@@ -396,6 +396,33 @@ function renderSubjects() {
     );
   });
 
+  // 英语口语跟读（独立卡片，不参与四科进度）
+  const dataNow = store.load();
+  const sk = store.todayKey();
+  const spDone = Math.min((dataNow.speakingProgress?.[sk]?.passed?.length || 0), 12);
+  const spCard = el('div', { class: 'card subject' }, [
+    el('div', { class: 'subject-head' }, [
+      el('div', { class: 'subject-badge', text: '🎤' }),
+      el('div', { class: 'subject-title' }, [
+        el('h3', { text: '英语口语跟读' }),
+        el('p', { text: '每日 12 句 · 约 10 分钟 · 3 次机会/句' })
+      ]),
+      el('span', {
+        class: `subject-count ${spDone >= 12 ? 'done' : ''}`,
+        text: `${spDone}/12`
+      })
+    ]),
+    el('a', {
+      class: `btn btn-block ${spDone >= 12 ? 'btn-ghost' : 'btn-primary'}`,
+      href: 'speaking.html',
+      text: spDone >= 12 ? '🔁 再练一遍' : '🎤 开始跟读'
+    }).tap?.(() => unlockAudio())
+  ]);
+  // 用 addEventListener 代替 .tap（ui.js 的 el 函数不提供 .tap）
+  const spGo = spCard.querySelector('a');
+  if (spGo) spGo.addEventListener('click', () => { unlockAudio(); sfxClick(); });
+  wrap.append(spCard);
+
   return wrap;
 }
 

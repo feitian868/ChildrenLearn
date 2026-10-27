@@ -11,6 +11,13 @@ import { celebrate } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
 import { shuffle } from './rng.js';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
+
+/** 一年级语文自动标拼音，其他年级/英语科学数学原样 */
+function pyHtml(grade, text) {
+  const s = text == null ? '' : String(text);
+  return needsPinyin(grade) ? pinyinize(s) : s;
+}
 
 const SUBJECT_EMOJI = {
   chinese: '📖',
@@ -183,7 +190,7 @@ export function mountGame(subject) {
     q.options.forEach((option, idx) => {
       const btn = el('button', { class: 'choice', type: 'button' }, [
         el('span', { class: 'opt-key', text: 'ABCD'[idx] || '' }),
-        el('span', { text: String(option) })
+        el('span', { html: pyHtml(task.grade, option) })
       ]);
       btn.addEventListener('click', () => {
         if (locked || btn.disabled) return;
@@ -251,7 +258,7 @@ export function mountGame(subject) {
     const makeTile = (text, side) => {
       const attrs = { class: `match-tile ${side}`, type: 'button' };
       attrs.dataset = side === 'left' ? { a: text } : { b: text };
-      return el('button', attrs, [el('span', { text })]);
+      return el('button', attrs, [el('span', { html: pyHtml(task.grade, text) })]);
     };
 
     shuffle(Math.random, pairs.map((p) => p.a)).forEach((text) => {
@@ -533,7 +540,7 @@ export function mountGame(subject) {
         class: q.stretch ? 'q-topic is-stretch' : 'q-topic',
         text: q.stretch ? `🚀 拔高 · ${q.topic}` : `${LEVEL_LABEL[q.level]} · ${q.topic}`
       }),
-      el('div', { class: 'q-prompt', text: q.prompt })
+      el('div', { class: 'q-prompt', html: pyHtml(task.grade, q.prompt) })
     ]);
 
     if (q.speak) {

@@ -96,6 +96,21 @@ body.game-body {
   border-bottom: 4px solid var(--accent-2);
   color: var(--accent);
 }
+/* 一年级拼音标注 */
+ruby { ruby-position: over; }
+rt {
+  font-size: 0.42em;
+  font-weight: 500;
+  color: var(--ink-muted, #888);
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+.choices ruby, .match-tile ruby { ruby-position: over; }
+.choices rt, .match-tile rt {
+  font-size: 0.38em;
+  color: var(--ink-muted, #888);
+  line-height: 1.1;
+}
 .q-sub { margin-top: 8px; font-size: clamp(14px, 2.2vw, 17px); color: var(--ink2); }
 
 /* 英语朗读按钮 */

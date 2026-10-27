@@ -1,0 +1,192 @@
+/* speaking.css —— 英语口语跟读页面 */
+
+body.game-body { background: linear-gradient(160deg, #fff5e6 0%, #fff 50%, #e6f5ff 100%); }
+
+.spk {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 14px 16px 80px;
+}
+
+.spk-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.spk-top .icon-btn {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  color: #333;
+  text-decoration: none;
+}
+.spk-heading h1 { margin: 0; font-size: 22px; }
+.spk-heading p { margin: 4px 0 0; font-size: 13px; color: #888; }
+
+.spk-banner {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff4e6;
+  color: #a66a00;
+  font-size: 13px;
+  margin-bottom: 14px;
+  border: 1px solid #ffe3b3;
+}
+
+.spk-intro {
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  border: 1px solid #eee;
+  margin-bottom: 16px;
+}
+.spk-intro p { margin: 4px 0; font-size: 14px; color: #555; }
+
+/* 列表 */
+.spk-list {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.spk-item {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.spk-item .spk-idx {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 50%;
+  background: #f0f6ff;
+  color: #6088b0;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.spk-item .spk-idx.ok { background: #e6f7ec; color: #1f9e53; }
+.spk-item .spk-idx.miss { background: #fff0f0; color: #d24a4a; }
+.spk-main { flex: 1; min-width: 0; }
+.spk-text {
+  font-size: 18px;
+  font-weight: 900;
+  color: #222;
+  letter-spacing: 0.3px;
+  overflow-wrap: break-word;
+}
+.spk-text b { color: #d96a00; }
+.spk-zh {
+  font-size: 13px;
+  color: #888;
+  margin-top: 4px;
+}
+.spk-go {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border: none;
+  background: #ffb45e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.spk-go:disabled { background: #ddd; color: #999; }
+
+/* 底部进度条 */
+.spk-foot { margin-top: 18px; }
+.spk-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  overflow: hidden;
+}
+.spk-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffb45e, #ff7a45);
+  transition: width 0.4s ease;
+}
+.spk-foot-text {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+/* 模态框 */
+dialog.spk-dialog {
+  border: none;
+  border-radius: 20px;
+  padding: 0;
+  width: min(92vw, 520px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  background: transparent;
+}
+dialog.spk-dialog::backdrop { background: rgba(0,0,0,0.4); }
+dialog.spk-dialog.open { display: block; }
+
+.spk-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 24px 22px 20px;
+}
+.spk-m-text {
+  font-size: 24px;
+  font-weight: 900;
+  color: #222;
+  text-align: center;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+.spk-m-text b { color: #d96a00; }
+.spk-m-zh {
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+.spk-m-ctrls {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.spk-m-ctrls .btn {
+  flex: 1 1 auto;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  background: #f5f5f5;
+  color: #333;
+}
+.spk-m-ctrls .btn.btn-primary { background: #ffb45e; color: #fff; }
+.spk-m-ctrls .btn:disabled { background: #ddd; color: #999; cursor: not-allowed; }
+.spk-m-log {
+  background: #fafafa;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 40px;
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px;
+}
+.spk-m-log-line {
+  display: flex; gap: 8px; align-items: baseline;
+  font-family: monospace;
+}
+.spk-m-log-line.ok { color: #1f9e53; }
+.spk-m-log-line.miss { color: #d24a4a; }
+
+/* 响应式 */
+@media (max-width: 420px) {
+  .spk-item .spk-idx { width: 28px; height: 28px; font-size: 12px; }
+  .spk-text { font-size: 16px; }
+  .spk-m-text { font-size: 20px; }
+}
