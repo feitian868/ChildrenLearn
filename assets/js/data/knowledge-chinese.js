@@ -780,5 +780,104 @@ export function chineseGenerated(grade, rng) {
     };
   });
 
+  /* —— 以下为难度加深题型 —— */
+
+  // 12) 整体认读音节辨析（一、二年级挑战）
+  const YNR = ['zhi', 'chi', 'shi', 'ri', 'zi', 'ci', 'si', 'yi', 'wu', 'yu', 'ye', 'yue', 'yuan', 'yin', 'yun', 'ying'];
+  const NOT_YNR = ['zh', 'ch', 'sh', 'r', 'z', 'c', 's', 'y', 'w', 'ge', 'ka', 'ma', 'ba', 'po', 'lu', 'de', 'ta'];
+  if (grade <= 2) {
+    repeat(3, () => {
+      const forward = rng() < 0.5;
+      if (forward) {
+        const right = pick(rng, YNR);
+        const wrong = sample(rng, NOT_YNR, 3);
+        const options = shuffle(rng, [right, ...wrong]);
+        return {
+          id: zid(grade, 'ynr', right, options.join('|')),
+          key: `zh:ynr:${right}`,
+          subject: 'chinese', grade, level: 2,
+          topic: '整体认读音节', type: 'choice',
+          prompt: '下面哪一个是整体认读音节？',
+          options,
+          answer: options.indexOf(right),
+          explain: `“${right}”是整体认读音节，要整体认读，不能拼读。`,
+          source: `${book} · 拼音`
+        };
+      }
+      const right = pick(rng, NOT_YNR);
+      const wrong = sample(rng, YNR, 3);
+      const options = shuffle(rng, [right, ...wrong]);
+      return {
+        id: zid(grade, 'ynr', right, options.join('|')),
+        key: `zh:ynr:not:${right}`,
+        subject: 'chinese', grade, level: 2,
+        topic: '整体认读音节', type: 'choice',
+        prompt: '下面哪一个不是整体认读音节？',
+        options,
+        answer: options.indexOf(right),
+        explain: `“${right}”不是整体认读音节；${wrong.join('、')} 都是整体认读音节。`,
+        source: `${book} · 拼音`
+      };
+    });
+  }
+
+  // 13) 成语意思填空（按意思选成语，挑战）
+  if (idiom.length >= 4) {
+    repeat(3, () => {
+      const item = pick(rng, idiom);
+      if (!item) return null;
+      const [word, , meaning] = item;
+      const others = sample(rng, idiom.filter((x) => x[0] !== word && x[2] !== meaning), 3).map((x) => x[0]);
+      if (others.length < 3) return null;
+      const options = shuffle(rng, [word, ...others]);
+      return {
+        id: zid(grade, 'cy2', word, options.join('|')),
+        key: `zh:cy2:${word}`,
+        subject: 'chinese', grade, level: 2,
+        topic: '成语理解', type: 'choice',
+        prompt: `表示“${meaning}”的成语是哪一个？`,
+        options,
+        answer: options.indexOf(word),
+        explain: `“${word}”的意思是${meaning}。`,
+        source: `${book} · 成语`
+      };
+    });
+  }
+
+  // 14) 诗句理解（三~六年级挑战：哪句诗与主题有关）
+  const POEM_SCENE = [
+    ['碧玉妆成一树高，万条垂下绿丝绦。', '春天'],
+    ['小荷才露尖尖角，早有蜻蜓立上头。', '夏天'],
+    ['停车坐爱枫林晚，霜叶红于二月花。', '秋天'],
+    ['墙角数枝梅，凌寒独自开。', '冬天'],
+    ['清明时节雨纷纷，路上行人欲断魂。', '清明节'],
+    ['爆竹声中一岁除，春风送暖入屠苏。', '春节'],
+    ['独在异乡为异客，每逢佳节倍思亲。', '思念家乡'],
+    ['举头望明月，低头思故乡。', '思念家乡'],
+    ['谁知盘中餐，粒粒皆辛苦。', '珍惜粮食'],
+    ['少壮不努力，老大徒伤悲。', '珍惜时间'],
+    ['欲穷千里目，更上一层楼。', '登高望远'],
+    ['春眠不觉晓，处处闻啼鸟。', '春天']
+  ];
+  if (grade >= 3) {
+    repeat(3, () => {
+      const item = pick(rng, POEM_SCENE);
+      const wrong = sample(rng, POEM_SCENE.filter((x) => x[0] !== item[0] && x[1] !== item[1]), 3);
+      if (wrong.length < 3) return null;
+      const options = shuffle(rng, [item[0], ...wrong.map((x) => x[0])]);
+      return {
+        id: zid(grade, 'pj', item[1], options.join('|')),
+        key: `zh:pj:${item[1]}`,
+        subject: 'chinese', grade, level: 2,
+        topic: '诗句理解', type: 'choice',
+        prompt: `下面哪句诗和“${item[1]}”有关？`,
+        options,
+        answer: options.indexOf(item[0]),
+        explain: `“${item[0]}”与“${item[1]}”有关。`,
+        source: '日积月累 · 古诗理解'
+      };
+    });
+  }
+
   return out;
 }

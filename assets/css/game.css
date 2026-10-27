@@ -75,6 +75,13 @@ body.game-body {
   font-size: 13px;
   font-weight: 800;
 }
+
+/* 跨级拔高题标记：醒目橙色徽章 */
+.q-topic.is-stretch {
+  background: #fff1e0;
+  color: #d96a00;
+  border: 2px solid #ffb45e;
+}
 .q-prompt {
   margin-top: 10px;
   font-size: clamp(22px, 4.6vw, 38px);

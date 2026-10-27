@@ -5,8 +5,9 @@
  *
  * 防重复：近 365 天做过的题优先回避（recentQuestions），池子耗尽时
  * 按「最久没做过」兜底轮换，保证永远能出满题。
- * 难度递进：按近 7 天首答正确率自适应每项任务的 level 2 数量——
- *   正确率 ≥85% → 3 道挑战题；≥60% → 2 道；否则 1 道（保底）。
+ * 难度递进：按近 7 天首答正确率自适应——
+ *   正确率 ≥85% → 3 道挑战题 + 1 道「跨级拔高题」（高一年级，六年级则全挑战题）；
+ *   ≥60% → 3 道挑战题；其余 → 2 道挑战题。
  */
 
 import * as store from './store.js';
@@ -55,8 +56,8 @@ function getPool(subject, grade, rng) {
   return gen ? [...staticPool, ...gen(grade, rng)] : staticPool;
 }
 
-/** 近 7 天首答正确率 → 每项任务的 level 2 目标数（1~3，保底 1） */
-function level2Target(data) {
+/** 近 7 天首答正确率 → 难度档位：{ l2: 每项挑战题数, stretch: 是否配跨级拔高题 } */
+function adaptTarget(data) {
   const today = store.todayKey();
   let correct = 0;
   let total = 0;
@@ -67,16 +68,16 @@ function level2Target(data) {
       total += h.firstTry.total;
     }
   }
-  if (!total) return 1; // 无历史：默认配比
+  if (!total) return { l2: 2, stretch: false }; // 无历史：默认配比
   const acc = correct / total;
-  if (acc >= 0.85) return 3;
-  if (acc >= 0.6) return 2;
-  return 1;
+  if (acc >= 0.85) return { l2: 3, stretch: true };
+  if (acc >= 0.6) return { l2: 3, stretch: false };
+  return { l2: 2, stretch: false };
 }
 
 
 
-function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey) {
+function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey, quota = QUESTIONS_PER_TASK) {
   const avail = pool.filter((item) => !used.has(item.id));
   // 知识点冷却起点：key 在 COOLDOWN_DAYS 内考过，本轮先让位给别的知识点
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
@@ -87,10 +88,16 @@ function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey) {
   };
   // 第一优先一定是「365 天内没出现过的题面」，冷却只是同档内的排序偏好，
   // 不能因为知识点冷却把已出过的题顶上来（否则会出现同年重复）。
-  const unseen = avail.filter((item) => !avoidMap[item.id]);
+  // 内容签名命中（跨年级同题，含拔高题用过的）也按「做过」处理。
+  const seenAt = (item) => {
+    const a = avoidMap[item.id] || '';
+    const b = avoidMap[sigKey(item)] || '';
+    return a > b ? a : b;
+  };
+  const unseen = avail.filter((item) => !seenAt(item));
   const seenBefore = avail
-    .filter((item) => avoidMap[item.id])
-    .sort((a, b) => ((avoidMap[a.id] || '') < (avoidMap[b.id] || '') ? -1 : 1));
+    .filter((item) => seenAt(item))
+    .sort((a, b) => (seenAt(a) < seenAt(b) ? -1 : 1));
   const split = (list) => {
     const fresh = shuffle(rng, list.filter((item) => !keyHot(item)));
     const cool = shuffle(rng, list.filter((item) => keyHot(item)));
@@ -111,13 +118,62 @@ function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey) {
     }
   };
 
-  take([...l2.fresh, ...l2.cool], l2t);              // 1. L2 配到目标数
-  take([...l1.fresh, ...l1.cool], QUESTIONS_PER_TASK); // 2. 没用过的 L1 补
-  take([...l2.fresh, ...l2.cool], QUESTIONS_PER_TASK); // 3. 不够先用没用过的 L2 补
-  take(seenBefore, QUESTIONS_PER_TASK, true);        // 4. 最后才用「最久未做」的旧题兜底
-  if (picked.length < QUESTIONS_PER_TASK) return [];
+  take([...l2.fresh, ...l2.cool], Math.min(l2t, quota)); // 1. L2 配到目标数
+  take([...l1.fresh, ...l1.cool], quota);                // 2. 没用过的 L1 补
+  take([...l2.fresh, ...l2.cool], quota);                // 3. 不够先用没用过的 L2 补
+  // 4. 最后才用「最久未做」的旧题兜底；不分级别——365 天不重是硬约束，
+  //    池子见底时宁可挑战题配比略降，也不能拿窗口内的旧 L2 造成重复
+  take(seenBefore, quota, true);
+  if (picked.length < quota) return [];
   picked.forEach((item) => used.add(item.id));
   return picked;
+}
+
+/**
+ * 从高一（或同）年级题池抽 1 道拔高题：优先未出现过的 L2，
+ * 成功返回带 stretch 标记的副本，抽不到返回 null。
+ * ownSigs：本年级题池的内容签名，避免跨年级共用生成器时抽到与本年级完全相同的题。
+ */
+function pickStretch(rng, pool, used, usedKeys, avoidMap, dayKey, ownSigs) {
+  const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
+  const keyHot = (item) => {
+    if (!item.key) return false;
+    const d = avoidMap[`k:${item.key}`];
+    return Boolean(d && d >= coolFrom);
+  };
+  const avail = pool.filter((item) => (
+    !used.has(item.id) && !avoidMap[item.id] && !avoidMap[sigKey(item)] && !ownSigs.has(contentSig(item))
+  ));
+  const prefer = shuffle(rng, avail.filter((item) => (
+    item.level === 2 && !keyHot(item) && !(item.key && usedKeys.has(item.key))
+  )));
+  const rest = shuffle(rng, avail.filter((item) => !prefer.includes(item)));
+  const q = prefer[0] || rest[0];
+  if (!q) return null;
+  used.add(q.id);
+  if (q.key) usedKeys.add(q.key);
+  return { ...q, stretch: true };
+}
+
+/** 题目内容签名：题干 + 选项（排序后）+ 答案文本，跨年级判重用；与选项顺序无关 */
+function contentSig(q) {
+  if (q.type === 'choice') {
+    const opts = (q.options || []).map(String).slice().sort().join(',');
+    return `choice|${q.prompt}|${opts}|${String(q.options[q.answer])}`;
+  }
+  if (q.type === 'match') {
+    return `match|${q.prompt}|${(q.pairs || []).map((p) => `${p.a}=${p.b}`).sort().join(',')}`;
+  }
+  return `${q.type}|${q.prompt}|${String(q.answer)}`;
+}
+
+/**
+ * 内容签名的回避键：跨年级同内容的题 id 前缀不同（g3/g4），仅靠 id 回避
+ * 挡不住「本年级做过 → 拔高又抽到」和「拔高做过 → 本年级又抽到」，
+ * 因此把签名哈希也写进 recentQuestions 一并回避 365 天。
+ */
+function sigKey(q) {
+  return `s:${hashString(contentSig(q))}`;
 }
 
 function titleOf(questions) {
@@ -133,23 +189,39 @@ function buildDay(key, grade, data) {
   const focus = focusOf(weekday);
   const tasks = [];
   const avoidMap = data?.recentQuestions || {};
-  const l2t = level2Target(data || {});
+  const adapt = adaptTarget(data || {});
+  // 六年级没有更高年级，拔高档转为「全挑战题」
+  const wantStretch = adapt.stretch && grade < 6;
 
   store.SUBJECTS.forEach((subject) => {
     const meta = store.SUBJECT_META[subject];
     const count = taskCountFor(subject, weekday);
     const rng = mulberry32(hashString(`${key}:${grade}:${subject}`));
     const pool = getPool(subject, grade, rng);
+    // 拔高题取自高一年级当天题池（用高一年级自己的种子，题目与其当天一致）
+    const stretchPool = wantStretch
+      ? getPool(subject, grade + 1, mulberry32(hashString(`${key}:${grade + 1}:${subject}`)))
+      : null;
     const used = new Set();
     const usedKeys = new Set();
+    // 本年级题池内容签名：跨年级共用的生成器可能产出完全相同的题，拔高题需避开
+    const ownSigs = wantStretch ? new Set(pool.map(contentSig)) : null;
     for (let i = 0; i < count; i++) {
-      const questions = pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, key);
+      // 先占拔高题位，再按剩余名额抽本年级题，保证拔高题优先拿到知识点
+      const stretchQ = wantStretch
+        ? pickStretch(rng, stretchPool, used, usedKeys, avoidMap, key, ownSigs)
+        : null;
+      const quota = stretchQ ? QUESTIONS_PER_TASK - 1 : QUESTIONS_PER_TASK;
+      const l2t = stretchQ ? Math.min(adapt.l2, quota) : (adapt.stretch ? QUESTIONS_PER_TASK : adapt.l2);
+      const questions = pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, key, quota);
       if (!questions.length) break;
+      if (stretchQ) questions.push(stretchQ);
       tasks.push({
         id: `${subject}-${key}-${i + 1}`,
         subject,
         subjectName: meta.name,
         icon: meta.icon,
+        grade,
         title: titleOf(questions),
         questions: questions.map((q) => ({ ...q })),
         level2: questions.filter((q) => q.level === 2).length,
@@ -186,6 +258,7 @@ function markUsed(data, day) {
   const map = data.recentQuestions || (data.recentQuestions = {});
   day.tasks.forEach((t) => t.questions.forEach((q) => {
     map[q.id] = day.date;
+    map[sigKey(q)] = day.date; // 内容签名一并记录，拦截跨年级同题（拔高 ↔ 本年级）
     if (q.key) map[`k:${q.key}`] = day.date;
   }));
   const cutoff = store.shiftDateKey(day.date, -AVOID_DAYS);

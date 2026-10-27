@@ -1,15 +1,15 @@
 /**
  * score.js —— 积分结算
- * 规则：单项达标 +5；当日全部达标 +20；连续每满 7 天 +50。
+ * 规则：每完成一个任务 +1 分；不设全勤/连签额外加成。
  * 只有游戏页真实达标后才会调用 completeTask，工作台不能手动勾选。
  */
 
 import * as store from './store.js';
 import { allSubjectsDone } from './tasks.js';
 
-export const TASK_POINTS = 5;
-export const DAILY_BONUS = 20;
-export const STREAK_BONUS = 50;
+export const TASK_POINTS = 1;
+export const DAILY_BONUS = 0;
+export const STREAK_BONUS = 0;
 
 export function completeTask(taskId, result = {}) {
   const data = store.load();

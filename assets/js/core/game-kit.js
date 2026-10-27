@@ -100,10 +100,12 @@ export function mountGame(subject) {
 
   function renderHeader(q, i) {
     clear(heading);
+    // 拔高题来自高一年级，头部仍显示当前年级，避免误导
+    const gradeText = GRADE_LABEL[q.stretch ? (task.grade || q.grade) : q.grade];
     heading.append(
       el('h1', { text: `${task.subjectName} · ${task.title}` }),
       el('p', {
-        text: `${GRADE_LABEL[q.grade]} · 第 ${i + 1}/${task.questions.length} 题 · ${LEVEL_LABEL[q.level]}题`
+        text: `${gradeText} · 第 ${i + 1}/${task.questions.length} 题 · ${q.stretch ? '🚀 拔高题' : `${LEVEL_LABEL[q.level]}题`}`
       })
     );
   }
@@ -527,7 +529,10 @@ export function mountGame(subject) {
 
     const card = el('div', { class: 'q-card reveal' });
     const head = el('div', { class: 'q-head' }, [
-      el('span', { class: 'q-topic', text: `${LEVEL_LABEL[q.level]} · ${q.topic}` }),
+      el('span', {
+        class: q.stretch ? 'q-topic is-stretch' : 'q-topic',
+        text: q.stretch ? `🚀 拔高 · ${q.topic}` : `${LEVEL_LABEL[q.level]} · ${q.topic}`
+      }),
       el('div', { class: 'q-prompt', text: q.prompt })
     ]);
 
@@ -608,7 +613,7 @@ export function mountGame(subject) {
           celebrate({
             emoji: '🏆',
             title: '今日任务全部完成！',
-            subtitle: `连续打卡 ${res.streak} 天${res.streakBonus ? ' · 7 天奖励 +50' : ''}`,
+            subtitle: `连续打卡 ${res.streak} 天`,
             points: res.dailyBonus + res.streakBonus,
             variant: 'daily',
             buttonText: '享受成果',

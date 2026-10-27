@@ -10,20 +10,20 @@
 
 export const CHEST_REWARDS = [
   {
-    id: 'chest-points-10',
+    id: 'chest-points-2',
     type: 'points',
-    name: '10 积分',
+    name: '2 积分',
     emoji: '⭐',
-    points: 10,
+    points: 2,
     weight: 24,
     desc: '宝箱里跳出一把金色小星星，积分直接进账。'
   },
   {
-    id: 'chest-points-20',
+    id: 'chest-points-5',
     type: 'points',
-    name: '20 积分',
+    name: '5 积分',
     emoji: '🌟',
-    points: 20,
+    points: 5,
     weight: 12,
     desc: '今天的运气不错，是双倍星星！'
   },
@@ -80,49 +80,49 @@ export const SHOP_ITEMS = [
     id: 'shop-story',
     name: '睡前多讲一个故事',
     emoji: '📚',
-    cost: 20,
+    cost: 100,
     desc: '今晚由你来挑故事书。'
   },
   {
     id: 'shop-draw',
-    name: '画画 / 手工 20 分钟',
+    name: '画画 / 手工 30 分钟',
     emoji: '🎨',
-    cost: 30,
+    cost: 200,
     desc: '自由创作时间，不被打扰。'
   },
   {
     id: 'shop-game',
-    name: '亲子游戏 15 分钟',
+    name: '亲子游戏 30 分钟',
     emoji: '🎲',
-    cost: 40,
+    cost: 300,
     desc: '和爸爸妈妈一起玩一局桌游或扑克。'
   },
   {
     id: 'shop-dessert',
     name: '选一份小甜点',
     emoji: '🍰',
-    cost: 50,
+    cost: 400,
     desc: '周末兑现，由你决定吃什么。'
   },
   {
     id: 'shop-movie',
     name: '周末家庭电影夜',
     emoji: '🍿',
-    cost: 80,
+    cost: 600,
     desc: '你来选片，全家一起看。'
   },
   {
     id: 'shop-trip',
-    name: '周末公园 / 户外 1 小时',
+    name: '周末公园 / 户外半天',
     emoji: '🌳',
-    cost: 100,
+    cost: 800,
     desc: '去公园骑车、放风筝或散步。'
   },
   {
     id: 'shop-book',
     name: '挑一本新书',
     emoji: '📗',
-    cost: 120,
+    cost: 1000,
     desc: '和爸爸妈妈一起去书店选一本。'
   }
 ];

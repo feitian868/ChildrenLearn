@@ -385,7 +385,7 @@ function renderSubjects() {
       const olympicGo = el('a', {
         class: 'btn btn-ghost btn-block olympic-entry',
         href: 'olympic.html',
-        text: '🧠 奥数专区 · 思维加餐（每日上限 20 分）'
+        text: '🧠 奥数专区 · 思维加餐（每日上限 5 分）'
       });
       olympicGo.addEventListener('click', () => unlockAudio());
       cardChildren.push(el('div', { class: 'olympic-entry-wrap' }, [olympicGo]));

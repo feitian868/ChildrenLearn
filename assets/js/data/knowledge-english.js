@@ -673,6 +673,54 @@ export function englishGenerated(grade, rng) {
     };
   });
 
+  /* —— 以下为难度加深题型 —— */
+
+  // 7) 短句填空（三年级起挑战；五年级起加入过去时/将来时混合）
+  const SENTENCE_BANK = [
+    { s: 'I ___ up at seven in the morning.', a: 'get', zh: '我早上七点起床。', w: ['go', 'play', 'eat'], g: 3 },
+    { s: 'I go to school ___ bus.', a: 'by', zh: '我乘公交车去上学。', w: ['on', 'in', 'at'], g: 3 },
+    { s: 'We ___ English every day.', a: 'learn', zh: '我们每天学英语。', w: ['run', 'jump', 'swim'], g: 3 },
+    { s: 'There ___ many books on the desk.', a: 'are', zh: '课桌上有很多书。', w: ['is', 'am', 'be'], g: 3 },
+    { s: 'I ___ TV in the evening.', a: 'watch', zh: '我晚上看电视。', w: ['look', 'see', 'read'], g: 3 },
+    { s: 'Spring is warm and ___.', a: 'sunny', zh: '春天温暖又晴朗。', w: ['cold', 'snowy', 'rainy'], g: 3 },
+    { s: 'The bird can ___ high.', a: 'fly', zh: '鸟能飞得很高。', w: ['run', 'swim', 'jump'], g: 3 },
+    { s: 'Elephants have long ___.', a: 'noses', zh: '大象有长鼻子。', w: ['tails', 'legs', 'eyes'], g: 3 },
+    { s: 'We have PE class ___ Monday.', a: 'on', zh: '我们星期一有体育课。', w: ['at', 'in', 'of'], g: 3 },
+    { s: 'I ___ my homework after dinner.', a: 'do', zh: '晚饭后我做作业。', w: ['read', 'write', 'play'], g: 3 },
+    { s: 'My father ___ English in a school.', a: 'teaches', zh: '我爸爸在学校教英语。', w: ['learns', 'plays', 'sings'], g: 4 },
+    { s: 'The cat is ___ the chair.', a: 'under', zh: '猫在椅子下面。', w: ['on', 'in', 'behind'], g: 4 },
+    { s: 'She ___ a red dress today.', a: 'wears', zh: '她今天穿着一条红裙子。', w: ['makes', 'draws', 'reads'], g: 4 },
+    { s: 'We ___ hands before meals.', a: 'wash', zh: '我们饭前洗手。', w: ['make', 'clean', 'close'], g: 4 },
+    { s: 'I like ___ because they are sweet.', a: 'apples', zh: '我喜欢苹果，因为它们很甜。', w: ['peppers', 'onions', 'potatoes'], g: 4 },
+    { s: 'He ___ to the park yesterday.', a: 'went', zh: '他昨天去了公园。', w: ['goes', 'go', 'going'], g: 5 },
+    { s: 'I will ___ my grandma tomorrow.', a: 'visit', zh: '我明天要去看望奶奶。', w: ['visited', 'visits', 'visiting'], g: 5 },
+    { s: 'She ___ a letter last night.', a: 'wrote', zh: '她昨晚写了一封信。', w: ['writes', 'write', 'writing'], g: 5 },
+    { s: 'They ___ football next Sunday.', a: 'will play', zh: '他们下周日要踢足球。', w: ['plays', 'played', 'playing'], g: 5 },
+    { s: 'Look! The boys are ___.', a: 'running', zh: '看！男孩们正在跑步。', w: ['run', 'runs', 'ran'], g: 6 },
+    { s: 'We ___ a picnic last weekend.', a: 'had', zh: '我们上周末野餐了。', w: ['have', 'has', 'having'], g: 6 },
+    { s: 'There ___ a football match tomorrow.', a: 'will be', zh: '明天将有一场足球赛。', w: ['is', 'was', 'are'], g: 6 }
+  ];
+  const clozeBank = SENTENCE_BANK.filter((x) => grade >= x.g);
+  if (clozeBank.length >= 4) {
+    repeat(4, () => {
+      const item = pick(rng, clozeBank);
+      if (!item) return null;
+      const options = shuffle(rng, [item.a, ...item.w]);
+      return {
+        id: itemId(grade, 'c', item.s, options.join('|')),
+        key: `en:cloze:${item.s}`,
+        subject: 'english', grade, level: 2,
+        topic: '短句填空', type: 'choice',
+        prompt: `选出正确的选项补全句子：“${item.s}”（${item.zh}）`,
+        options,
+        answer: options.indexOf(item.a),
+        explain: `正确答案是“${item.a}”，句子的意思是“${item.zh}”。`,
+        source: '句型运用 · 情景表达',
+        speak: item.s.replace('___', item.a)
+      };
+    });
+  }
+
   return out;
 }
 

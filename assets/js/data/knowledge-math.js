@@ -131,7 +131,8 @@ GENERATORS.push({
       };
     }
     if (grade === 2) {
-      if (rand() < 0.5) {
+      const mode = randInt(rand, 0, 3);
+      if (mode === 0) {
         const a = randInt(rand, 16, 89);
         const b = randInt(rand, 11, 99 - a > 11 ? 99 - a : 12);
         const bb = Math.min(99 - a, Math.max(b, 11));
@@ -143,14 +144,37 @@ GENERATORS.push({
           explain: `个位相加满十向十位进 1，结果是 ${a + bb}。`
         };
       }
-      const a = randInt(rand, 31, 99);
-      const b = randInt(rand, 12, a - 10);
+      if (mode === 1) {
+        const a = randInt(rand, 31, 99);
+        const b = randInt(rand, 12, a - 10);
+        return {
+          topic: '两位数减两位数（退位）',
+          source: src(2, '100以内的加法和减法（二）'),
+          prompt: `${a} - ${b} = （ ）`,
+          answer: a - b,
+          explain: `个位不够减，从十位退 1 当十，结果是 ${a - b}。`
+        };
+      }
+      // 整百、整千数的加减（二下「万以内数的认识」）
+      const a = randInt(rand, 2, 9) * 100;
+      const b = randInt(rand, 1, 9) * 100;
+      if (rand() < 0.5) {
+        return {
+          topic: '整百、整千数的加减法',
+          source: src(2, '万以内数的认识', '下册'),
+          prompt: `${a} + ${b} = （ ）`,
+          answer: a + b,
+          explain: `${a / 100} 个百加 ${b / 100} 个百是 ${(a + b) / 100} 个百，即 ${a + b}。`
+        };
+      }
+      const big = Math.max(a, b);
+      const small = Math.min(a, b);
       return {
-        topic: '两位数减两位数（退位）',
-        source: src(2, '100以内的加法和减法（二）'),
-        prompt: `${a} - ${b} = （ ）`,
-        answer: a - b,
-        explain: `个位不够减，从十位退 1 当十，结果是 ${a - b}。`
+        topic: '整百、整千数的加减法',
+        source: src(2, '万以内数的认识', '下册'),
+        prompt: `${big} - ${small} = （ ）`,
+        answer: big - small,
+        explain: `${big / 100} 个百减 ${small / 100} 个百是 ${(big - small) / 100} 个百，即 ${big - small}。`
       };
     }
     if (grade === 3) {
@@ -1325,6 +1349,175 @@ GENERATORS.push({
       answer: a - b + c,
       explain: `按顺序算：${a} - ${b} = ${a - b}，${a - b} + ${c} = ${a - b + c}。`
     };
+  }
+});
+
+/* 39. 加减混合运算（二、三年级挑战，结果控制在所学范围内） */
+GENERATORS.push({
+  key: 'mix-addsub',
+  grades: [2, 3],
+  level: 2,
+  variants: () => 4,
+  make(rand, grade) {
+    const hi = grade === 2 ? 99 : 900;
+    const lo = grade === 2 ? 20 : 120;
+    const unit2 = grade === 2 ? '100以内的加法和减法（二）' : '万以内的加法和减法（二）';
+    if (rand() < 0.5) {
+      const a = randInt(rand, lo, hi - 30);
+      const b = randInt(rand, lo, hi - a > lo ? hi - a : lo);
+      const sum = a + b;
+      const c = randInt(rand, 10, sum - 5);
+      return {
+        topic: '加减混合运算',
+        source: src(grade, unit2),
+        prompt: `${a} + ${b} - ${c} = （ ）`,
+        answer: sum - c,
+        explain: `按从左到右的顺序算：${a} + ${b} = ${sum}，${sum} - ${c} = ${sum - c}。`
+      };
+    }
+    const a = randInt(rand, lo + 30, hi);
+    const b = randInt(rand, 11, a - 10);
+    const rest = a - b;
+    const c = randInt(rand, 10, hi - rest > 10 ? hi - rest : 10);
+    return {
+      topic: '加减混合运算',
+      source: src(grade, unit2),
+      prompt: `${a} - ${b} + ${c} = （ ）`,
+      answer: rest + c,
+      explain: `按从左到右的顺序算：${a} - ${b} = ${rest}，${rest} + ${c} = ${rest + c}。`
+    };
+  }
+});
+
+/* 40. 乘加、乘减混合（二、三年级挑战） */
+GENERATORS.push({
+  key: 'mul-addsub',
+  grades: [2, 3],
+  level: 2,
+  variants: () => 4,
+  make(rand, grade) {
+    const a = randInt(rand, 2, 9);
+    const b = randInt(rand, 2, 9);
+    const product = a * b;
+    const topic = '乘加、乘减';
+    const source = src(2, '表内乘法（二）');
+    if (rand() < 0.5) {
+      const c = randInt(rand, 2, grade === 2 ? 50 : 200);
+      return {
+        topic,
+        source,
+        prompt: `${a} × ${b} + ${c} = （ ）`,
+        answer: product + c,
+        explain: `先算乘法 ${a} × ${b} = ${product}，再算 ${product} + ${c} = ${product + c}。`
+      };
+    }
+    const c = randInt(rand, 1, product - 1);
+    return {
+      topic,
+      source,
+      prompt: `${a} × ${b} - ${c} = （ ）`,
+      answer: product - c,
+      explain: `先算乘法 ${a} × ${b} = ${product}，再算 ${product} - ${c} = ${product - c}。`
+    };
+  }
+});
+
+/* 41. 有余数的除法（二、三年级挑战，选择题） */
+GENERATORS.push({
+  key: 'div-remainder',
+  grades: [2, 3],
+  level: 2,
+  variants: () => 4,
+  make(rand) {
+    const b = randInt(rand, 3, 9);
+    const q = randInt(rand, 2, 9);
+    const r = randInt(rand, 1, b - 1);
+    const n = b * q + r;
+    const correct = `商 ${q} 余 ${r}`;
+    const wrongs = [
+      `商 ${q + 1} 余 ${r}`,
+      `商 ${q} 余 ${r === 1 ? r + 1 : r - 1}`,
+      `商 ${q - 1 > 0 ? q - 1 : q + 2} 余 ${r}`
+    ].filter((x) => x !== correct);
+    return choose(rand, correct, wrongs, {
+      topic: '有余数的除法',
+      source: src(2, '有余数的除法', '下册'),
+      prompt: `${n} ÷ ${b} 的商和余数是多少？`,
+      explain: `${b} × ${q} = ${b * q}，${n} - ${b * q} = ${r}，余数要比除数小，所以 ${correct}。`
+    });
+  }
+});
+
+/* 42. 四则混合运算顺序（三、四年级挑战） */
+GENERATORS.push({
+  key: 'order-ops',
+  grades: [3, 4],
+  level: 2,
+  variants: () => 4,
+  make(rand, grade) {
+    const hi = grade === 3 ? 200 : 500;
+    const mode = randInt(rand, 0, 3);
+    if (mode === 0) {
+      const a = randInt(rand, 10, hi);
+      const b = randInt(rand, 2, 9);
+      const c = randInt(rand, 2, 9);
+      return {
+        topic: '四则混合运算',
+        source: src(grade, '四则运算', grade === 3 ? '上册' : '下册'),
+        prompt: `${a} + ${b} × ${c} = （ ）`,
+        answer: a + b * c,
+        explain: `先算乘法 ${b} × ${c} = ${b * c}，再算加法 ${a} + ${b * c} = ${a + b * c}。`
+      };
+    }
+    if (mode === 1) {
+      const b = randInt(rand, 2, 9);
+      const c = randInt(rand, 2, 9);
+      const a = randInt(rand, b * c + 2, b * c + hi);
+      return {
+        topic: '四则混合运算',
+        source: src(grade, '四则运算', grade === 3 ? '上册' : '下册'),
+        prompt: `${a} - ${b} × ${c} = （ ）`,
+        answer: a - b * c,
+        explain: `先算乘法 ${b} × ${c} = ${b * c}，再算减法 ${a} - ${b * c} = ${a - b * c}。`
+      };
+    }
+    const a = randInt(rand, 2, 30);
+    const b = randInt(rand, 2, 20);
+    const c = randInt(rand, 2, 9);
+    return {
+      topic: '四则混合运算',
+      source: src(grade, '四则运算', grade === 3 ? '上册' : '下册'),
+      prompt: `（${a} + ${b}）× ${c} = （ ）`,
+      answer: (a + b) * c,
+      explain: `有括号先算括号里：${a} + ${b} = ${a + b}，再算 ${a + b} × ${c} = ${(a + b) * c}。`
+    };
+  }
+});
+
+/* 43. 分数乘整数（六年级挑战，选择题） */
+GENERATORS.push({
+  key: 'fraction-mul',
+  grades: [6],
+  level: 2,
+  variants: () => 3,
+  make(rand) {
+    const d = pick(rand, [3, 4, 5, 6, 7, 8, 9, 10, 12]);
+    const n = randInt(rand, 1, d - 1);
+    const k = randInt(rand, 2, 9);
+    const num = n * k;
+    const correct = frac(num, d);
+    const wrongs = [
+      frac(num, d * k),
+      frac(n + k, d),
+      frac(num + 1, d),
+      frac(Math.max(1, num - 1), d)
+    ].filter((x) => x !== correct);
+    return choose(rand, correct, wrongs, {
+      topic: '分数乘整数',
+      source: src(6, '分数乘法'),
+      prompt: `${n}/${d} × ${k} = （ ）`,
+      explain: `分子乘整数：${n} × ${k} = ${num}，分母不变，约分后是 ${correct}。`
+    });
   }
 });
 

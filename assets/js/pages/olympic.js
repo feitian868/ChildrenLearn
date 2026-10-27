@@ -1,6 +1,6 @@
 /**
  * olympic.js —— 奥数专区（数学思维加餐）
- * 不占每日任务、不影响宝箱；每套 4 题，首答对 +2、重试对 +1，每日上限 20 分。
+ * 不占每日任务、不影响宝箱；每套 4 题，首答对 +1，每日上限 5 分。
  * 得分写入 days[今天].olympicEarned，成长记录会统计。
  */
 
@@ -13,7 +13,7 @@ import { celebrate } from '../core/fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js';
 import { mulberry32, hashString } from '../core/rng.js';
 
-const DAILY_CAP = 20;
+const DAILY_CAP = 5;
 const app = document.getElementById('app');
 document.body.dataset.subject = 'math';
 
@@ -208,7 +208,7 @@ function renderInput(q, feedback) {
 
 function record(kind) {
   results.push(kind);
-  const pts = kind === 'first' ? 2 : 1;
+  const pts = kind === 'first' ? 1 : 0;
   // todayEarned() 读的是 store 实时值，已包含本组之前的得分，不能再减 earnedThisSet
   const room = Math.max(0, DAILY_CAP - todayEarned());
   const add = Math.min(pts, room);
@@ -246,9 +246,9 @@ function renderResult() {
         el('div', { class: 'q-sub', text: capped && earnedThisSet === 0
           ? '今日奥数积分已领满，明天再来吧！'
           : `本组获得 +${earnedThisSet} 分 · 今日累计 ${todayEarned()}/${DAILY_CAP} 分` }),
-        el('div', { class: 'mini-actions', style: { display: 'flex', gap: '12px', justifyContent: 'center' } }, [
+        el('div', { class: 'mini-actions', style: { display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' } }, [
           again,
-          el('a', { class: 'btn btn-ghost', href: 'index.html', text: '回到工作台' })
+          el('a', { class: 'btn btn-ghost', href: 'index.html', style: { background: '#eef2ff', color: 'var(--accent)', border: '2px solid var(--accent-2)', fontWeight: 800 }, text: '🏠 回到工作台' })
         ])
       ])
     ])
