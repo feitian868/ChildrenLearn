@@ -1,6 +1,12 @@
 /* speaking.css —— 英语口语跟读页面 */
 
-body.game-body { background: linear-gradient(160deg, #fff5e6 0%, #fff 50%, #e6f5ff 100%); }
+/* 跟读页内容多，需要整页可滚动：覆盖 game.css 里游戏页的一屏锁定 */
+body.game-body {
+  background: linear-gradient(160deg, #fff5e6 0%, #fff 50%, #e6f5ff 100%);
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+}
 
 .spk {
   max-width: 720px;
