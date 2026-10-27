@@ -31,6 +31,11 @@ export function unlockAudio() {
   if (c && c.state === 'suspended') c.resume();
 }
 
+/** 供儿歌合成等模块复用同一个已解锁的 AudioContext（关闭音效时返回 null） */
+export function getAudioContext() {
+  return ensureContext();
+}
+
 function tone(freq, delay, duration, { type = 'sine', gain = 0.12 } = {}) {
   const c = ensureContext();
   if (!c) return;

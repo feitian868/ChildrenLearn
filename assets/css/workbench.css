@@ -373,6 +373,28 @@
 .mini-actions { display: flex; gap: 10px; margin-top: 12px; }
 .mini-actions .btn { flex: 1; }
 
+/* 小小钢琴 */
+.mini-keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.mini-key {
+  min-height: 92px;
+  border-radius: 14px;
+  border: 3px solid #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--key) 55%, #fff), var(--key));
+  color: #3a2b00;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: var(--shadow-sm);
+  touch-action: manipulation;
+  transition: transform .1s var(--ease), filter .1s;
+}
+.mini-key:active,
+.mini-key.is-hit { transform: translateY(4px) scale(.97); filter: brightness(1.12); }
+
 /* ---------- 用户区 ---------- */
 .user-bar {
   display: flex;

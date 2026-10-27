@@ -1,10 +1,11 @@
 /**
- * minigames.js —— 宝箱里的三个互动小游戏
+ * minigames.js —— 宝箱里的四个互动小游戏
  * 全部用 DOM / Canvas 实现，不依赖外部资源。
  */
 
 import { el } from './ui.js';
 import { sfxClick, sfxWin, unlockAudio } from './audio.js';
+import { playNote, playSong } from './songs.js';
 
 function shell({ title, desc, buttonText = '收下这份快乐' }) {
   unlockAudio();
@@ -279,6 +280,75 @@ function openMemory() {
   ui.onCleanup(() => { lock = true; });
 }
 
+/* ============================================================
+   4. 小小钢琴
+   ============================================================ */
+function openPiano() {
+  const ui = shell({
+    title: '🎹 小小钢琴',
+    desc: '点彩色琴键就能弹出声音，从左到右声音越来越高。'
+  });
+
+  const keys = [
+    { n: 'C4', label: 'Do', color: '#ff8fab' },
+    { n: 'D4', label: 'Re', color: '#ffb37f' },
+    { n: 'E4', label: 'Mi', color: '#ffd166' },
+    { n: 'F4', label: 'Fa', color: '#90e0a0' },
+    { n: 'G4', label: 'Sol', color: '#8ecae6' },
+    { n: 'A4', label: 'La', color: '#c7b8ff' },
+    { n: 'B4', label: 'Si', color: '#f2a7d5' },
+    { n: 'C5', label: 'Do↑', color: '#ff8fab' }
+  ];
+
+  const row = el('div', { class: 'mini-keys' });
+  const result = el('p', { class: 'mini-result', text: '随便点一点，听听每个键的声音。' });
+
+  keys.forEach((k) => {
+    const btn = el('button', {
+      class: 'mini-key',
+      type: 'button',
+      'aria-label': `琴键 ${k.label}`,
+      text: k.label
+    });
+    btn.style.setProperty('--key', k.color);
+    btn.addEventListener('click', () => {
+      playNote(k.n, 0.6);
+      btn.classList.add('is-hit');
+      setTimeout(() => btn.classList.remove('is-hit'), 180);
+      result.textContent = `这是：${k.label}`;
+    });
+    row.append(btn);
+  });
+
+  const demoBtn = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: '🎵 听一段《小星星》' });
+  let handle = null;
+  demoBtn.addEventListener('click', () => {
+    sfxClick();
+    if (handle) {
+      handle.stop();
+      handle = null;
+      demoBtn.textContent = '🎵 听一段《小星星》';
+      result.textContent = '停下来啦，想听就再点一次。';
+      return;
+    }
+    demoBtn.textContent = '⏸ 停止';
+    result.textContent = '跟着旋律一起哼一哼～';
+    handle = playSong('twinkle', {
+      onEnd: () => {
+        handle = null;
+        demoBtn.textContent = '🎵 听一段《小星星》';
+        result.textContent = '听完啦，你也可以自己弹 🎶';
+      }
+    });
+  });
+
+  ui.body.append(row, demoBtn, result);
+  ui.onCleanup(() => {
+    handle?.stop();
+    handle = null;
+  });
+}
+
 function shuffle(list) {
   const arr = list.slice();
   for (let i = arr.length - 1; i > 0; i--) {
@@ -291,5 +361,6 @@ function shuffle(list) {
 export function openMinigame(game) {
   if (game === 'bubble') openBubble();
   else if (game === 'memory') openMemory();
+  else if (game === 'piano') openPiano();
   else openWheel();
 }

@@ -4,6 +4,17 @@
 
 import { el } from './ui.js';
 import { sfxWin, sfxDaily, sfxChest, unlockAudio, speakCongrats, stopSpeak } from './audio.js';
+import { currentUser } from './store.js';
+
+/** 当前用户称呼：默认用户/空名字统一显示为「你」 */
+export function playerName() {
+  try {
+    const name = currentUser();
+    return name && name !== '默认用户' ? name : '你';
+  } catch {
+    return '你';
+  }
+}
 
 const PALETTE = ['#ffd166', '#ff8fab', '#8ecae6', '#90e0a0', '#c7b8ff', '#ffb37f'];
 
@@ -104,9 +115,10 @@ export function celebrate({
   else sfxWin();
 
   // 祝贺语音：稍晚于音效起播（200ms），避免相互盖住，也降低被“继续”按钮提前取消的概率
+  const who = playerName();
   const spoken = speech || (points
-    ? `${title}！你太棒了！获得 ${points} 积分。`
-    : `${title}！你太棒了！`);
+    ? `${title}！${who}太棒了！获得 ${points} 积分。`
+    : `${title}！${who}太棒了！`);
   speakCongrats(spoken, 200);
 
   const overlay = el('div', { class: 'fx', role: 'dialog', 'aria-modal': 'true' });
@@ -114,7 +126,7 @@ export function celebrate({
   const inner = el('div', { class: 'fx-inner' });
   inner.append(el('div', { class: 'fx-emoji', text: emoji }));
   inner.append(el('div', { class: 'fx-title', text: title }));
-  inner.append(el('div', { class: 'fx-cheer', text: '你太棒了！' }));
+  inner.append(el('div', { class: 'fx-cheer', text: `${who} 太棒了！` }));
   if (subtitle) inner.append(el('div', { class: 'fx-sub', text: subtitle }));
   if (points) inner.append(el('div', { class: 'fx-points', text: `+${points} 积分` }));
 

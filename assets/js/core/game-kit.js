@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { GRADE_LABEL, LEVEL_LABEL, PASS_LINE, SUBJECT_TIP } from '../data/curriculum.js';
 import { getTaskById } from './tasks.js';
 import { completeTask, markCelebrated } from './score.js';
-import { celebrate } from './fx.js';
+import { celebrate, playerName } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
 import { shuffle } from './rng.js';
@@ -585,7 +585,7 @@ export function mountGame(subject) {
         subtitle: `首答正确 ${first}/${total} · ${task.title}`,
         variant: 'task',
         buttonText: '继续',
-        speech: '复习完成！你太棒了，知识又巩固了一遍！',
+        speech: `${playerName()}太棒了！复习完成，知识又巩固了一遍！`,
         onClose: () => renderResult({ passed: true, first, total, replay: true })
       });
       return;
@@ -599,7 +599,7 @@ export function mountGame(subject) {
         subtitle: `首答正确 ${first}/${total} · ${task.title}`,
         variant: 'task',
         buttonText: '继续',
-        speech: '你太棒了！这项任务已经达标过啦，再来一遍也很厉害！',
+        speech: `${playerName()}太棒了！这项任务已经达标过啦，再来一遍也很厉害！`,
         onClose: () => renderResult({ passed: true, first, total, replay: true })
       });
       return;

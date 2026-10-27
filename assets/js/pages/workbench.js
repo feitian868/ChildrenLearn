@@ -15,8 +15,9 @@ import {
 import { chestState, openChest } from '../core/chest.js';
 import { shopState, redeemItem } from '../core/shop.js';
 import { markCelebrated } from '../core/score.js';
-import { celebrate } from '../core/fx.js';
+import { celebrate, playerName } from '../core/fx.js';
 import { openMinigame } from '../core/minigames.js';
+import { SONGS, SONG_MAP, playSong } from '../core/songs.js';
 import {
   setSoundEnabled,
   isSoundEnabled,
@@ -400,7 +401,9 @@ function renderSubjects() {
   // 整张卡片就是链接，点标题、进度、按钮任意位置都能进入，避免只有小按钮可点
   const dataNow = store.load();
   const sk = store.todayKey();
-  const spDone = Math.min((dataNow.speakingProgress?.[sk]?.passed?.length || 0), 12);
+  const spProg = dataNow.speakingProgress?.[sk] || {};
+  const spTotal = spProg.total || 12;
+  const spDone = Math.min(spProg.passed?.length || 0, spTotal);
   const spCard = el('a', {
     class: 'card subject spk-card',
     href: 'speaking.html',
@@ -410,16 +413,16 @@ function renderSubjects() {
       el('div', { class: 'subject-badge', text: '🎤' }),
       el('div', { class: 'subject-title' }, [
         el('h3', { text: '英语口语跟读' }),
-        el('p', { text: '每日 12 句 · 约 10 分钟 · 3 次机会/句' })
+        el('p', { text: '单词拼写 + 句子 + 情景对话 · 约 10 分钟' })
       ]),
       el('span', {
-        class: `subject-count ${spDone >= 12 ? 'done' : ''}`.trim(),
-        text: `${spDone}/12`
+        class: `subject-count ${spDone >= spTotal ? 'done' : ''}`.trim(),
+        text: `${spDone}/${spTotal}`
       })
     ]),
     el('span', {
-      class: `btn btn-block ${spDone >= 12 ? 'btn-ghost' : 'btn-primary'}`,
-      text: spDone >= 12 ? '🔁 再练一遍' : '🎤 开始跟读'
+      class: `btn btn-block ${spDone >= spTotal ? 'btn-ghost' : 'btn-primary'}`,
+      text: spDone >= spTotal ? '🔁 再练一遍' : '🎤 开始跟读'
     })
   ]);
   spCard.addEventListener('click', () => { unlockAudio(); sfxClick(); });
@@ -449,10 +452,18 @@ function renderChest() {
     btnDisabled = false;
   } else if (state.state === 'opened') {
     emoji = state.reward?.emoji || '🎉';
-    tip = `今天抽到了：${state.reward?.name || '惊喜奖励'}。明天再来吧！`;
+    tip = `今天抽到了：${state.reward?.name || '惊喜奖励'}。`;
     btnText = '已领取，明天再来';
     btnClass = 'btn btn-ghost btn-block';
     btnDisabled = true;
+
+    // 非积分奖励当天可以再玩 / 再听 / 再看一次
+    if (state.reward && state.reward.type !== 'points') {
+      tip = `今天抽到了：${state.reward.name}，还想再来一次也可以。`;
+      btnText = replayText(state.reward);
+      btnClass = 'btn btn-primary btn-block';
+      btnDisabled = false;
+    }
   }
 
   const card = el('div', {
@@ -470,10 +481,29 @@ function renderChest() {
   const btn = el('button', { class: btnClass, type: 'button', text: btnText, disabled: btnDisabled });
   btn.addEventListener('click', () => {
     sfxClick();
+    if (state.state === 'opened' && state.reward && state.reward.type !== 'points') {
+      playReward(state.reward);
+      return;
+    }
     handleOpenChest();
   });
   card.append(btn);
   return card;
+}
+
+/** 已开过的奖励，再玩一次按钮文案 */
+function replayText(reward) {
+  if (reward.type === 'minigame') return '再玩一次';
+  if (reward.type === 'song') return '再听一遍';
+  if (reward.type === 'video') return '再看一遍';
+  return '已领取，明天再来';
+}
+
+/** 按奖励类型分发：小游戏 / 儿歌 / 动画片 */
+function playReward(reward) {
+  if (reward.type === 'minigame') openMinigame(reward.game);
+  else if (reward.type === 'song') openSong(reward.song ? SONG_MAP[reward.song] : null);
+  else if (reward.type === 'video') openVideo(reward);
 }
 
 function handleOpenChest() {
@@ -503,12 +533,9 @@ function handleOpenChest() {
     title: reward.name,
     subtitle: reward.desc || '宝箱里的惊喜',
     variant: 'chest',
-    buttonText: reward.type === 'minigame' ? '开始玩' : '播放',
-    speech: `宝箱开出${reward.name}，你太棒了！`,
-    onClose: () => {
-      if (reward.type === 'minigame') openMinigame(reward.game);
-      else if (reward.type === 'video') openVideo(reward);
-    }
+    buttonText: reward.type === 'minigame' ? '开始玩' : reward.type === 'song' ? '听一听' : '播放',
+    speech: `宝箱开出${reward.name}，${playerName()}太棒了！`,
+    onClose: () => playReward(reward)
   });
 }
 
@@ -539,6 +566,61 @@ function openVideo(reward) {
       overlay.remove();
     }
   });
+  document.body.append(overlay);
+}
+
+/** 儿歌弹层：播放 / 停止，关掉弹层自动停 */
+function openSong(song) {
+  const item = song || SONGS[0];
+  const overlay = el('div', { class: 'overlay' });
+  const tip = el('p', { class: 'mini-result', text: item.tip || '点下面的按钮开始播放 🎵' });
+  const playBtn = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: '▶ 播放儿歌' });
+  const closeBtn = el('button', { class: 'btn btn-ghost btn-block', type: 'button', text: '听完了' });
+
+  let handle = null;
+  const stop = (msg) => {
+    handle?.stop();
+    handle = null;
+    playBtn.textContent = '▶ 再听一遍';
+    if (msg) tip.textContent = msg;
+  };
+
+  playBtn.addEventListener('click', () => {
+    sfxClick();
+    if (handle) {
+      stop('停下来啦，想听就再点一次。');
+      return;
+    }
+    playBtn.textContent = '⏸ 停止';
+    tip.textContent = `正在播放：${item.emoji || '🎵'} ${item.name}`;
+    handle = playSong(item, {
+      onEnd: () => {
+        handle = null;
+        playBtn.textContent = '▶ 再听一遍';
+        tip.textContent = '听完啦，还想听就再点一次 🎶';
+      }
+    });
+  });
+
+  closeBtn.addEventListener('click', () => {
+    stop('');
+    overlay.remove();
+  });
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      stop('');
+      overlay.remove();
+    }
+  });
+
+  const sheet = el('div', { class: 'sheet mini-sheet' }, [
+    el('h3', { text: `${item.emoji || '🎵'} ${item.name}` }),
+    el('p', { text: '用手机、平板的喇叭就能听到，不用联网加载音频。' }),
+    playBtn,
+    closeBtn,
+    tip
+  ]);
+  overlay.append(sheet);
   document.body.append(overlay);
 }
 
@@ -810,7 +892,7 @@ function maybeCelebrateDaily() {
     subtitle: `连续打卡 ${data.profile.streak || 1} 天 · 四科全部达标`,
     variant: 'daily',
     buttonText: '享受成果',
-    speech: `今天的任务全部完成，你太棒了！已经连续打卡 ${data.profile.streak || 1} 天。`
+    speech: `今天的任务全部完成，${playerName()}太棒了！已经连续打卡 ${data.profile.streak || 1} 天。`
   });
 }
 
