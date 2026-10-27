@@ -175,6 +175,20 @@ dialog.spk-dialog.open { display: block; }
 }
 .spk-m-ctrls .btn.btn-primary { background: #ffb45e; color: #fff; }
 .spk-m-ctrls .btn:disabled { background: #ddd; color: #999; cursor: not-allowed; }
+/* 长按录音中状态 */
+.spk-m-ctrls .btn.is-recording {
+  background: #ff4757 !important;
+  color: #fff;
+  animation: spkPulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.6);
+}
+@keyframes spkPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(255, 71, 87, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); }
+}
+/* 触屏设备长按禁用文字选择 */
+.spk-m-ctrls .btn { user-select: none; -webkit-user-select: none; touch-action: manipulation; }
 .spk-m-log {
   background: #fafafa;
   border-radius: 10px;
@@ -244,6 +258,23 @@ dialog.spk-dialog.open { display: block; }
   letter-spacing: 2px;
   color: #d96a00;
   margin: 10px 0;
+  transition: all 0.2s ease;
+}
+.spk-m-word.is-big {
+  font-size: clamp(30px, 7vw, 46px);
+  letter-spacing: 4px;
+  padding: 16px 12px;
+  background: linear-gradient(135deg, #fff7e8, #ffe4c4);
+  border-radius: 14px;
+  border: 2px dashed #ffb066;
+}
+.spk-m-word.is-hidden {
+  color: #b0b8c5;
+  letter-spacing: 8px;
+  font-size: 22px;
+  background: transparent;
+  border: none;
+  padding: 0;
 }
 .spk-input {
   width: 100%;

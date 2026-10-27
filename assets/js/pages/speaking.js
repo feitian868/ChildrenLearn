@@ -168,7 +168,7 @@ function persist() {
 }
 
 /* ============================================================
-   语音识别
+   语音识别（长按说话 / 松开停止 + 短按兜底自动停）
    ============================================================ */
 
 const SR = (() => {
@@ -178,8 +178,8 @@ const SR = (() => {
 const srEnabled = !!SR;
 if (SR) {
   SR.lang = 'en-US';
-  SR.continuous = false;
-  SR.interimResults = false;
+  SR.continuous = true;       // 长按模式必须开，允许持续录音
+  SR.interimResults = true;  // 显示中间识别结果
   SR.maxAlternatives = 3;
 }
 
@@ -193,6 +193,138 @@ function judge(target, transcript) {
   let hit = 0;
   keyWords.forEach((w) => { if (u.includes(w)) hit++; });
   return hit / keyWords.size >= 0.6;
+}
+
+/**
+ * 长按录音：
+ *   - pointerdown / touchstart → 开始录音，按钮变红色「松开结束」
+ *   - pointerup / touchend / pointerleave → 停止录音，收集结果
+ *   - 兜底 15 秒自动停（防止卡死）
+ *   - 不支持长按的环境（PC 鼠标）：短按一次自动录 4 秒再停止
+ *
+ * @param {HTMLElement} btn   要绑定的按钮元素
+ * @param {string}      text  目标文本（用于 judge 打分）
+ * @param {function}    onResult  结束回调 ({ passed, transcript })
+ */
+function recordPress(btn, text, onResult) {
+  if (!SR) { onResult({ passed: false, transcript: '' }); return; }
+
+  let holding = false;
+  let started = false;
+  let finalTranscript = '';
+  let autoStopTimer = null;
+  let fallBackShortPress = false;
+  const isTouch = matchMedia('(pointer: coarse)').matches;
+
+  function resetSR() {
+    SR.onresult = null;
+    SR.onerror = null;
+    SR.onend = null;
+  }
+
+  function startRec() {
+    if (started) return;
+    started = true;
+    holding = true;
+    finalTranscript = '';
+    btn.disabled = false;
+    btn.classList.add('is-recording');
+    btn.textContent = '🔴 松开结束（或读完再说）';
+
+    SR.onresult = (ev) => {
+      let interim = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) finalTranscript += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      btn.textContent = interim
+        ? `🔴 ${interim.slice(0, 16)}${interim.length > 16 ? '…' : ''}（松开结束）`
+        : '🔴 正在听…（松开结束）';
+    };
+    SR.onerror = () => { finish({ passed: false, transcript: finalTranscript }); };
+    SR.onend = () => {
+      // 只有不是我们主动 stop 的情况下才兜底 finish
+      if (!holding && started) finish({ passed: judge(text, finalTranscript), transcript: finalTranscript });
+    };
+
+    try { SR.start(); }
+    catch { finish({ passed: false, transcript: '' }); return; }
+
+    // 兜底 15 秒自动停
+    autoStopTimer = setTimeout(() => {
+      if (holding) {
+        holding = false;
+        try { SR.stop(); } catch { /* ignore */ }
+      }
+    }, 15000);
+
+    // PC 无长按 → 短按后 4 秒自动停
+    if (!isTouch) {
+      fallBackShortPress = true;
+      setTimeout(() => {
+        if (holding) {
+          holding = false;
+          try { SR.stop(); } catch { /* ignore */ }
+        }
+      }, 4000);
+    }
+  }
+
+  function stopRec() {
+    if (!started) return;
+    holding = false;
+    clearTimeout(autoStopTimer);
+    btn.classList.remove('is-recording');
+    btn.textContent = '🎤 跟我读';
+    btn.disabled = true;
+    try { SR.stop(); } catch { /* ignore */ }
+    // SR 停掉后可能还有最后一个 final result
+    setTimeout(() => {
+      btn.disabled = false;
+      finish({ passed: judge(text, finalTranscript), transcript: finalTranscript });
+    }, 400);
+  }
+
+  function finish(res) {
+    started = false;
+    holding = false;
+    clearTimeout(autoStopTimer);
+    btn.classList.remove('is-recording');
+    btn.textContent = '🎤 跟我读';
+    resetSR();
+    onResult(res);
+  }
+
+  // 绑定事件
+  const pd = (e) => { e.preventDefault(); startRec(); };
+  const pu = (e) => { e.preventDefault(); if (started) stopRec(); };
+  const pl = (e) => { if (holding) stopRec(); };
+
+  // 触屏 + 鼠标统一用 pointer events
+  btn.addEventListener('pointerdown', pd);
+  btn.addEventListener('pointerup', pu);
+  btn.addEventListener('pointercancel', pl);
+  btn.addEventListener('pointerleave', pl);
+
+  // 同时也保留 click 作为 PC 端的兜底短按
+  btn.addEventListener('click', (e) => {
+    // 如果已经通过 pointerdown 启动过，click 不再触发
+    if (started || fallBackShortPress) return;
+    startRec();
+    // 给 PC 端 4 秒自动停
+    setTimeout(() => {
+      if (holding) {
+        holding = false;
+        try { SR.stop(); } catch { /* ignore */ }
+      }
+    }, 4000);
+  }, { once: true });
+}
+
+/** 旧版单次录音兼容保留（list 外部入口） */
+function recordOnce(btn, text, onResult) {
+  recordPress(btn, text, onResult);
 }
 
 /* ============================================================
@@ -374,27 +506,66 @@ function recordOnce(btn, text, onResult) {
   try { SR.start(); } catch { finish({ passed: false, transcript: '' }); }
 }
 
-/* ---------- 单词：拼写 + 发音 ---------- */
+/* ---------- 单词：展示 → 拼写 → 发音 ---------- */
 
 function practiceWord(item) {
   if (!item) return;
+  // 三阶段：'show' 展示词卡 → 'spell' 拼写检查 → 'done' 完成
+  let phase = progress.passed.has(item.id) ? 'done' : 'show';
   const state = { spelled: progress.passed.has(item.id), spoken: progress.passed.has(item.id) };
-  const wordEl = el('div', { class: 'spk-m-word', text: state.spelled ? item.word : '？ ？ ？' });
+
+  const wordEl = el('div', { class: 'spk-m-word is-big', text: item.word });
+  const zhEl = el('div', { class: 'spk-m-zh', text: item.zh });
   const input = el('input', {
     class: 'spk-input',
     type: 'text',
     placeholder: '在这里拼出这个单词',
     autocomplete: 'off',
     autocapitalize: 'off',
-    spellcheck: false
+    spellcheck: false,
+    style: { display: 'none' }
   });
-  const hint = el('div', { class: 'spk-hint', text: `共 ${item.word.length} 个字母，首字母是 “${item.word[0]}”` });
+  const hint = el('div', { class: 'spk-hint', text: '' });
   const logBox = el('div', { class: 'spk-m-log' });
+
   const listenBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '🔊 听发音' });
-  const checkBtn = el('button', { class: 'btn', type: 'button', text: '✍️ 检查拼写' });
-  const readBtn = el('button', { class: 'btn', type: 'button', text: '🎤 读一读' });
-  const selfBtn = srEnabled ? null : el('button', { class: 'btn btn-outline', type: 'button', text: '✅ 我读对了（自评）' });
+  const nextBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '我记住了，开始拼写 ✍️' });
+  const checkBtn = el('button', { class: 'btn', type: 'button', text: '✍️ 检查拼写', style: { display: 'none' } });
+  const readBtn = el('button', { class: 'btn', type: 'button', text: '🎤 读一读', style: { display: 'none' } });
+  const selfBtn = srEnabled ? null : el('button', { class: 'btn btn-outline', type: 'button', text: '✅ 我读对了（自评）', style: { display: 'none' } });
   const closeBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '返回' });
+
+  function setPhase(p) {
+    phase = p;
+    // reset
+    input.style.display = 'none';
+    nextBtn.style.display = 'none';
+    checkBtn.style.display = 'none';
+    readBtn.style.display = 'none';
+    if (selfBtn) selfBtn.style.display = 'none';
+
+    if (p === 'show') {
+      wordEl.classList.remove('is-hidden');
+      wordEl.textContent = item.word;
+      hint.textContent = `看看这个词，然后点「我记住了」开始拼写`;
+      nextBtn.style.display = '';
+    } else if (p === 'spell') {
+      wordEl.classList.add('is-hidden');
+      wordEl.textContent = '？ ？ ？';
+      input.style.display = '';
+      input.value = '';
+      hint.textContent = `共 ${item.word.length} 个字母，首字母是 “${item.word[0]}”`;
+      checkBtn.style.display = '';
+      input.focus();
+    } else if (p === 'done') {
+      wordEl.classList.remove('is-hidden');
+      wordEl.textContent = item.word;
+      hint.textContent = state.spoken ? '拼写和发音都对了 ✔' : '拼写正确！再读一遍就完成了';
+      checkBtn.style.display = 'none';
+      readBtn.style.display = '';
+      if (selfBtn) selfBtn.style.display = '';
+    }
+  }
 
   const tryFinish = () => {
     if (!(state.spelled && state.spoken)) return;
@@ -408,15 +579,15 @@ function practiceWord(item) {
   };
 
   listenBtn.addEventListener('click', () => { sfxClick(); speak(item.word, 'en-US'); });
+  nextBtn.addEventListener('click', () => { sfxClick(); setPhase('spell'); });
   checkBtn.addEventListener('click', () => {
     const val = input.value.trim().toLowerCase();
     if (!val) { toast('先拼一拼再检查哦', 'warn'); return; }
     if (val === item.word.toLowerCase()) {
       state.spelled = true;
-      wordEl.textContent = item.word;
-      hint.textContent = '拼写正确！再读一遍就完成了';
       sfxCorrect();
       toast('拼写正确 ✔', 'ok');
+      setPhase('done');
       tryFinish();
     } else {
       sfxWrong();
@@ -439,24 +610,21 @@ function practiceWord(item) {
     });
   });
   if (selfBtn) {
-    selfBtn.addEventListener('click', () => {
-      state.spoken = true;
-      tryFinish();
-    });
+    selfBtn.addEventListener('click', () => { state.spoken = true; tryFinish(); });
   }
   closeBtn.addEventListener('click', () => { sfxClick(); closeDialog(); render(); });
 
   openDialog([
     el('div', { class: 'spk-m-tag', text: '① 单词跟读' }),
-    el('div', { class: 'spk-m-zh', text: item.zh }),
+    zhEl,
     wordEl,
     input,
     hint,
-    el('div', { class: 'spk-m-ctrls' }, [listenBtn, checkBtn, readBtn, selfBtn, closeBtn]),
+    el('div', { class: 'spk-m-ctrls' }, [listenBtn, nextBtn, checkBtn, readBtn, selfBtn, closeBtn]),
     logBox
   ]);
+  setPhase('show');          // 先展示单词
   setTimeout(() => speak(item.word, 'en-US'), 250);
-  setTimeout(() => input.focus(), 300);
 }
 
 /* ---------- 句子 ---------- */
