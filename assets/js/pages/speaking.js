@@ -8,9 +8,9 @@
  */
 
 import * as store from '../core/store.js';
-import { hashString, mulberry32, shuffle, pick, sample } from '../core/rng.js';
-import { speak, unlockAudio, sfxClick, sfxCorrect, sfxWrong, sfxWin } from './audio.js';
-import { el, clear, toast } from './ui.js';
+import { hashString, mulberry32, shuffle } from '../core/rng.js';
+import { speak, unlockAudio, sfxClick, sfxCorrect, sfxWrong, sfxWin } from '../core/audio.js';
+import { el, clear, toast } from '../core/ui.js';
 
 const app = document.getElementById('app');
 const data = store.load();
@@ -96,12 +96,14 @@ function buildSpeakingDay(grade, dayKey) {
   }
 
   // 365 天回避：如果签名已出现过，从同池找替换
+  // 注意只排除「今天之前」用过且仍在窗口内的；今天自己的记录要放过（否则刷新后一条都不剩）
   const cutoff = store.shiftDateKey(dayKey, -365);
+  const tooRecent = (sig) => Boolean(avoid[sig] && avoid[sig] < dayKey && avoid[sig] >= cutoff);
   const out = [];
   const usedSig = new Set();
   for (const item of pickSet) {
     const sig = `sp:${item.text.toLowerCase()}`;
-    if (avoid[sig] && avoid[sig] >= cutoff) continue; // 365 天内做过
+    if (tooRecent(sig)) continue;
     if (usedSig.has(sig)) continue;
     out.push({
       id: `sp-${hashString(sig).toString(36)}`,
@@ -120,7 +122,7 @@ function buildSpeakingDay(grade, dayKey) {
     for (const q of fallback) {
       if (out.length >= TOTAL) break;
       const sig = `sp:${q.speak.toLowerCase()}`;
-      if (avoid[sig] && avoid[sig] >= cutoff) continue;
+      if (tooRecent(sig)) continue;
       if (usedSig.has(sig)) continue;
       out.push({
         id: `sp-${hashString(sig).toString(36)}`,
@@ -134,15 +136,12 @@ function buildSpeakingDay(grade, dayKey) {
     }
   }
 
-  return out.slice(0, TOTAL);
-}
-
-function markSpeakingUsed(items, dayKey) {
-  const map = data.speakingRecent || (data.speakingRecent = {});
-  items.forEach((it) => { map[it.sig] = dayKey; });
-  const cutoff = store.shiftDateKey(dayKey, -365);
-  Object.keys(map).forEach((k) => { if (map[k] < cutoff) delete map[k]; });
+  const items = out.slice(0, TOTAL);
+  // 生成即登记：明天起 365 天内不再重复出现（今天的记录由 tooRecent 放过，刷新不受影响）
+  items.forEach((it) => { avoid[it.sig] = dayKey; });
+  Object.keys(avoid).forEach((k) => { if (avoid[k] < cutoff) delete avoid[k]; });
   store.save(data);
+  return items;
 }
 
 /* ============================================================
@@ -152,11 +151,24 @@ function markSpeakingUsed(items, dayKey) {
 const dayKey = store.todayKey();
 const speakingItems = buildSpeakingDay(data.grade, dayKey);
 
-let progress = (data.speakingProgress || {})[dayKey] || {
-  done: new Set(), passed: new Set(), time: 0
+const savedProgress = (data.speakingProgress || {})[dayKey] || {};
+const progress = {
+  done: new Set(Array.isArray(savedProgress.done) ? savedProgress.done : []),
+  passed: new Set(Array.isArray(savedProgress.passed) ? savedProgress.passed : [])
 };
-if (!(progress.done instanceof Set)) progress.done = new Set(progress.done);
-if (!(progress.passed instanceof Set)) progress.passed = new Set(progress.passed);
+
+/** 进度以数组形式落盘（Set 无法 JSON 序列化），并处理 12 句全过的加分 */
+function persistProgress() {
+  data.speakingProgress = data.speakingProgress || {};
+  data.speakingProgress[dayKey] = { done: [...progress.done], passed: [...progress.passed] };
+  if (progress.passed.size >= TOTAL && !(data.speakingAward || {})[dayKey]) {
+    data.speakingAward = data.speakingAward || {};
+    data.speakingAward[dayKey] = true;
+    data.profile.points = (data.profile.points || 0) + 1;
+    toast('12 句全部通过，积分 +1 🎉', 'ok');
+  }
+  store.save(data);
+}
 
 const SR = (() => {
   try { return new (window.SpeechRecognition || window.webkitSpeechRecognition)(); }
@@ -176,14 +188,17 @@ function render() {
   unlockAudio();
   clear(app);
   app.className = 'spk';
-  app.append(
+  const nodes = [
     renderTop(),
-    srEnabled ? null : el('div', { class: 'spk-banner', html: '⚠ 本浏览器未开启录音权限或不支持语音识别，跟读评分将降级为「朗读 + 自评」模式。建议用 Chrome 浏览器。' }),
     renderIntro(),
     renderList(),
     renderControls(),
     el('dialog', { class: 'spk-dialog', id: 'spkDialog' })
-  );
+  ];
+  if (!srEnabled) {
+    nodes.splice(1, 0, el('div', { class: 'spk-banner', html: '⚠ 本浏览器不支持语音识别（或未授权麦克风），已降级为「朗读 + 自评」模式。建议用 Chrome 浏览器。' }));
+  }
+  app.append(...nodes);
 }
 
 function renderTop() {
@@ -285,8 +300,7 @@ function practice(item) {
   const onPass = () => {
     progress.passed.add(item.id);
     progress.done.add(item.id);
-    store.save(data);
-    markSpeakingUsed([item], dayKey);
+    persistProgress();
     sfxWin();
     render();
   };
@@ -298,8 +312,7 @@ function practice(item) {
       sfxClick();
       progress.passed.add(item.id);
       progress.done.add(item.id);
-      store.save(data);
-      markSpeakingUsed([item], dayKey);
+      persistProgress();
       toast('自评通过 ✔', 'ok');
       render();
     });
@@ -340,8 +353,7 @@ function startRecord(item, recordBtn, logBox, log, attemptsLeft, onPass) {
       sfxWrong();
       toast('3 次未过，先跳过吧', 'warn');
       progress.done.add(item.id);
-      store.save(data);
-      markSpeakingUsed([item], dayKey);
+      persistProgress();
       render();
     }
   };

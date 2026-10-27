@@ -73,6 +73,9 @@ function defaultData(grade = 3) {
     days: {},
     dailyHistory: {}, // { [dateKey]: { completed, total, pointsEarned, chestOpened, streak, firstTry:{correct,total} } }
     recentQuestions: {}, // { [questionId]: 最后使用日期 }，抽题回避用，保留 365 天
+    speakingProgress: {}, // { [dateKey]: { done: [id], passed: [id] } } 英语跟读当日进度
+    speakingRecent: {},    // { [sig]: 最后使用日期 } 跟读内容回避用，保留 365 天
+    speakingAward: {},     // { [dateKey]: true } 当日跟读 12 句全过的加分已发放标记
     orders: [],
     settings: {
       sound: true,
@@ -227,6 +230,9 @@ function normalize(raw) {
     days: raw.days && typeof raw.days === 'object' ? raw.days : {},
     dailyHistory: raw.dailyHistory && typeof raw.dailyHistory === 'object' ? raw.dailyHistory : {},
     recentQuestions: raw.recentQuestions && typeof raw.recentQuestions === 'object' ? raw.recentQuestions : {},
+    speakingProgress: raw.speakingProgress && typeof raw.speakingProgress === 'object' ? raw.speakingProgress : {},
+    speakingRecent: raw.speakingRecent && typeof raw.speakingRecent === 'object' ? raw.speakingRecent : {},
+    speakingAward: raw.speakingAward && typeof raw.speakingAward === 'object' ? raw.speakingAward : {},
     orders: Array.isArray(raw.orders) ? raw.orders : [],
     settings: { ...base.settings, ...(raw.settings || {}) }
   };

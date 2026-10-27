@@ -397,10 +397,15 @@ function renderSubjects() {
   });
 
   // 英语口语跟读（独立卡片，不参与四科进度）
+  // 整张卡片就是链接，点标题、进度、按钮任意位置都能进入，避免只有小按钮可点
   const dataNow = store.load();
   const sk = store.todayKey();
   const spDone = Math.min((dataNow.speakingProgress?.[sk]?.passed?.length || 0), 12);
-  const spCard = el('div', { class: 'card subject' }, [
+  const spCard = el('a', {
+    class: 'card subject spk-card',
+    href: 'speaking.html',
+    'aria-label': '进入英语口语跟读'
+  }, [
     el('div', { class: 'subject-head' }, [
       el('div', { class: 'subject-badge', text: '🎤' }),
       el('div', { class: 'subject-title' }, [
@@ -408,19 +413,16 @@ function renderSubjects() {
         el('p', { text: '每日 12 句 · 约 10 分钟 · 3 次机会/句' })
       ]),
       el('span', {
-        class: `subject-count ${spDone >= 12 ? 'done' : ''}`,
+        class: `subject-count ${spDone >= 12 ? 'done' : ''}`.trim(),
         text: `${spDone}/12`
       })
     ]),
-    el('a', {
+    el('span', {
       class: `btn btn-block ${spDone >= 12 ? 'btn-ghost' : 'btn-primary'}`,
-      href: 'speaking.html',
       text: spDone >= 12 ? '🔁 再练一遍' : '🎤 开始跟读'
-    }).tap?.(() => unlockAudio())
+    })
   ]);
-  // 用 addEventListener 代替 .tap（ui.js 的 el 函数不提供 .tap）
-  const spGo = spCard.querySelector('a');
-  if (spGo) spGo.addEventListener('click', () => { unlockAudio(); sfxClick(); });
+  spCard.addEventListener('click', () => { unlockAudio(); sfxClick(); });
   wrap.append(spCard);
 
   return wrap;

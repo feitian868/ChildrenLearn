@@ -137,6 +137,18 @@
 .subject-count { font-weight: 800; color: var(--ink2); font-size: 15px; font-variant-numeric: tabular-nums; }
 .subject-count.done { color: var(--ok); }
 
+/* 英语口语跟读卡片：整张卡都是链接，点任意位置都能进入 */
+.spk-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  --sc: #ff8f4d;
+  --sc-soft: #fff4ec;
+}
+.spk-card:active { transform: scale(0.99); }
+.spk-card .btn-block { margin-top: 12px; }
+
 /* 数学卡标题行的奥数入口 */
 .olympic-head-btn {
   min-height: var(--tap);
