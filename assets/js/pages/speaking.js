@@ -486,26 +486,6 @@ function closeDialog() {
   dialog.className = 'spk-dialog';
 }
 
-/** 通用：录音一次，回调 passed */
-function recordOnce(btn, text, onResult) {
-  if (!SR) { onResult({ passed: false, transcript: '' }); return; }
-  btn.disabled = true;
-  const origin = btn.textContent;
-  btn.textContent = '🎤 录音中…';
-  const finish = (res) => {
-    btn.disabled = false;
-    btn.textContent = origin;
-    onResult(res);
-  };
-  SR.onresult = (ev) => {
-    const transcript = (ev.results[0][0].transcript || '').toLowerCase();
-    try { SR.stop(); } catch { /* 忽略 */ }
-    finish({ passed: judge(text, transcript), transcript });
-  };
-  SR.onerror = () => { try { SR.stop(); } catch { /* 忽略 */ } finish({ passed: false, transcript: '' }); };
-  try { SR.start(); } catch { finish({ passed: false, transcript: '' }); }
-}
-
 /* ---------- 单词：展示 → 拼写 → 发音 ---------- */
 
 function practiceWord(item) {
