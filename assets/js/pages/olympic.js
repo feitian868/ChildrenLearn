@@ -13,7 +13,8 @@ import { celebrate } from '../core/fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js';
 import { mulberry32, hashString } from '../core/rng.js';
 
-const DAILY_CAP = 5;
+const BASE_CAP = 5;
+const OVER_CAP = 8;   // 四科全完成后的上限
 const app = document.getElementById('app');
 document.body.dataset.subject = 'math';
 
@@ -22,6 +23,15 @@ let index = 0;
 let results = [];      // 'first' | 'retry'
 let locked = false;
 let earnedThisSet = 0;
+
+function allTodayDone() {
+  const d = store.getToday();
+  if (!d) return false;
+  return d.tasks.length > 0 && d.tasks.every((t) => t.done);
+}
+function dailyCap() {
+  return allTodayDone() ? OVER_CAP : BASE_CAP;
+}
 
 function todayEarned() {
   return store.getToday()?.olympicEarned || 0;
@@ -55,11 +65,15 @@ function render() {
   });
 
   const gradeLabel = GRADE_LABEL[store.load().grade];
+  const cap = dailyCap();
+  const overHint = allTodayDone()
+    ? '🌟 四科已全完成，奥数上限提升到 8 分！'
+    : `四科全部完成后上限提升到 ${OVER_CAP} 分`;
   const top = el('div', { class: 'game-top' }, [
     back,
     el('div', { class: 'game-heading' }, [
       el('h1', { text: `🧠 奥数专区 · ${gradeLabel}` }),
-      el('p', { text: `思维训练加餐 · 今日已得 ${todayEarned()}/${DAILY_CAP} 分` })
+      el('p', { text: `思维训练加餐 · 今日已得 ${todayEarned()}/${cap} 分 · ${overHint}` })
     ]),
     dots
   ]);
@@ -210,7 +224,7 @@ function record(kind) {
   results.push(kind);
   const pts = kind === 'first' ? 1 : 0;
   // todayEarned() 读的是 store 实时值，已包含本组之前的得分，不能再减 earnedThisSet
-  const room = Math.max(0, DAILY_CAP - todayEarned());
+  const room = Math.max(0, dailyCap() - todayEarned());
   const add = Math.min(pts, room);
   earnedThisSet += add;
   if (add > 0) {
@@ -230,7 +244,7 @@ function next() {
 function renderResult() {
   clear(app);
   const firsts = results.filter((x) => x === 'first').length;
-  const capped = todayEarned() >= DAILY_CAP;
+  const capped = todayEarned() >= dailyCap();
 
   const again = el('button', { class: 'btn btn-primary', type: 'button', text: '再来一组' });
   again.addEventListener('click', () => { sfxClick(); newSet(); });
@@ -245,7 +259,7 @@ function renderResult() {
         el('div', { class: 'q-prompt', text: `${firsts}/${questions.length} 题一次答对` }),
         el('div', { class: 'q-sub', text: capped && earnedThisSet === 0
           ? '今日奥数积分已领满，明天再来吧！'
-          : `本组获得 +${earnedThisSet} 分 · 今日累计 ${todayEarned()}/${DAILY_CAP} 分` }),
+          : `本组获得 +${earnedThisSet} 分 · 今日累计 ${todayEarned()}/${dailyCap()} 分` }),
         el('div', { class: 'mini-actions', style: { display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' } }, [
           again,
           el('a', { class: 'btn btn-ghost', href: 'index.html', style: { background: '#eef2ff', color: 'var(--accent)', border: '2px solid var(--accent-2)', fontWeight: 800 }, text: '🏠 回到工作台' })

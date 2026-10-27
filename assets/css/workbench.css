@@ -595,3 +595,105 @@
   .parent-body { display: block !important; }
   .answer-table { font-size: 12px; }
 }
+
+/* ---------- 诊断报告（v3 新增） ---------- */
+.gp-diagnosis { padding: 18px 22px; }
+.gp-dia-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.gp-dia-head h3 { font-size: 18px; }
+.gp-dia-section { margin-top: 16px; }
+.gp-dia-section h4 { font-size: 15px; color: var(--ink2); margin-bottom: 10px; font-weight: 700; }
+.gp-dia-tip {
+  margin-top: 10px;
+  font-size: 13.5px;
+  color: var(--ink2);
+  line-height: 1.7;
+  padding: 10px 14px;
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+
+/* 学科正确率进度条 */
+.gp-subj-list { display: flex; flex-direction: column; gap: 10px; }
+.gp-subj-row {
+  display: grid;
+  grid-template-columns: 26px 50px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.gp-subj-icon { font-size: 20px; text-align: center; }
+.gp-subj-name { font-size: 14px; font-weight: 600; }
+.gp-subj-bar {
+  height: 10px;
+  background: var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.gp-subj-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  transition: width 400ms ease;
+}
+.gp-subj-rate { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+
+/* 薄弱知识点 */
+.gp-weak-list { display: flex; flex-direction: column; gap: 8px; }
+.gp-weak-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-hover);
+  border-radius: 10px;
+}
+.gp-weak-rank {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.gp-weak-topic { flex: 1; font-size: 14px; font-weight: 600; }
+.gp-weak-miss {
+  font-size: 13px; color: var(--bad); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 错因分布 */
+.gp-reason-list { display: flex; flex-direction: column; gap: 10px; }
+.gp-reason-row {
+  display: grid;
+  grid-template-columns: 28px 100px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.gp-reason-icon { font-size: 20px; text-align: center; }
+.gp-reason-name { font-size: 14px; font-weight: 600; }
+.gp-reason-bar {
+  height: 12px;
+  background: var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.gp-reason-fill {
+  display: block;
+  height: 100%;
+  border-radius: 6px;
+  transition: width 400ms ease;
+}
+.gp-reason-val {
+  font-size: 13px; font-variant-numeric: tabular-nums;
+  color: var(--ink2); min-width: 70px; text-align: right;
+}
+
+/* ---------- 工作台小补充 ---------- */
+.progress-est {
+  font-size: 12.5px;
+  color: var(--ink2);
+  display: inline-block;
+  margin-top: 4px;
+}
+.oly-today-chip {
+  font-size: 13px;
+}

@@ -9,9 +9,11 @@
  * 其他模块一律通过这里读写，统一走 getUserKey()，不散落硬编码键名。
  */
 
+// 注意：不能导入 score.js（会形成循环依赖），这里的 1 必须和 score.js 的 TASK_POINTS 保持一致
+
 export const APP_USERS_KEY = 'app_users';
 export const APP_CURRENT_KEY = 'app_currentUser';
-export const VERSION = 2;
+export const VERSION = 3;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
 
 export const SUBJECTS = ['chinese', 'english', 'math', 'science'];
@@ -257,11 +259,55 @@ function normalize(raw) {
 function snapshotOf(day, data) {
   const done = day.tasks.filter((t) => t.done);
   const pointsEarned =
-    done.length * 5 +
+    done.length * 1 +  // 与 score.js 的 TASK_POINTS 保持一致：每完成一个任务 +1 分
     (day.allDoneBonus || 0) +
     (day.streakBonus || 0) +
     (day.chest?.rewardPoints || 0) +
     (day.olympicEarned || 0); // 奥数专区得分也计入当日
+
+  // --- 学科维度的首答正确率 ---
+  const subjectStats = {};
+  day.tasks.forEach((t) => {
+    if (!t.subject || !t.done) return;
+    if (!subjectStats[t.subject]) subjectStats[t.subject] = { correct: 0, total: 0 };
+    subjectStats[t.subject].correct += t.firstTryCorrect || 0;
+    subjectStats[t.subject].total += t.resultTotal || t.questions?.length || 4;
+  });
+
+  // --- 错题错因分布 ---
+  /** @type {{careless:number|key:string, noknow:number|key:string, guess:number|key:string, nokey:{key:string,topic:string,miss:number,total:number}[]}} */
+  let reasonStats = null;
+  let weakKeys = null;
+  const hasReasons = done.some((t) => Array.isArray(t.wrongReasons) && t.wrongReasons.length);
+  if (hasReasons) {
+    reasonStats = { careless: 0, noknow: 0, guess: 0 };
+    const keyMiss = new Map();
+    const keyTotal = new Map();
+    done.forEach((t) => {
+      (t.wrongReasons || []).forEach((entry, idx) => {
+        reasonStats[entry.reason] = (reasonStats[entry.reason] || 0) + 1;
+        const q = t.questions?.[idx];
+        if (q?.key) {
+          keyMiss.set(q.key, (keyMiss.get(q.key) || 0) + 1);
+          keyTotal.set(q.key, (keyTotal.get(q.key) || 0)); // 同任务不同题不重复算 total
+        }
+      });
+      // 同任务的题目 total 计数
+      const taskKeys = new Set((t.questions || []).map((q) => q.key).filter(Boolean));
+      taskKeys.forEach((k) => keyTotal.set(k, (keyTotal.get(k) || 0) + 1));
+    });
+    // 薄弱知识点 TOP（错题数 >= 2 的）
+    weakKeys = Array.from(keyMiss.entries())
+      .map(([key, miss]) => {
+        // 找一个有这个 key 的题目拿 topic 名字
+        const q = day.tasks.flatMap((t) => t.questions || []).find((x) => x.key === key);
+        return { key, topic: q?.topic || key, miss, total: keyTotal.get(key) || 1 };
+      })
+      .filter((x) => x.miss >= 2)
+      .sort((a, b) => b.miss - a.miss)
+      .slice(0, 8);
+  }
+
   return {
     completed: done.length,
     total: day.tasks.length,
@@ -274,7 +320,11 @@ function snapshotOf(day, data) {
           correct: done.reduce((s, t) => s + (t.firstTryCorrect || 0), 0),
           total: done.reduce((s, t) => s + (t.resultTotal || t.questions?.length || 4), 0)
         }
-      : null
+      : null,
+    // 以下是 v3 新增：诊断性评估数据
+    subjectStats: Object.keys(subjectStats).length ? subjectStats : null,
+    wrongReasons: reasonStats,
+    weakKeys
   };
 }
 

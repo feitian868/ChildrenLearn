@@ -359,10 +359,47 @@ export const ENGLISH_BANK = [
     'go-went，see-saw，ride-rode，buy-bought。', `${P6B} · Unit 3 Where Did You Go?`, {
       pairs: [{ a: 'go', b: 'went' }, { a: 'see', b: 'saw' }, { a: 'ride', b: 'rode' }, { a: 'buy', b: 'bought' }]
     }),
-  e('g6-24', 6, 2, '拼写', 'order', '按顺序点字母，拼出“博物馆”的英文', null, 'museum',
+  e('g6-24', 6, 2, '拼写', 'order', '按顺序点字母，拼出"博物馆"的英文', null, 'museum',
     '博物馆的英文是 museum，字母顺序 m-u-s-e-u-m。', `${P6A} · Unit 1 How Can I Get There?`, {
       tiles: ['m', 'u', 's', 'e', 'u', 'm']
-    })
+    }),
+
+  /* ---------------- 情景表达 / 看图说话（主动输出类） ---------------- */
+  // 一年级：简单交际场景
+  e('g1-ex-1', 1, 2, '情景表达', 'choice', '早上来到学校见到老师，你应该说什么？', ['Good morning, teacher!', 'Good night!', 'Goodbye!', 'I am fine!'], 0,
+    '早上问好说 Good morning。', `${J1A} · Hello!`, { speak: 'Good morning, teacher!' }),
+  e('g1-ex-2', 1, 2, '情景表达', 'choice', '别人帮了你，你应该说什么？', ['Thank you!', 'Sorry!', 'Hello!', 'Goodbye!'], 0,
+    '表示感谢用 Thank you。', `${J1A} · Hello!`, { speak: 'Thank you' }),
+
+  // 二年级：日常场景
+  e('g2-ex-1', 2, 2, '情景表达', 'choice', '在商场想买一件衣服，你应该对售货员说什么？', ['How much is this?', 'Where is the hospital?', 'What is your name?', 'I am ten.'], 0,
+    '问价格用 How much is this?（这个多少钱？）', `${J2A} · Shopping`, { speak: 'How much is this' }),
+  e('g2-ex-2', 2, 2, '情景表达', 'choice', '朋友生日聚会，你应该说什么祝福语？', ['Happy birthday!', 'Good morning!', 'Goodbye!', 'See you later.'], 0,
+    '生日祝福说 Happy birthday!', `${J2A} · Happy Birthday`, { speak: 'Happy birthday' }),
+
+  // 三年级：学校与家庭
+  e('g3-ex-1', 3, 2, '情景表达', 'choice', '老师问"What is your hobby?"（你的爱好是什么？），你应该回答什么？', ['My hobby is reading.', 'I am fine.', 'I am ten.', 'Yes, I do.'], 0,
+    '回答爱好用 My hobby is...（我的爱好是……）', `${P3A} · My Hobby`, { speak: 'My hobby is reading' }),
+  e('g3-ex-2', 3, 2, '情景表达', 'choice', '你想知道动物园几点开门，应该怎么问？', ['When does the zoo open?', 'Where is the zoo?', 'How much is the ticket?', 'What animals do you like?'], 0,
+    '问营业时间用 When does...open?', `${P3A} · Ask and Answer`, { speak: 'When does the zoo open' }),
+
+  // 四年级：描述与询问
+  e('g4-ex-1', 4, 2, '情景表达', 'choice', '你生病了去看医生，医生问"What is wrong with you?"，你应该回答什么？', ['I have a cold.', 'I am eleven.', 'I like apples.', 'I go to school by bus.'], 0,
+    '描述病情用 I have...（我得了……）。', `${P4B} · What's the Matter?`, { speak: 'I have a cold' }),
+  e('g4-ex-2', 4, 2, '情景表达', 'choice', '电话里找 Mike，你应该怎么说？', ['Hello, may I speak to Mike?', 'Hello, I am Mike.', 'Goodbye.', 'See you tomorrow.'], 0,
+    '打电话找人用 May I speak to...', `${P4A} · At the Phone`, { speak: 'May I speak to Mike' }),
+
+  // 五年级：计划与经历
+  e('g5-ex-1', 5, 2, '情景表达', 'choice', '朋友问你周末打算做什么，你应该回答什么？', ['I am going to visit my grandma.', 'I go to school every day.', 'I am a student.', 'I like cats.'], 0,
+    '描述计划用 be going to...（打算做……）', `${P5A} · My Weekend Plan`, { speak: 'I am going to visit my grandma' }),
+  e('g5-ex-2', 5, 2, '情景表达', 'choice', '同学问你"你刚才去哪儿了？"（Where did you go just now?），你应该回答什么？', ['I went to the library.', 'I go to school.', 'I will go home.', 'I am happy.'], 0,
+    '描述过去的经历用一般过去时 went。', `${P5B} · Yesterday`, { speak: 'I went to the library' }),
+
+  // 六年级：综合交际
+  e('g6-ex-1', 6, 2, '情景表达', 'choice', '外国朋友说他明天要考试，你应该怎么回应？', ['Good luck!', 'Goodbye!', 'I am sorry.', 'Thank you.'], 0,
+    '别人要考试或面试时，说 Good luck!（祝你好运！）', `${P6A} · Polite Expressions`, { speak: 'Good luck' }),
+  e('g6-ex-2', 6, 2, '情景表达', 'choice', '你想表达"我认为我们应该多锻炼"，最地道的说法是？', ['I think we should exercise more.', 'I think we must exercise more.', 'I like exercise more.', 'We exercise more.'], 0,
+    '表达建议用 should（应该），比 must（必须）语气更委婉得体。', `${P6B} · Advice`, { speak: 'I think we should exercise more' })
 ];
 
 export function englishPool(grade) {

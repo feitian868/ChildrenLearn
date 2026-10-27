@@ -299,6 +299,16 @@ function renderProgress() {
   const bar = el('i');
   bar.style.width = `${prog.percent}%`;
 
+  // 时间预估：未完成任务 × 10 分钟/项，跟读约 10 分钟，奥数可选
+  const remaining = prog.total - prog.done;
+  let estMin = remaining * 10;
+  // 跟读如果没做
+  const sk = store.todayKey();
+  const spProg = store.load().speakingProgress?.[sk] || {};
+  const spTotal = spProg.total || 12;
+  if ((spProg.passed?.length || 0) < spTotal) estMin += 10;
+  const estText = remaining === 0 ? '四科都完成啦 🎉' : `预计还要 ${estMin} 分钟`;
+
   return el('div', { class: 'card progress' }, [
     el('div', { class: 'progress-head' }, [
       el('h2', {}, ['今日进度', el('span', { class: 'date', text: store.formatDateCN(store.todayKey()) })]),
@@ -307,9 +317,10 @@ function renderProgress() {
     el('div', { class: 'progress-bar' }, [bar]),
     el('div', { class: 'progress-text' }, [
       el('span', {}, ['已完成 ', el('b', { text: prog.done }), ` / ${prog.total} 项`]),
-      el('span', {
-        text: done ? '去开启今日宝箱吧 →' : `再完成 ${prog.total - prog.done} 项就点亮宝箱`
-      })
+      el('span', {}, [
+        done ? '去开启今日宝箱吧 →' : `再完成 ${prog.total - prog.done} 项就点亮宝箱`,
+        el('small', { class: 'progress-est', text: ` · ${estText}` })
+      ])
     ])
   ]);
 }
@@ -369,6 +380,15 @@ function renderSubjects() {
       });
       headOly.addEventListener('click', () => unlockAudio());
       headChildren.push(headOly);
+
+      // 奥数今日状态徽章
+      const todayOly = day.olympicEarned || 0;
+      if (todayOly > 0) {
+        headChildren.push(el('span', {
+          class: 'chip chip-gold oly-today-chip',
+          text: `🧠 +${todayOly}`
+        }));
+      }
     }
 
     headChildren.push(el('span', {

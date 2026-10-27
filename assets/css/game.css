@@ -99,17 +99,26 @@ body.game-body {
 /* 一年级拼音标注 */
 ruby { ruby-position: over; }
 rt {
-  font-size: 0.42em;
+  font-size: 0.62em;
   font-weight: 500;
-  color: var(--ink-muted, #888);
-  line-height: 1.1;
-  letter-spacing: 0;
+  color: var(--ink-muted, #5a6278);
+  line-height: 1.25;
+  letter-spacing: 0.12em;
+  padding: 0 1px;
 }
 .choices ruby, .match-tile ruby { ruby-position: over; }
 .choices rt, .match-tile rt {
-  font-size: 0.38em;
-  color: var(--ink-muted, #888);
-  line-height: 1.1;
+  font-size: 0.55em;
+  letter-spacing: 0.10em;
+  color: var(--ink-muted, #5a6278);
+  line-height: 1.25;
+}
+/* 题干里原生写的拼音字母串（如 duōshǎo）——自动加字母间距 */
+.pinyin-literal {
+  display: inline-block;
+  letter-spacing: 0.28em;
+  padding: 0 2px;
+  font-weight: 500;
 }
 .q-sub { margin-top: 8px; font-size: clamp(14px, 2.2vw, 17px); color: var(--ink2); }
 
@@ -507,4 +516,59 @@ rt {
   .choice { padding: 8px 10px; }
   .choice .opt-key { display: none; }
   .match-wrap { gap: 8px 10px; }
+}
+
+/* ---------- 错因反思弹窗 ---------- */
+.reason-overlay {
+  z-index: 500;
+  background: rgba(28, 35, 60, 0.55);
+}
+.reason-sheet {
+  text-align: center;
+  animation: reasonPop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.reason-sheet.is-open { }
+@keyframes reasonPop {
+  from { transform: scale(0.85) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.reason-sheet h3 {
+  font-size: 20px;
+  margin-bottom: 6px;
+}
+.reason-sheet p {
+  font-size: 14px;
+  color: var(--ink2);
+  margin-bottom: 18px;
+}
+.reason-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reason-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  font-size: 16px;
+  text-align: left;
+  transition: transform 120ms, background 120ms, border-color 120ms;
+  min-height: 54px;
+}
+.reason-btn:active {
+  transform: scale(0.97);
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+.r-emoji {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.r-text {
+  flex: 1;
+  font-weight: 600;
 }

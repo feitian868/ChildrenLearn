@@ -6,13 +6,13 @@ import { el } from './ui.js';
 import { sfxWin, sfxDaily, sfxChest, unlockAudio, speakCongrats, stopSpeak } from './audio.js';
 import { currentUser } from './store.js';
 
-/** 当前用户称呼：默认用户/空名字统一显示为「你」 */
+/** 当前用户称呼：直接返回用户名，不替换成"你" */
 export function playerName() {
   try {
     const name = currentUser();
-    return name && name !== '默认用户' ? name : '你';
+    return name || '小朋友';
   } catch {
-    return '你';
+    return '小朋友';
   }
 }
 

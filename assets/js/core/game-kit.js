@@ -88,8 +88,10 @@ export function mountGame(subject) {
 
   const replay = Boolean(task.done);
   let results = new Array(task.questions.length).fill(null);
+  let wrongReasons = new Array(task.questions.length).fill(null); // 首答错因记录
   let index = 0;
   let locked = false;
+  let wrongIndex = 0;
 
   const heading = el('div', { class: 'game-heading' });
   const dots = el('div', { class: 'dots', role: 'status' });
@@ -142,12 +144,53 @@ export function mountGame(subject) {
     return box;
   }
 
-  let wrongIndex = 0;
+  const REASON_OPTIONS = [
+    { key: 'careless', text: '看错了 / 粗心', emoji: '🙈' },
+    { key: 'noknow',  text: '这题我不会',    emoji: '🤔' },
+    { key: 'guess',    text: '随便猜的',    emoji: '🎲' }
+  ];
 
+  let wrongMessageCalled = 0;
   function wrongMessage() {
-    const msg = WRONG_HINTS[wrongIndex % WRONG_HINTS.length];
-    wrongIndex += 1;
+    const pool = [
+      '没关系，再想一想～',
+      '差一点点，再试一次！',
+      '答错不扣分，慢慢来。',
+      '看看题目里的关键词，再选一次。',
+      '换个角度试试，你可以的！',
+      '注意题目问的是什么，再来一次。'
+    ];
+    const msg = pool[wrongMessageCalled % pool.length];
+    wrongMessageCalled += 1;
     return msg;
+  }
+
+  /** 答错后：先弹错因选择（仅首答），再让孩子 retry */
+  function showReasonPicker() {
+    return new Promise((resolve) => {
+      const overlay = el('div', { class: 'overlay reason-overlay' });
+      const sheet = el('div', { class: 'sheet reason-sheet', style: { width: 'min(360px, 100%)' } }, [
+        el('h3', { text: '你觉得为什么错了？' }),
+        el('p', { text: '告诉自己原因，下次就不会犯同样的错啦～' })
+      ]);
+      const buttons = el('div', { class: 'reason-btns' });
+      REASON_OPTIONS.forEach((opt) => {
+        const btn = el('button', { class: 'btn btn-ghost reason-btn', type: 'button' }, [
+          el('span', { class: 'r-emoji', text: opt.emoji }),
+          el('span', { class: 'r-text', text: opt.text })
+        ]);
+        btn.addEventListener('click', () => {
+          overlay.remove();
+          sfxClick();
+          resolve(opt.key);
+        });
+        buttons.append(btn);
+      });
+      sheet.append(buttons);
+      overlay.append(sheet);
+      document.body.append(overlay);
+      setTimeout(() => sheet.classList.add('is-open'), 30);
+    });
   }
 
   function markFirst(ok) {
@@ -177,11 +220,25 @@ export function mountGame(subject) {
     setTimeout(nextQuestion, 720);
   }
 
-  function wrongThenRetry(hint, extra) {
+  async function wrongThenRetry(hint, extra) {
+    // 防竞态：在弹错因弹窗期间锁定，避免多个错误按钮叠加弹窗
+    if (locked) return;
+    locked = true;
     markFirst(false);
     sfxWrong();
+    // 首答错因反思（replay 模式跳过）
+    if (!replay && wrongReasons[index] === null) {
+      try {
+        const reason = await showReasonPicker();
+        wrongReasons[index] = reason;
+      } catch {
+        // 用户取消（虽然目前没有取消按钮），记录为 guess
+        wrongReasons[index] = 'guess';
+      }
+    }
     hint.show(wrongMessage());
     extra?.();
+    locked = false;
   }
 
   /* ---------------- 选择题 ---------------- */
@@ -591,7 +648,14 @@ export function mountGame(subject) {
       return;
     }
 
-    const res = completeTask(task.id, { firstTryCorrect: first, total });
+    const res = completeTask(task.id, {
+      firstTryCorrect: first,
+      total,
+      wrongReasons: wrongReasons
+        .map((r, i) => (results[i] === 'miss' && r ? { reason: r, qIdx: i } : null))
+        .filter(Boolean),
+      questionResults: results.map((r) => r === 'correct')
+    });
     if (!res || res.already) {
       celebrate({
         emoji: SUBJECT_EMOJI[task.subject] || '🎉',
@@ -668,9 +732,10 @@ export function mountGame(subject) {
     const again = el('button', { class: 'btn btn-ghost', type: 'button', text: '再练一次' });
     again.addEventListener('click', () => {
       results = new Array(task.questions.length).fill(null);
+      wrongReasons = new Array(task.questions.length).fill(null);
       index = 0;
       locked = false;
-      wrongIndex = 0;
+      wrongMessageCalled = 0;
       showQuestion(0);
     });
 

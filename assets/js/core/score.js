@@ -33,6 +33,13 @@ export function completeTask(taskId, result = {}) {
   task.firstTryCorrect = Number.isFinite(result.firstTryCorrect) ? result.firstTryCorrect : null;
   task.resultTotal = Number.isFinite(result.total) ? result.total : task.questions.length;
   task.attempts = (task.attempts || 0) + 1;
+  // v3 新增：答题详情（错因、每题首答结果）
+  if (Array.isArray(result.wrongReasons) && result.wrongReasons.length) {
+    task.wrongReasons = result.wrongReasons;
+  }
+  if (Array.isArray(result.questionResults)) {
+    task.questionResults = result.questionResults;
+  }
 
   const profile = data.profile;
   let awarded = TASK_POINTS;

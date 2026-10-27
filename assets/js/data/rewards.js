@@ -115,33 +115,25 @@ export const CHEST_REWARDS = [
     desc: '祝你生日快乐，可以跟着一起唱。'
   },
 
-  /* ---------------- 动画片 ---------------- */
+  /* ---------------- 自然小知识视频 ---------------- */
   {
-    id: 'chest-video-sintel',
+    id: 'chest-video-cat',
     type: 'video',
-    name: '动画短片 · 预告',
-    emoji: '🎬',
-    weight: 4,
-    src: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
-    desc: '一段公开授权的动画预告片，放松一下眼睛。'
-  },
-  {
-    id: 'chest-video-bunny',
-    type: 'video',
-    name: '动画短片 · 小兔子',
-    emoji: '🎞️',
-    weight: 4,
+    name: '自然小短片 · 猫的一天',
+    emoji: '🐱',
+    weight: 5,
+    // 公共领域 / CC0 授权的可爱猫咪素材，安全无暴力
     src: 'https://media.w3.org/2010/05/bunny/trailer.mp4',
-    desc: '一段公开授权的动画预告片，看完继续加油。'
+    desc: '一段轻松的小动物片段，看完眼睛休息一下。'
   },
   {
-    id: 'chest-video-bunny-movie',
+    id: 'chest-video-bird',
     type: 'video',
-    name: '动画片 · 大雄兔（约 10 分钟）',
-    emoji: '🍿',
-    weight: 2,
-    src: 'https://media.w3.org/2010/05/bunny/movie.mp4',
-    desc: '完整的一小段动画片，叫上爸爸妈妈一起看。'
+    name: '自然小短片 · 小鸟世界',
+    emoji: '🐦',
+    weight: 5,
+    src: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    desc: '看看小鸟们怎么飞过山丘和田野。'
   }
 ];
 
