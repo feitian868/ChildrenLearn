@@ -249,8 +249,6 @@ export function mountGame(subject) {
         el('span', { class: 'opt-key', text: 'ABCD'[idx] || '' }),
         el('span', { html: pyHtml(task.grade, option) })
       ]);
-      // 选项 ruby 强制下沉，避免和左侧 opt-key 圆圈冲突
-      btn.querySelectorAll('ruby').forEach(r => { r.style.rubyPosition = 'under'; });
       btn.addEventListener('click', () => {
         if (locked || btn.disabled) return;
         sfxClick();
@@ -317,9 +315,7 @@ export function mountGame(subject) {
     const makeTile = (text, side) => {
       const attrs = { class: `match-tile ${side}`, type: 'button' };
       attrs.dataset = side === 'left' ? { a: text } : { b: text };
-      const tile = el('button', attrs, [el('span', { html: pyHtml(task.grade, text) })]);
-      tile.querySelectorAll('ruby').forEach(r => { r.style.rubyPosition = 'under'; });
-      return tile;
+      return el('button', attrs, [el('span', { html: pyHtml(task.grade, text) })]);
     };
 
     shuffle(Math.random, pairs.map((p) => p.a)).forEach((text) => {
@@ -625,11 +621,6 @@ export function mountGame(subject) {
 
     card.append(body);
     stage.append(card);
-
-    // 选项/连线/排序里的 ruby 强制下沉到下方，避免和左侧 opt-key 圆圈冲突
-    // (CSS 规则在部分浏览器场景下无法被覆盖，inline style 兜底)
-    stage.querySelectorAll('.choices ruby, .match-tile ruby, .order-slot ruby, .tile ruby')
-      .forEach(r => { r.style.rubyPosition = 'under'; });
   }
 
   /* ---------------- 结算 ---------------- */

@@ -181,8 +181,6 @@ function renderChoice(q, feedback, onReset) {
       el('span', { class: 'opt-key', text: 'ABCD'[i] }),
       el('span', { html: pyHtml(String(opt)) })
     ]);
-    // 选项 ruby 下沉，避免和 opt-key 圆圈冲突
-    btn.querySelectorAll('ruby').forEach(r => { r.style.rubyPosition = 'under'; });
     btn.addEventListener('click', () => {
       if (locked || btn.disabled) return;
       unlockAudio();
