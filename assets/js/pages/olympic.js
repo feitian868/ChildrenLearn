@@ -12,6 +12,7 @@ import { el, clear, toast } from '../core/ui.js';
 import { celebrate } from '../core/fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js';
 import { mulberry32, hashString } from '../core/rng.js';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
 
 const BASE_CAP = 5;
 const OVER_CAP = 8;   // 四科全完成后的上限
@@ -41,11 +42,17 @@ function newSet() {
   // 真随机：每次进入/再来一组都换新数值
   const rng = mulberry32(hashString(`oly-${Date.now()}-${Math.random()}`));
   const data = store.load();
-  questions = olympicSet(data.grade, rng);
+  const grade = data.grade;
+  const py = needsPinyin(grade);
+  questions = olympicSet(grade, rng);
   index = 0;
   results = [];
   earnedThisSet = 0;
   render();
+}
+
+function pyHtml(text) {
+  return py ? pinyinize(text) : text;
 }
 
 function render() {
@@ -82,7 +89,7 @@ function render() {
   const card = el('div', { class: 'q-card' }, [
     el('div', { class: 'q-head' }, [
       el('span', { class: 'q-topic', text: `${q.topic} · 第 ${index + 1}/${questions.length} 题` }),
-      el('div', { class: 'q-prompt', text: q.prompt })
+      el('div', { class: 'q-prompt', html: pyHtml(q.prompt) })
     ])
   ]);
   const feedback = el('div', { class: 'oly-feedback', role: 'status' });
@@ -172,8 +179,10 @@ function renderChoice(q, feedback, onReset) {
   q.options.forEach((opt, i) => {
     const btn = el('button', { class: 'choice', type: 'button' }, [
       el('span', { class: 'opt-key', text: 'ABCD'[i] }),
-      el('span', { text: String(opt) })
+      el('span', { html: pyHtml(String(opt)) })
     ]);
+    // 选项 ruby 下沉，避免和 opt-key 圆圈冲突
+    btn.querySelectorAll('ruby').forEach(r => { r.style.rubyPosition = 'under'; });
     btn.addEventListener('click', () => {
       if (locked || btn.disabled) return;
       unlockAudio();
