@@ -44,101 +44,141 @@ function shell({ title, desc, buttonText = '收下这份快乐' }) {
 }
 
 /* ============================================================
-   1. 幸运转盘
+   1. 接苹果（替换幸运转盘）
    ============================================================ */
-function openWheel() {
+function openCatchApple() {
   const ui = shell({
-    title: '🎡 幸运转盘',
-    desc: '点击“开始转动”，看看指针会停在哪一格。'
+    title: '🍎 接苹果',
+    desc: '20 秒内接住天上掉下来的水果，左右移动篮子。手机点屏幕左右侧，电脑按 ← → 键。'
   });
 
-  const labels = ['🍀 好运+1', '⭐ 超级星星', '✋ 击掌', '🦘 跳一下', '🎉 大声说耶', '😄 再笑一个'];
-  const colors = ['#8ecae6', '#ffd166', '#90e0a0', '#ff8fab', '#c7b8ff', '#ffb37f'];
+  const bar = el('div', { class: 'mini-bar' });
+  const scoreNode = el('b', { text: '0' });
+  const timeNode = el('b', { text: '20' });
+  bar.append(
+    el('span', {}, ['接住 ', scoreNode, ' 个']),
+    el('span', {}, ['剩余 ', timeNode, ' 秒'])
+  );
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 360;
-  canvas.height = 360;
-  canvas.className = 'mini-wheel';
-  ui.body.append(canvas);
+  const area = el('div', { class: 'mini-area', style: { touchAction: 'none' } });
+  const basket = el('div', {
+    class: 'mini-basket',
+    text: '🧺',
+    style: { left: '42%', bottom: '8px', position: 'absolute', fontSize: '44px', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,.15))' }
+  });
+  area.append(basket);
+  const result = el('p', { class: 'mini-result', text: '左右移动篮子，接住水果！' });
+  ui.body.append(bar, area, result);
 
-  const ctx = canvas.getContext('2d');
-  const step = (Math.PI * 2) / labels.length;
-  let rotation = 0;
-  let spinning = false;
-  let raf = 0;
+  let score = 0;
+  let time = 20;
+  let ended = false;
+  let basketLeft = 42;  // 百分比
+  const fruits = ['🍎', '🍊', '🍓', '🍇', '🍌', '🍐'];
 
-  const draw = () => {
-    ctx.clearRect(0, 0, 360, 360);
-    ctx.save();
-    ctx.translate(180, 180);
-    ctx.rotate(rotation);
-    labels.forEach((label, i) => {
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 166, i * step, (i + 1) * step);
-      ctx.closePath();
-      ctx.fillStyle = colors[i];
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-
-      ctx.save();
-      ctx.rotate(i * step + step / 2);
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.font = 'bold 19px "PingFang SC", "Microsoft YaHei", sans-serif';
-      ctx.fillStyle = '#3a2b00';
-      ctx.fillText(label, 150, 0);
-      ctx.restore();
-    });
-    ctx.restore();
-
-    ctx.beginPath();
-    ctx.moveTo(180, 4);
-    ctx.lineTo(162, 40);
-    ctx.lineTo(198, 40);
-    ctx.closePath();
-    ctx.fillStyle = '#1d2340';
-    ctx.fill();
+  const setBasket = (pct) => {
+    basketLeft = Math.max(0, Math.min(86, pct));
+    basket.style.left = basketLeft + '%';
   };
-  draw();
 
-  const result = el('p', { class: 'mini-result', text: '准备好了吗？' });
-  const spinBtn = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: '开始转动' });
+  // 触屏：按屏幕左右半边移动
+  let touchSide = null;
+  const startTouch = (e) => {
+    if (ended) return;
+    const rect = area.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    touchSide = x < rect.width / 2 ? -1 : 1;
+  };
+  const endTouch = () => { touchSide = null; };
+  area.addEventListener('pointerdown', startTouch);
+  area.addEventListener('pointerup', endTouch);
+  area.addEventListener('pointerleave', endTouch);
+  area.addEventListener('pointercancel', endTouch);
 
-  spinBtn.addEventListener('click', () => {
-    if (spinning) return;
-    spinning = true;
-    spinBtn.disabled = true;
-    result.textContent = '转呀转……';
+  // 键盘 ← →
+  const keys = { ArrowLeft: false, ArrowRight: false };
+  const onKeyDown = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = true; e.preventDefault(); } };
+  const onKeyUp = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = false; e.preventDefault(); } };
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
 
-    const winner = Math.floor(Math.random() * labels.length);
-    const targetMod = ((-Math.PI / 2 - (winner + 0.5) * step) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    const start = rotation;
-    let end = start + Math.PI * 2 * 4;
-    end += (targetMod - ((end % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  // 游戏主循环
+  const falling = [];  // {el, x%, y%, vy}
+  const spawnFruit = () => {
+    if (ended) return;
+    const fruit = el('div', {
+      class: 'mini-fruit',
+      text: fruits[Math.floor(Math.random() * fruits.length)],
+      style: { position: 'absolute', top: '-40px', fontSize: '34px', transition: 'none' }
+    });
+    const x = 6 + Math.random() * 86;
+    fruit.style.left = x + '%';
+    area.append(fruit);
+    falling.push({ el: fruit, x: x, y: -40, vy: 1.2 + Math.random() * 1.6 });
+  };
 
-    const t0 = performance.now();
-    const ease = (t) => 1 - Math.pow(1 - t, 3);
-    const frame = (now) => {
-      const t = Math.min(1, (now - t0) / 3000);
-      rotation = start + (end - start) * ease(t);
-      draw();
-      if (t < 1) raf = requestAnimationFrame(frame);
-      else {
-        spinning = false;
-        sfxWin();
-        result.textContent = `指针停在：${labels[winner]}`;
-        spinBtn.disabled = false;
-        spinBtn.textContent = '再转一次';
+  let lastSpawn = 0;
+  let lastFrame = 0;
+  const gameLoop = (now) => {
+    if (ended) return;
+    // 生成水果
+    if (now - lastSpawn > 750) { spawnFruit(); lastSpawn = now; }
+    // 移动篮子（触屏方向 + 键盘）
+    if (touchSide) setBasket(basketLeft + touchSide * 2.2);
+    if (keys.ArrowLeft) setBasket(basketLeft - 2.5);
+    if (keys.ArrowRight) setBasket(basketLeft + 2.5);
+    // 更新水果
+    const areaH = area.clientHeight;
+    const basketTop = areaH * 0.72;  // 篮子大致在底部 8% + 高度
+    for (let i = falling.length - 1; i >= 0; i--) {
+      const f = falling[i];
+      f.y += f.vy;
+      f.el.style.top = f.y + 'px';
+      // 碰撞检测（篮子区域与水果）
+      if (f.y >= basketTop && f.y <= basketTop + 50) {
+        const dx = Math.abs(f.x - basketLeft - 7);  // 篮子中心在 basketLeft + 7%
+        if (dx < 16) {
+          // 接住了！
+          score += 1;
+          scoreNode.textContent = String(score);
+          sfxClick();
+          f.el.remove();
+          falling.splice(i, 1);
+          continue;
+        }
       }
-    };
-    raf = requestAnimationFrame(frame);
-  });
+      // 掉出屏幕
+      if (f.y > areaH + 40) {
+        f.el.remove();
+        falling.splice(i, 1);
+      }
+    }
+    raf = requestAnimationFrame(gameLoop);
+  };
+  let raf = requestAnimationFrame(gameLoop);
 
-  ui.body.append(spinBtn, result);
-  ui.onCleanup(() => cancelAnimationFrame(raf));
+  // 倒计时
+  const countdown = setInterval(() => {
+    time -= 1;
+    timeNode.textContent = String(Math.max(0, time));
+    if (time <= 0) {
+      ended = true;
+      clearInterval(countdown);
+      cancelAnimationFrame(raf);
+      falling.forEach(f => f.el.remove());
+      sfxWin();
+      result.textContent = `时间到！你接住了 ${score} 个水果 🎉`;
+      ui.closeBtn.textContent = '我玩够了';
+    }
+  }, 1000);
+
+  ui.onCleanup(() => {
+    clearInterval(countdown);
+    cancelAnimationFrame(raf);
+    ended = true;
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('keyup', onKeyUp);
+  });
 }
 
 /* ============================================================
@@ -362,5 +402,5 @@ export function openMinigame(game) {
   if (game === 'bubble') openBubble();
   else if (game === 'memory') openMemory();
   else if (game === 'piano') openPiano();
-  else openWheel();
+  else openCatchApple();
 }

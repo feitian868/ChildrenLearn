@@ -41,13 +41,13 @@ export const CHEST_REWARDS = [
 
   /* ---------------- 互动小游戏 ---------------- */
   {
-    id: 'chest-minigame-wheel',
+    id: 'chest-minigame-catch',
     type: 'minigame',
-    game: 'wheel',
-    name: '幸运转盘',
-    emoji: '🎡',
+    game: 'catch-apple',
+    name: '接苹果',
+    emoji: '🍎',
     weight: 11,
-    desc: '转一转，看看指针停在哪一格。'
+    desc: '20 秒内用篮子接住天上掉下来的水果。'
   },
   {
     id: 'chest-minigame-bubble',
@@ -55,7 +55,7 @@ export const CHEST_REWARDS = [
     game: 'bubble',
     name: '泡泡大作战',
     emoji: '🫧',
-    weight: 11,
+    weight: 10,
     desc: '20 秒内戳破尽可能多的泡泡。'
   },
   {
@@ -64,7 +64,7 @@ export const CHEST_REWARDS = [
     game: 'memory',
     name: '记忆翻牌',
     emoji: '🃏',
-    weight: 9,
+    weight: 8,
     desc: '翻开卡片，找出全部相同的图案。'
   },
   {
@@ -73,7 +73,7 @@ export const CHEST_REWARDS = [
     game: 'piano',
     name: '小小钢琴',
     emoji: '🎹',
-    weight: 9,
+    weight: 8,
     desc: '点彩色琴键弹出声音，自己弹出《小星星》。'
   },
 
@@ -115,25 +115,42 @@ export const CHEST_REWARDS = [
     desc: '祝你生日快乐，可以跟着一起唱。'
   },
 
-  /* ---------------- 自然小知识视频 ---------------- */
+  /* ---------------- 自然小短片（≈25% 权重） ---------------- */
   {
-    id: 'chest-video-cat',
+    id: 'chest-video-forest',
     type: 'video',
-    name: '自然小短片 · 猫的一天',
-    emoji: '🐱',
-    weight: 5,
-    // 公共领域 / CC0 授权的可爱猫咪素材，安全无暴力
+    name: '自然小短片 · 森林里的一天',
+    emoji: '🌳',
+    weight: 7,
     src: 'https://media.w3.org/2010/05/bunny/trailer.mp4',
-    desc: '一段轻松的小动物片段，看完眼睛休息一下。'
+    desc: '跟着小动物一起走进森林，看看它们的一天。'
   },
   {
-    id: 'chest-video-bird',
+    id: 'chest-video-butterfly',
     type: 'video',
-    name: '自然小短片 · 小鸟世界',
-    emoji: '🐦',
-    weight: 5,
+    name: '自然小短片 · 蝴蝶飞呀飞',
+    emoji: '🦋',
+    weight: 7,
     src: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
-    desc: '看看小鸟们怎么飞过山丘和田野。'
+    desc: '看看小动物们怎么在花丛中自由自在。'
+  },
+  {
+    id: 'chest-video-ocean',
+    type: 'video',
+    name: '自然小短片 · 海洋世界',
+    emoji: '🐠',
+    weight: 7,
+    src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    desc: '潜入海底看看五颜六色的鱼。'
+  },
+  {
+    id: 'chest-video-sky',
+    type: 'video',
+    name: '自然小短片 · 天空的云',
+    emoji: '☁️',
+    weight: 8,
+    src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
+    desc: '抬头看看天上的云，变化多端真好看。'
   }
 ];
 
