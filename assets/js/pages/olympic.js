@@ -73,7 +73,7 @@ function render() {
     back,
     el('div', { class: 'game-heading' }, [
       el('h1', { text: `🧠 奥数专区 · ${gradeLabel}` }),
-      el('p', { text: `思维训练加餐 · 今日已得 ${todayEarned()}/${cap} 分 · ${overHint}` })
+      el('p', { text: `思维训练加餐 · 每套 ${questions.length} 题 · 今日已得 ${todayEarned()}/${cap} 分 · ${overHint}` })
     ]),
     dots
   ]);
@@ -86,16 +86,30 @@ function render() {
     ])
   ]);
   const feedback = el('div', { class: 'oly-feedback', role: 'status' });
-  card.append(q.type === 'choice' ? renderChoice(q, feedback) : renderInput(q, feedback));
+  // 把 reset 函数传给 choice/input，用于重试
+  let resetFn = null;
+  if (q.type === 'choice') {
+    card.append(renderChoice(q, feedback, (fn) => { resetFn = fn; }));
+  } else {
+    card.append(renderInput(q, feedback, (fn) => { resetFn = fn; }));
+  }
   card.append(feedback);
   stage.append(card);
 
-  app.append(top, stage, el('div', { class: 'game-foot', text: '答错可以重试，首答对 +2 分，重试对 +1 分' }));
+  const foot = el('div', { class: 'game-foot oly-foot' }, [
+    el('span', { text: '答错可以重试，首答对 +1 分' }),
+    el('a', { class: 'btn btn-ghost oly-back-home', href: 'index.html', text: '🏠 返回工作台' })
+  ]);
+  // 让 showWrong 可以拿到 resetFn
+  card._reset = () => resetFn && resetFn();
+  feedback._reset = () => resetFn && resetFn();
+
+  app.append(top, stage, foot);
 }
 
 /* ------------------------- 作答反馈 ------------------------- */
 
-/** 答对：显示「答对啦」+ 解析 + 下一题按钮，让孩子清楚看到结果 */
+/** 答对：显示「答对啦」+ 解析 + 下一题大按钮 */
 function showCorrect(feedback, q) {
   clear(feedback);
   feedback.className = 'oly-feedback is-correct';
@@ -103,9 +117,12 @@ function showCorrect(feedback, q) {
   const isLast = index + 1 >= questions.length;
   const nextBtn = el('button', {
     class: 'btn btn-primary oly-next',
-    type: 'button',
-    text: isLast ? '查看本组结果' : '下一题'
+    type: 'button'
   });
+  nextBtn.append(
+    el('span', { class: 'oly-next-main', text: isLast ? '🏁 查看本组结果' : '▶ 下一题' }),
+    el('span', { class: 'oly-next-sub', text: isLast ? '去算积分 · 领奖励' : '继续加油！' })
+  );
   nextBtn.addEventListener('click', () => {
     sfxClick();
     next();
@@ -121,23 +138,37 @@ function showCorrect(feedback, q) {
   );
 }
 
-/** 答错：常驻提示，直到答对为止 */
-function showWrong(feedback) {
+/** 答错：显示「❌ 再试一次」+ 明确的重试按钮（恢复所有选项/输入） */
+function showWrong(feedback, reset) {
   clear(feedback);
   feedback.className = 'oly-feedback is-wrong';
+
+  const retryBtn = el('button', {
+    class: 'btn oly-retry',
+    type: 'button',
+    text: '🔄 重新作答'
+  });
+  retryBtn.addEventListener('click', () => {
+    sfxClick();
+    reset && reset();
+    clear(feedback);
+  });
+
   feedback.append(
     el('div', { class: 'oly-fb-head' }, [
       el('span', { class: 'oly-fb-icon', text: '❌' }),
       el('span', { text: '答错了，再试一次' })
-    ])
+    ]),
+    retryBtn
   );
 }
 
 /* ------------------------- 选择题 ------------------------- */
 
-function renderChoice(q, feedback) {
+function renderChoice(q, feedback, onReset) {
   const wrap = el('div', { class: 'choices' });
   let tried = false;
+  const buttons = [];
   q.options.forEach((opt, i) => {
     const btn = el('button', { class: 'choice', type: 'button' }, [
       el('span', { class: 'opt-key', text: 'ABCD'[i] }),
@@ -157,18 +188,25 @@ function renderChoice(q, feedback) {
         sfxWrong();
         btn.classList.add('is-wrong');
         btn.disabled = true;
-        showWrong(feedback);
+        showWrong(feedback, reset);
         toast('再想想，你可以的！', 'info');
       }
     });
+    buttons.push(btn);
     wrap.append(btn);
   });
+  // 暴露重置函数：恢复所有选项可点
+  const reset = () => {
+    tried = false;
+    buttons.forEach(b => { b.disabled = false; b.classList.remove('is-wrong', 'is-correct'); });
+  };
+  onReset(reset);
   return wrap;
 }
 
 /* ------------------------- 数字输入题 ------------------------- */
 
-function renderInput(q, feedback) {
+function renderInput(q, feedback, onReset) {
   let value = '';
   let tried = false;
   const box = el('div', { class: 'calc-box', text: '?' });
@@ -191,10 +229,18 @@ function renderInput(q, feedback) {
       setTimeout(() => box.classList.remove('anim-shake'), 420);
       value = '';
       refresh();
-      showWrong(feedback);
+      showWrong(feedback, reset);
       toast('再算一次，接近了！', 'info');
     }
   };
+
+  const reset = () => {
+    tried = false;
+    value = '';
+    box.classList.remove('is-correct', 'anim-shake');
+    refresh();
+  };
+  onReset(reset);
 
   ['1','2','3','4','5','6','7','8','9','.','0','⌫'].forEach((k) => {
     const btn = el('button', { class: 'key', type: 'button', text: k });
