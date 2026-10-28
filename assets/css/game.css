@@ -98,25 +98,28 @@ body.game-body {
 }
 /* 一年级拼音标注 */
 ruby { ruby-position: over; }
+/* 题干/通用 rt：base 22-38px，0.82em ≈ 18-31px，比原 0.72em 放大约 14% */
 rt {
-  font-size: 1.0em;
+  font-size: 0.82em;
   font-weight: 500;
   color: var(--ink-muted, #5a6278);
-  line-height: 1.25;
-  letter-spacing: 0.12em;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
   padding: 0 1px;
 }
-.choices ruby, .match-tile ruby { ruby-position: over; }
-.choices rt, .match-tile rt {
-  font-size: 1.0em;
-  letter-spacing: 0.12em;
+/* 选项/连线/排序里 ruby 下沉到下方，避免和左侧 opt-key 圆圈或其他 sibling 元素冲突 */
+.choices ruby, .match-tile ruby, .order-slot ruby, .tile ruby { ruby-position: under !important; }
+/* 选项 rt：base 18-24px，0.85em ≈ 15-20px，比原 0.72em 放大约 18% */
+.choices rt, .match-tile rt, .order-slot rt, .tile rt {
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
   color: var(--ink-muted, #5a6278);
-  line-height: 1.25;
+  line-height: 1.15;
 }
-/* 题干里原生写的拼音字母串（如 duōshǎo）——自动加字母间距 */
+/* 题干里原生写的拼音字母串（如 shù dè piān páng...）——轻微加间距避免粘连 */
 .pinyin-literal {
   display: inline-block;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.05em;
   padding: 0 2px;
   font-weight: 500;
 }
