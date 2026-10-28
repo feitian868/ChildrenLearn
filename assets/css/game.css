@@ -99,7 +99,7 @@ body.game-body {
 /* 一年级拼音标注 */
 ruby { ruby-position: over; }
 rt {
-  font-size: 0.72em;
+  font-size: 1.0em;
   font-weight: 500;
   color: var(--ink-muted, #5a6278);
   line-height: 1.25;
@@ -108,7 +108,7 @@ rt {
 }
 .choices ruby, .match-tile ruby { ruby-position: over; }
 .choices rt, .match-tile rt {
-  font-size: 0.72em;
+  font-size: 1.0em;
   letter-spacing: 0.12em;
   color: var(--ink-muted, #5a6278);
   line-height: 1.25;
