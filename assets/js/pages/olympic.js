@@ -24,6 +24,7 @@ let index = 0;
 let results = [];      // 'first' | 'retry'
 let locked = false;
 let earnedThisSet = 0;
+let py = false;        // 当前年级是否需要拼音（newSet 里设）
 
 function allTodayDone() {
   const d = store.getToday();
@@ -43,7 +44,7 @@ function newSet() {
   const rng = mulberry32(hashString(`oly-${Date.now()}-${Math.random()}`));
   const data = store.load();
   const grade = data.grade;
-  const py = needsPinyin(grade);
+  py = needsPinyin(grade);
   questions = olympicSet(grade, rng);
   index = 0;
   results = [];
