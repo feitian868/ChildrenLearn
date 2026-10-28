@@ -4,18 +4,22 @@
  * 得分写入 days[今天].olympicEarned，成长记录会统计。
  */
 
-import * as store from '../core/store.js';
-import { ensureToday } from '../core/tasks.js';
-import { olympicSet } from '../data/knowledge-olympic.js';
-import { GRADE_LABEL } from '../data/curriculum.js';
-import { el, clear, toast } from '../core/ui.js';
-import { celebrate } from '../core/fx.js';
-import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js';
-import { mulberry32, hashString } from '../core/rng.js';
-import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
+import * as store from '../core/store.js?v=20261028h';
+import { ensureToday } from '../core/tasks.js?v=20261028h';
+import { olympicSet } from '../data/knowledge-olympic.js?v=20261028h';
+import { GRADE_LABEL } from '../data/curriculum.js?v=20261028h';
+import { el, clear, toast } from '../core/ui.js?v=20261028h';
+import { celebrate } from '../core/fx.js?v=20261028h';
+import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js?v=20261028h';
+import { mulberry32, hashString } from '../core/rng.js?v=20261028h';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261028h';
 
 const BASE_CAP = 5;
 const OVER_CAP = 8;   // 四科全完成后的上限
+const SET_SIZE = 4;
+const RECENT_SETS = 2;               // 模板去重：只避开最近 2 套用过的（保留 8 个）
+const MAX_RECENT_TEMPLATES = SET_SIZE * RECENT_SETS;
+const MAX_RECENT_HASHES = 400;       // hash 去重：保留最近 400 个题目实例
 const app = document.getElementById('app');
 document.body.dataset.subject = 'math';
 
@@ -25,6 +29,46 @@ let results = [];      // 'first' | 'retry'
 let locked = false;
 let earnedThisSet = 0;
 let py = false;        // 当前年级是否需要拼音（newSet 里设）
+
+/* ---------------- 去重持久化 ---------------- */
+
+/** 从 profile 里读出去重相关字段（兼容旧数据） */
+function readDedup(data) {
+  const p = data.profile || {};
+  return {
+    // { [grade: number]: templateId[] }
+    templates: p.olympicSeenTemplates || {},
+    // number[] —— 最近见过的 prompt hash
+    hashes: p.olympicSeenHashes || []
+  };
+}
+
+/** 写入新用过的 template IDs 和 prompt hashes */
+function writeDedup(grade, templateIds, hashes) {
+  store.update((d) => {
+    const p = d.profile = d.profile || {};
+    // templates per grade
+    const gradeKey = String(grade);
+    const existing = (p.olympicSeenTemplates?.[gradeKey] || []).slice();
+    templateIds.forEach((id) => {
+      // 去重：同一个模板如果之前在 list 里，先删掉旧位置再 push 到末尾
+      const i = existing.indexOf(id);
+      if (i >= 0) existing.splice(i, 1);
+      existing.push(id);
+    });
+    // 只保留最近 N 个（够覆盖 5 轮 bag 刷新）
+    p.olympicSeenTemplates = {
+      ...(p.olympicSeenTemplates || {}),
+      [gradeKey]: existing.slice(-MAX_RECENT_TEMPLATES)
+    };
+    // hashes：全局滑动窗口
+    const all = (p.olympicSeenHashes || []).slice();
+    hashes.forEach((h) => {
+      if (!all.includes(h)) all.push(h);
+    });
+    p.olympicSeenHashes = all.slice(-MAX_RECENT_HASHES);
+  });
+}
 
 function allTodayDone() {
   const d = store.getToday();
@@ -45,7 +89,22 @@ function newSet() {
   const data = store.load();
   const grade = data.grade;
   py = needsPinyin(grade);
-  questions = olympicSet(grade, rng);
+
+  // 读出去重池
+  const dedup = readDedup(data);
+  const recentTemplates = new Set(dedup.templates[String(grade)] || []);
+  const recentHashes = new Set(dedup.hashes || []);
+
+  // 生成（olympicSet 返回 {questions, usedTemplateIds, usedHashes}）
+  const { questions: qs, usedTemplateIds, usedHashes } = olympicSet(grade, rng, {
+    excludeTemplateIds: recentTemplates,
+    excludePromptHashes: recentHashes
+  });
+  questions = qs;
+
+  // 写回去重池
+  writeDedup(grade, usedTemplateIds, usedHashes);
+
   index = 0;
   results = [];
   earnedThisSet = 0;
