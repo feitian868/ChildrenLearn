@@ -242,14 +242,29 @@ function recordPress(btn, text, onResult) {
         ? `🔴 ${interim.slice(0, 16)}${interim.length > 16 ? '…' : ''}（松开结束）`
         : '🔴 正在听…（松开结束）';
     };
-    SR.onerror = () => { finish({ passed: false, transcript: finalTranscript }); };
+    SR.onerror = () => {
+      // 只有不是我们主动 stop 的情况下才报错
+      if (holding || started) finish({ passed: false, transcript: finalTranscript });
+    };
     SR.onend = () => {
       // 只有不是我们主动 stop 的情况下才兜底 finish
       if (!holding && started) finish({ passed: judge(text, finalTranscript), transcript: finalTranscript });
     };
 
-    try { SR.start(); }
-    catch { finish({ passed: false, transcript: '' }); return; }
+    // Chrome: 如果 SR 已经在 running，先 stop 等 300ms 再 start
+    const tryStart = () => {
+      try { SR.start(); }
+      catch {
+        // "not allowed" / "service not available" — 不可恢复
+        finish({ passed: false, transcript: '' });
+      }
+    };
+    if (SR.state === 'running' || SR.state === 'starting') {
+      try { SR.stop(); } catch { /* ignore */ }
+      setTimeout(tryStart, 350);
+    } else {
+      tryStart();
+    }
 
     // 兜底 15 秒自动停
     autoStopTimer = setTimeout(() => {
