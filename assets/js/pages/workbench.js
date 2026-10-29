@@ -12,12 +12,12 @@ import {
   dayProgress,
   allSubjectsDone
 } from '../core/tasks.js';
-import { chestState, openChest } from '../core/chest.js';
+import { chestState, openChest } from '../core/chest.js?v=20261029a';
 import { shopState, redeemItem } from '../core/shop.js';
 import { markCelebrated } from '../core/score.js';
 import { celebrate, playerName } from '../core/fx.js';
-import { openMinigame } from '../core/minigames.js';
-import { SONGS, SONG_MAP, playSong } from '../core/songs.js';
+import { openMinigame } from '../core/minigames.js?v=20261029a';
+import { SONGS, SONG_MAP, playSong } from '../core/songs.js?v=20261029a';
 import {
   setSoundEnabled,
   isSoundEnabled,
@@ -28,6 +28,91 @@ import { el, clear, dialog, longPress, toast } from '../core/ui.js';
 
 const app = document.getElementById('app');
 let parentOpen = false;
+
+/* ============ 视频场景动画（CSS 关键帧，只注入一次） ============ */
+(function injectVideoSceneCSS() {
+  if (document.getElementById('__video-scene-css')) return;
+  const s = document.createElement('style');
+  s.id = '__video-scene-css';
+  s.textContent = `
+@keyframes vs-sway{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes vs-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes vs-bubble{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(-220px);opacity:0}}
+@keyframes vs-wave{0%,100%{transform:translateX(-10px)}50%{transform:translateX(10px)}}
+@keyframes vs-swim1{0%{transform:translateX(0) scaleX(1)}49%{transform:translateX(440px) scaleX(1)}50%{transform:translateX(440px) scaleX(-1)}99%{transform:translateX(0) scaleX(-1)}100%{transform:translateX(0) scaleX(1)}}
+@keyframes vs-swim2{0%{transform:translateX(0) scaleX(1)}49%{transform:translateX(460px) scaleX(1)}50%{transform:translateX(460px) scaleX(-1)}99%{transform:translateX(0) scaleX(-1)}100%{transform:translateX(0) scaleX(1)}}
+@keyframes vs-butterfly1{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(20px,-30px) rotate(15deg)}50%{transform:translate(60px,-10px) rotate(-10deg)}75%{transform:translate(30px,-50px) rotate(10deg)}100%{transform:translate(0,0) rotate(0)}}
+@keyframes vs-butterfly2{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(-30px,-20px) rotate(-15deg)}50%{transform:translate(-70px,10px) rotate(10deg)}75%{transform:translate(-40px,-40px) rotate(-5deg)}100%{transform:translate(0,0) rotate(0)}}
+@keyframes vs-cloud{0%{transform:translateX(-120px)}100%{transform:translateX(820px)}}
+@keyframes vs-bird{0%{transform:translateX(0) translateY(0)}25%{transform:translateX(200px) translateY(-15px)}50%{transform:translateX(400px) translateY(0)}75%{transform:translateX(600px) translateY(-10px)}100%{transform:translateX(800px) translateY(0)}}
+  `;
+  document.head.appendChild(s);
+})();
+
+/** 4 种纯 CSS 动画自然场景（零网络依赖） */
+const VIDEO_SCENES = {
+  forest: () => {
+    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#87ceeb 0%,#b4e7a5 60%,#2d5016 100%)' } });
+    wrap.append(
+      el('div', { text: '☀️', style: { position: 'absolute', top: '14px', right: '20px', fontSize: '52px', animation: 'vs-sway 4s ease-in-out infinite' } })
+    );
+    for (let i = 0; i < 6; i++) {
+      wrap.append(el('div', {
+        text: '🌳',
+        style: {
+          position: 'absolute', left: `${5 + i * 16}%`, bottom: `${i % 2 * 6}%`,
+          fontSize: `${50 + i * 6}px`, transformOrigin: 'bottom center',
+          animation: `vs-sway ${3 + i * 0.7}s ease-in-out infinite`
+        }
+      }));
+    }
+    wrap.append(
+      el('div', { style: { position: 'absolute', bottom: '0', left: '0', right: '0', height: '38px', background: 'linear-gradient(180deg,#22543d,#1a365d)', opacity: '0.8' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', left: '20%', bottom: '8px', fontSize: '22px', animation: 'vs-float 3s ease-in-out infinite' } }),
+      el('div', { text: '🐿️', style: { position: 'absolute', left: '60%', bottom: '14px', fontSize: '18px', animation: 'vs-float 3.5s ease-in-out infinite 1s' } })
+    );
+    return wrap;
+  },
+  butterfly: () => {
+    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fef3c7 0%,#bbf7d0 100%)' } });
+    wrap.append(
+      el('div', { text: '🌻', style: { position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', fontSize: '48px', animation: 'vs-sway 5s ease-in-out infinite' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', top: '80px', left: '12px', fontSize: '32px', animation: 'vs-butterfly1 6s ease-in-out infinite' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', top: '40px', right: '20px', fontSize: '26px', animation: 'vs-butterfly2 7s ease-in-out infinite 1s' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', bottom: '30px', left: '45%', fontSize: '28px', animation: 'vs-butterfly1 5.5s ease-in-out infinite 2s' } })
+    );
+    for (let i = 0; i < 5; i++) {
+      wrap.append(el('div', { text: '🌸', style: { position: 'absolute', bottom: `${i * 12}px`, left: `${15 + i * 18}%`, fontSize: '18px' } }));
+    }
+    return wrap;
+  },
+  ocean: () => {
+    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#60a5fa 0%,#1e40af 60%,#172554 100%)' } });
+    wrap.append(
+      el('div', { style: { position: 'absolute', top: '0', left: '0', right: '0', height: '14px', background: 'linear-gradient(180deg,rgba(255,255,255,.6),transparent)', animation: 'vs-wave 3s ease-in-out infinite' } }),
+      el('div', { text: '🐠', style: { position: 'absolute', top: '40px', left: '-40px', fontSize: '34px', animation: 'vs-swim1 6s linear infinite' } }),
+      el('div', { text: '🐟', style: { position: 'absolute', top: '90px', left: '-60px', fontSize: '28px', animation: 'vs-swim2 7s linear infinite 1.5s' } }),
+      el('div', { text: '🐡', style: { position: 'absolute', top: '140px', left: '-50px', fontSize: '30px', animation: 'vs-swim1 8s linear infinite 3s' } }),
+      el('div', { text: '🪸', style: { position: 'absolute', bottom: '10px', left: '10px', fontSize: '40px' } }),
+      el('div', { text: '🌿', style: { position: 'absolute', bottom: '8px', right: '14px', fontSize: '34px' } })
+    );
+    for (let i = 0; i < 4; i++) {
+      wrap.append(el('div', { text: '🫧', style: { position: 'absolute', bottom: `${40 + i * 18}px`, left: `${20 + i * 18}%`, fontSize: '14px', animation: `vs-bubble ${4 + i}s ease-in infinite ${i * 0.8}s` } }));
+    }
+    return wrap;
+  },
+  sky: () => {
+    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fbbf24 0%,#fb923c 40%,#f472b6 80%,#a78bfa 100%)' } });
+    wrap.append(
+      el('div', { text: '🌤️', style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', fontSize: '64px', animation: 'vs-sway 6s ease-in-out infinite' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '60px', left: '-120px', fontSize: '40px', animation: 'vs-cloud 14s linear infinite' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '120px', left: '-160px', fontSize: '34px', animation: 'vs-cloud 18s linear infinite 5s' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '170px', left: '-140px', fontSize: '30px', animation: 'vs-cloud 16s linear infinite 8s' } }),
+      el('div', { text: '🕊️', style: { position: 'absolute', top: '90px', left: '-60px', fontSize: '18px', animation: 'vs-bird 10s linear infinite' } })
+    );
+    return wrap;
+  }
+};
 let day = null;
 
 /* ------------------------- 渲染入口 ------------------------- */
@@ -561,31 +646,19 @@ function handleOpenChest() {
 
 function openVideo(reward) {
   const overlay = el('div', { class: 'overlay' });
-  const video = el('video', {
-    src: reward.src,
-    controls: true,
-    autoplay: true,
-    playsInline: true,
-    style: { width: '100%', borderRadius: '16px', background: '#000', marginTop: '12px' }
-  });
+  const sceneFn = VIDEO_SCENES[reward.scene] || VIDEO_SCENES.forest;
+  const sceneEl = sceneFn();
   const sheet = el('div', { class: 'sheet', style: { width: 'min(720px, 100%)' } }, [
     el('h3', { text: `${reward.emoji || '🎬'} ${reward.name}` }),
-    el('p', { text: reward.desc || '' }),
-    video
+    el('p', { text: reward.desc || '', style: { color: '#718096', fontSize: '13px', margin: '4px 0 10px' } }),
+    sceneEl
   ]);
   const close = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: '看完了' });
-  close.addEventListener('click', () => {
-    video.pause();
-    overlay.remove();
-  });
+  const closeAll = () => overlay.remove();
+  close.addEventListener('click', closeAll);
   sheet.append(close);
   overlay.append(sheet);
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      video.pause();
-      overlay.remove();
-    }
-  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAll(); });
   document.body.append(overlay);
 }
 

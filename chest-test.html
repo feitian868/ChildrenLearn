@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>宝箱测试台 · Chest Lab v2（开箱即播）</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh; padding: 24px; color: #2d3748;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: white; font-size: 28px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+    .subtitle { color: rgba(255,255,255,.85); margin-bottom: 24px; font-size: 14px; }
+    .card {
+      background: white; border-radius: 16px; padding: 20px 24px; margin-bottom: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.15);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 18px; color: #4c51bf; display: flex; align-items: center; gap: 8px; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    button { border: none; cursor: pointer; font-weight: 700; font-size: 14px; padding: 10px 18px; border-radius: 10px; transition: transform .08s; }
+    button:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; box-shadow: 0 4px 14px rgba(102,126,234,.4); }
+    .btn-ghost { background: #edf2f7; color: #4a5568; }
+    .btn-gold { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #78350f; }
+
+    .result-badge {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #78350f;
+      font-weight: 800; padding: 14px 20px; border-radius: 12px; font-size: 18px;
+      display: flex; align-items: center; gap: 10px; min-height: 56px;
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; padding: 10px 12px; background: #f7fafc; color: #4a5568; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 10px 12px; border-bottom: 1px solid #edf2f7; vertical-align: middle; }
+    tr:hover td { background: #fafbfc; }
+    .bar-cell { width: 200px; }
+    .bar-bg { background: #edf2f7; height: 10px; border-radius: 5px; overflow: hidden; }
+    .bar-fg { height: 100%; border-radius: 5px; transition: width .3s ease; }
+    .type-points .bar-fg { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+    .type-minigame .bar-fg { background: linear-gradient(90deg, #34d399, #10b981); }
+    .type-song .bar-fg { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
+    .type-video .bar-fg { background: linear-gradient(90deg, #f472b6, #ec4899); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+    .tag-points { background: #fef3c7; color: #92400e; }
+    .tag-minigame { background: #d1fae5; color: #065f46; }
+    .tag-song { background: #ede9fe; color: #5b21b6; }
+    .tag-video { background: #fce7f3; color: #9d174d; }
+
+    /* Modal */
+    .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.6); display: flex; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px); animation: fadeIn .2s ease; }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes pop { 0% { transform: scale(.6); opacity: 0 } 60% { transform: scale(1.05) } 100% { transform: scale(1); opacity: 1 } }
+    .sheet {
+      background: white; border-radius: 20px; width: min(640px, 94vw); max-height: 90vh;
+      overflow: hidden; display: flex; flex-direction: column; animation: pop .35s cubic-bezier(.17,.67,.38,1.22);
+      box-shadow: 0 30px 80px rgba(0,0,0,.4);
+    }
+    .mini-head { padding: 18px 22px 6px; text-align: center; }
+    .mini-head h3 { margin: 0 0 4px; font-size: 22px; color: #2d3748; }
+    .mini-head p { margin: 0; color: #718096; font-size: 13px; }
+    .mini-body { flex: 1; overflow: auto; padding: 14px 22px; }
+    .close-bar { padding: 10px 22px 16px; text-align: center; }
+    .btn-block { width: 100%; padding: 12px; font-size: 15px; }
+
+    /* Reward specific */
+    .reward-points-display { text-align: center; padding: 30px 0; }
+    .points-number { font-size: 84px; font-weight: 900; background: linear-gradient(135deg, #f59e0b, #d97706); -webkit-background-clip: text; background-clip: text; color: transparent; animation: bounce .6s cubic-bezier(.17,.67,.38,1.5); }
+    @keyframes bounce { 0% { transform: scale(.3) } 60% { transform: scale(1.2) } 100% { transform: scale(1) } }
+
+    .video-wrap { position: relative; padding-top: 56.25%; border-radius: 12px; overflow: hidden; background: #000; }
+    .video-wrap video { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    /* Piano */
+    .piano { display: flex; justify-content: center; gap: 4px; padding: 10px 0; }
+    .piano-key { width: 48px; height: 140px; border: 2px solid #333; border-radius: 0 0 8px 8px; background: linear-gradient(180deg, #fff, #f0f0f0); cursor: pointer; font-weight: 700; color: #666; font-size: 11px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; transition: all .08s; }
+    .piano-key:hover { background: linear-gradient(180deg, #fef3c7, #fde68a); }
+    .piano-key.active { background: linear-gradient(180deg, #fbbf24, #f59e0b); transform: translateY(3px); }
+    .piano-play-btn { display: block; margin: 14px auto; padding: 12px 30px; font-size: 15px; }
+
+    /* Catch apple */
+    .mini-bar { display: flex; justify-content: space-between; font-weight: 700; padding: 0 4px 8px; }
+    .mini-area { position: relative; height: 320px; background: linear-gradient(180deg, #dbeafe 0%, #bbf7d0 100%); border-radius: 12px; overflow: hidden; touch-action: none; }
+    .mini-basket { position: absolute; left: 42%; bottom: 8px; font-size: 44px; filter: drop-shadow(0 4px 8px rgba(0,0,0,.15)); }
+    .fruit { position: absolute; font-size: 32px; pointer-events: none; }
+    .mini-result { text-align: center; margin: 10px 0 0; color: #4a5568; }
+
+    /* Bubble */
+    .bubble-area { position: relative; height: 320px; background: linear-gradient(180deg, #e0e7ff, #c7d2fe); border-radius: 12px; overflow: hidden; touch-action: none; }
+    .bubble { position: absolute; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; animation: bubbleFloat 8s linear infinite; }
+    @keyframes bubbleFloat { 0% { transform: translateY(0) } 100% { transform: translateY(340px) } }
+
+    /* Memory */
+    .memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; max-width: 380px; margin: 0 auto; }
+    .memory-card { aspect-ratio: 1; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; transition: transform .15s, background .15s; color: transparent; }
+    .memory-card.flipped { background: #fff; border: 2px solid #cbd5e1; color: #2d3748; transform: scale(1); }
+    .memory-card.matched { background: #d1fae5; border-color: #10b981; cursor: default; animation: matchPop .3s ease; }
+    @keyframes matchPop { 0% { transform: scale(1) } 50% { transform: scale(1.12) } 100% { transform: scale(1) } }
+
+    /* Song lyrics */
+    .song-tip { text-align: center; color: #764ba2; font-size: 15px; padding: 14px; background: #ede9fe; border-radius: 10px; margin: 10px 0; font-weight: 600; }
+    .song-dot { display: inline-block; width: 10px; height: 10px; background: #a78bfa; border-radius: 50%; margin: 0 2px; animation: beat .6s ease infinite; }
+    @keyframes beat { 0%,100% { transform: scale(1) } 50% { transform: scale(1.4); background: #7c3aed } }
+
+    /* Summary grid */
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .summary-item { background: #f7fafc; padding: 10px 14px; border-radius: 10px; border-left: 4px solid #667eea; }
+    .summary-item .label { font-size: 12px; color: #718096; }
+    .summary-item .value { font-size: 20px; font-weight: 800; color: #2d3748; margin-top: 2px; }
+
+    .sim-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; font-size: 13px; }
+    .sim-label { width: 180px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sim-bar-bg { flex: 1; max-width: 400px; background: #f1f5f9; height: 14px; border-radius: 7px; position: relative; }
+    .sim-bar-expected { position: absolute; inset: 0 auto 0 0; border-radius: 7px 0 0 7px; background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 3px, transparent 3px, transparent 6px); }
+    .sim-bar-actual { position: absolute; inset: 0 auto 0 0; border-radius: 7px 0 0 7px; background: linear-gradient(90deg, #667eea, #764ba2); opacity: .85; }
+    .sim-value { width: 70px; text-align: right; font-variant-numeric: tabular-nums; color: #475569; }
+    .sim-count { width: 60px; text-align: right; font-variant-numeric: tabular-nums; color: #94a3b8; font-size: 12px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🎁 宝箱测试台 v2 · 开箱即播</h1>
+  <div class="subtitle">不仅看概率！点开箱会真的弹出积分动画、播放儿歌、视频或小游戏。</div>
+
+  <div class="card">
+    <h2>🎯 真实开箱</h2>
+    <div class="controls">
+      <button class="btn-primary" id="btn-open">🎁 开一个宝箱（弹出效果）</button>
+      <button class="btn-ghost" id="btn-open-x4">⚡ 快速连开 4 个（只看结果）</button>
+      <button class="btn-ghost" id="btn-reset">🔄 重置模拟</button>
+    </div>
+    <div class="result-badge" id="result">
+      <span>先解锁浏览器音频：随便点一下页面，然后开宝箱 👇</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎲 Monte Carlo 批量模拟</h2>
+    <div class="controls">
+      <button class="btn-primary" data-n="100">×100 次</button>
+      <button class="btn-primary" data-n="1000">×1,000 次</button>
+      <button class="btn-primary" data-n="10000">×10,000 次</button>
+      <button class="btn-primary" data-n="100000">×100,000 次</button>
+    </div>
+    <div class="summary-grid" id="summary"></div>
+  </div>
+
+  <div class="card">
+    <h2>📦 奖励池一览（共 <span id="reward-count">0</span> 个 · 总权重 <span id="total-weight">0</span>）</h2>
+    <table>
+      <thead><tr>
+        <th>类型</th><th>Emoji</th><th>名称</th><th>权重</th><th>理论概率</th>
+        <th class="bar-cell">概率条</th><th>模拟次数</th><th>模拟概率</th><th>偏差</th>
+      </tr></thead>
+      <tbody id="reward-body"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>📊 模拟 vs 理论概率（<span id="sim-total">0</span> 次）</h2>
+    <div id="sim-chart"></div>
+    <p style="font-size:12px;color:#718096;margin-top:8px">紫色实心条 = 模拟概率｜斜线纹条 = 理论概率</p>
+  </div>
+</div>
+
+<script>
+/* ================= 奖励池（与 rewards.js 同步） ================= */
+const REWARDS = [
+  { id:'chest-points-2',   type:'points',   name:'2 积分',            emoji:'⭐', weight:16, points:2,  desc:'金色小星星进账' },
+  { id:'chest-points-5',   type:'points',   name:'5 积分',            emoji:'🌟', weight:9,  points:5,  desc:'加倍星星' },
+  { id:'chest-points-10',  type:'points',   name:'10 积分大奖',       emoji:'🏆', weight:3,  points:10, desc:'稀有金色大奖' },
+  { id:'chest-minigame-catch',  type:'minigame', game:'catch-apple', name:'接苹果',         emoji:'🍎', weight:11 },
+  { id:'chest-minigame-bubble', type:'minigame', game:'bubble',      name:'泡泡大作战',     emoji:'🫧', weight:10 },
+  { id:'chest-minigame-memory', type:'minigame', game:'memory',      name:'记忆翻牌',       emoji:'🃏', weight:8 },
+  { id:'chest-minigame-piano',  type:'minigame', game:'piano',       name:'小小钢琴',       emoji:'🎹', weight:8 },
+  { id:'chest-song-twinkle',    type:'song',     song:'twinkle',     name:'儿歌《小星星》', emoji:'⭐', weight:8 },
+  { id:'chest-song-two-tigers', type:'song',     song:'two-tigers',  name:'儿歌《两只老虎》', emoji:'🐯', weight:7 },
+  { id:'chest-song-mary',       type:'song',     song:'mary-lamb',   name:'儿歌《玛丽的小羊羔》', emoji:'🐑', weight:6 },
+  { id:'chest-song-birthday',   type:'song',     song:'birthday',    name:'儿歌《生日快乐》', emoji:'🎂', weight:6 },
+  { id:'chest-video-forest',    type:'video',    name:'自然短片·森林', emoji:'🌳', weight:7, scene:'forest' },
+  { id:'chest-video-butterfly', type:'video',    name:'自然短片·蝴蝶', emoji:'🦋', weight:7, scene:'butterfly' },
+  { id:'chest-video-ocean',     type:'video',    name:'自然短片·海洋', emoji:'🐠', weight:7, scene:'ocean' },
+  { id:'chest-video-sky',       type:'video',    name:'自然短片·天空', emoji:'☁️', weight:8, scene:'sky' }
+];
+const SONGS = {
+  twinkle: { name:'小星星', tempo:104, tip:'一闪一闪亮晶晶', notes:[['C4',1],['C4',1],['G4',1],['G4',1],['A4',1],['A4',1],['G4',2],['F4',1],['F4',1],['E4',1],['E4',1],['D4',1],['D4',1],['C4',2],['G4',1],['G4',1],['F4',1],['F4',1],['E4',1],['E4',1],['D4',2],['G4',1],['G4',1],['F4',1],['F4',1],['E4',1],['E4',1],['D4',2],['C4',1],['C4',1],['G4',1],['G4',1],['A4',1],['A4',1],['G4',2],['F4',1],['F4',1],['E4',1],['E4',1],['D4',1],['D4',1],['C4',2]] },
+  'two-tigers': { name:'两只老虎', tempo:120, tip:'两只老虎跑得快', notes:[['C4',1],['D4',1],['E4',1],['C4',1],['C4',1],['D4',1],['E4',1],['C4',1],['E4',1],['F4',1],['G4',2],['E4',1],['F4',1],['G4',2],['G4',.5],['A4',.5],['G4',.5],['F4',.5],['E4',1],['C4',1],['G4',.5],['A4',.5],['G4',.5],['F4',.5],['E4',1],['C4',1],['C4',1],['G3',1],['C4',2],['C4',1],['G3',1],['C4',2]] },
+  'mary-lamb': { name:'玛丽有只小羊羔', tempo:108, tip:'雪白羊毛真漂亮', notes:[['E4',1],['D4',1],['C4',1],['D4',1],['E4',1],['E4',1],['E4',2],['D4',1],['D4',1],['D4',2],['E4',1],['G4',1],['G4',2],['E4',1],['D4',1],['C4',1],['D4',1],['E4',1],['E4',1],['E4',1],['E4',1],['D4',1],['D4',1],['E4',1],['D4',1],['C4',2]] },
+  birthday: { name:'生日快乐', tempo:100, tip:'祝你生日快乐！', notes:[['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',2]] }
+};
+
+/* ================= 状态 ================= */
+const TOTAL_W = REWARDS.reduce((s,r) => s+(r.weight||1), 0);
+const TYPE_LABEL = { points:'积分', minigame:'小游戏', song:'儿歌', video:'短片' };
+const stats = Object.fromEntries(REWARDS.map(r=>[r.id,0]));
+let simTotal = 0;
+let audioCtx = null;
+
+/* ================= Audio ================= */
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+const SEMI = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+function freqOf(n) {
+  const m = /^([A-G])(#|b)?(-?\d)$/.exec(String(n));
+  if (!m) return 0;
+  const s = SEMI[m[1]] + (m[2]==='#'?1:m[2]==='b'?-1:0);
+  return 440 * Math.pow(2, ((Number(m[3])+1)*12+s - 69)/12);
+}
+function playNote(name, dur=0.55, {type='triangle', gain=0.09}={}) {
+  ensureAudio();
+  const f = freqOf(name); if (!f) return;
+  const t0 = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const v = audioCtx.createGain();
+  osc.type = type; osc.frequency.setValueAtTime(f, t0);
+  v.gain.setValueAtTime(0.0001, t0);
+  v.gain.exponentialRampToValueAtTime(gain, t0+0.02);
+  v.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  osc.connect(v).connect(audioCtx.destination); osc.start(t0); osc.stop(t0+dur+0.05);
+}
+function playSong(id, { onEnd } = {}) {
+  ensureAudio();
+  const s = SONGS[id] || SONGS.twinkle;
+  const beat = 60/(s.tempo||100);
+  const base = audioCtx.currentTime + 0.08;
+  let cursor = 0;
+  const timers = [];
+  s.notes.forEach(([name, beats]) => {
+    const dur = Math.max(0.08, (beats||1)*beat);
+    if (name !== 'R') {
+      const f = freqOf(name);
+      if (f) {
+        const osc = audioCtx.createOscillator();
+        const v = audioCtx.createGain();
+        const t = base + cursor;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t);
+        v.gain.setValueAtTime(0.0001, t);
+        v.gain.exponentialRampToValueAtTime(0.11, t + Math.min(0.05, dur/3));
+        v.gain.exponentialRampToValueAtTime(0.0001, t + dur*0.9);
+        osc.connect(v).connect(audioCtx.destination);
+        osc.start(t); osc.stop(t+dur);
+      }
+    }
+    const at = cursor * 1000;
+    timers.push(setTimeout(()=>{}, at));
+    cursor += dur;
+  });
+  timers.push(setTimeout(()=>onEnd?.(), cursor*1000+120));
+  return { stop(){ timers.forEach(clearTimeout); } };
+}
+
+/* ================= Modal ================= */
+function openModal(contentNode) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.innerHTML = `<div class="sheet"><div class="mini-body" id="__mb"></div><div class="close-bar"><button class="btn btn-gold btn-block" id="__cb">收下这份快乐 ✨</button></div></div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('__mb').appendChild(contentNode);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  overlay.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  document.getElementById('__cb').addEventListener('click', close);
+  return { overlay, close };
+}
+
+/* ================= 抽奖 ================= */
+function rollReward() {
+  let r = Math.random() * TOTAL_W;
+  for (const reward of REWARDS) { r -= reward.weight || 1; if (r <= 0) return reward; }
+  return REWARDS[0];
+}
+function rollOnceSilent() { stats[rollReward().id]++; simTotal++; }
+function runTrials(n) {
+  for (let i = 0; i < n; i++) rollOnceSilent();
+  render();
+}
+
+/* ================= 渲染 ================= */
+function typeLabel(type) { return `<span class="tag tag-${type}">${TYPE_LABEL[type]||type}</span>`; }
+function render() {
+  const tbody = document.getElementById('reward-body'); tbody.innerHTML = '';
+  REWARDS.forEach(r => {
+    const pct = (r.weight/TOTAL_W*100).toFixed(1);
+    const c = stats[r.id];
+    const spct = simTotal ? (c/simTotal*100).toFixed(1) : '—';
+    const diff = simTotal ? (c/simTotal*100 - r.weight/TOTAL_W*100).toFixed(2) : '';
+    const tr = document.createElement('tr');
+    tr.className = `type-${r.type}`;
+    tr.innerHTML = `
+      <td>${typeLabel(r.type)}</td>
+      <td style="font-size:20px">${r.emoji}</td>
+      <td><div style="font-weight:700">${r.name}</div><div style="color:#718096;font-size:12px">${r.desc||''}</div></td>
+      <td><b>${r.weight}</b></td>
+      <td><b>${pct}%</b></td>
+      <td class="bar-cell"><div class="bar-bg"><div class="bar-fg" style="width:${Math.max(r.weight/TOTAL_W*100,2)}%"></div></div></td>
+      <td style="font-variant-numeric:tabular-nums;color:#475569">${c.toLocaleString()}</td>
+      <td style="font-variant-numeric:tabular-nums;color:#475569">${spct==='—'?'—':spct+'%'}</td>
+      <td style="font-variant-numeric:tabular-nums;color:${diff===''?'':Math.abs(parseFloat(diff))<1?'#16a34a':'#dc2626'}">${diff===''?'':(diff>0?'+':'')+diff+'%'}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('reward-count').textContent = REWARDS.length;
+  document.getElementById('total-weight').textContent = TOTAL_W;
+
+  document.getElementById('sim-total').textContent = simTotal.toLocaleString();
+  const chart = document.getElementById('sim-chart'); chart.innerHTML = '';
+  const maxPct = Math.max(...REWARDS.map(r => Math.max(r.weight/TOTAL_W, stats[r.id]/(simTotal||1))));
+  REWARDS.forEach(r => {
+    const e = r.weight/TOTAL_W, a = simTotal ? stats[r.id]/simTotal : 0;
+    const row = document.createElement('div'); row.className='sim-row';
+    row.innerHTML = `
+      <div class="sim-label">${r.emoji} ${r.name}</div>
+      <div class="sim-bar-bg">
+        <div class="sim-bar-expected" style="width:${e/maxPct*100}%"></div>
+        <div class="sim-bar-actual" style="width:${a/maxPct*100}%"></div>
+      </div>
+      <div class="sim-value">${(a*100).toFixed(2)}%</div>
+      <div class="sim-count">${stats[r.id].toLocaleString()}</div>`;
+    chart.appendChild(row);
+  });
+
+  // summary
+  const summary = document.getElementById('summary'); summary.innerHTML = '';
+  const groups = {};
+  REWARDS.forEach(r => { if (!groups[r.type]) groups[r.type]={expected:0,actual:0,count:0}; groups[r.type].expected+=r.weight/TOTAL_W; groups[r.type].actual+=stats[r.id]; groups[r.type].count++; });
+  Object.entries(groups).forEach(([t,g]) => {
+    const ap = simTotal ? g.actual/simTotal : 0;
+    const el = document.createElement('div'); el.className='summary-item';
+    el.style.borderLeftColor = ({points:'#f59e0b',minigame:'#10b981',song:'#8b5cf6',video:'#ec4899'})[t];
+    el.innerHTML = `<div class="label">${TYPE_LABEL[t]}</div><div class="value">${(g.expected*100).toFixed(1)}% <span style="font-size:13px;color:#718096">|</span> <span style="color:#667eea">${(ap*100).toFixed(1)}%</span></div><div class="label">${g.count}种 · 实际 ${g.actual.toLocaleString()}次</div>`;
+    summary.appendChild(el);
+  });
+}
+
+/* ================= 开箱播放 ================= */
+function openChestPlay() {
+  const r = rollReward();
+  stats[r.id]++; simTotal++;
+  document.getElementById('result').innerHTML = `<span style="font-size:24px">${r.emoji}</span><b>开出：${r.name}</b> · 权重 ${r.weight} · 理论 ${(r.weight/TOTAL_W*100).toFixed(1)}%`;
+  render();
+  switchRewardModal(r);
+}
+function openChestSilent() {
+  const r = rollReward();
+  stats[r.id]++; simTotal++;
+  return r;
+}
+
+/* ----- 积分 ----- */
+function showPoints(points, name) {
+  const body = document.createElement('div');
+  body.style.textAlign = 'center';
+  body.innerHTML = `
+    <div class="reward-points-display">
+      <div style="font-size:60px">⭐⭐⭐</div>
+      <div style="margin-top:10px;color:#718096;font-weight:700">${name}</div>
+      <div class="points-number">+${points}</div>
+      <div style="color:#4a5568;margin-top:14px">积分到账啦！</div>
+    </div>`;
+  openModal(body);
+}
+
+/* ----- 歌曲 ----- */
+function showSong(id) {
+  ensureAudio();
+  const s = SONGS[id] || SONGS.twinkle;
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div class="song-tip">🎵 ${s.tip}</div>
+    <div style="text-align:center;margin-top:10px" id="beat-dots">
+      <span class="song-dot"></span><span class="song-dot"></span><span class="song-dot"></span><span class="song-dot"></span>
+    </div>
+    <button class="btn-primary piano-play-btn" id="play-song-again">🔁 再听一遍</button>
+    <div style="text-align:center;color:#718096;font-size:12px;margin-top:8px">提示：点页面任意处先解锁浏览器音频</div>`;
+  openModal(body);
+  playSong(id);
+  document.getElementById('play-song-again').addEventListener('click', () => playSong(id));
+}
+
+/* ----- 视频 ----- */
+/* ================= 动画场景（零网络依赖） ================= */
+const VIDEO_SCENES = {
+  forest: `
+    <div style="position:relative;height:260px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#87ceeb 0%,#b4e7a5 60%,#2d5016 100%)">
+      <div style="position:absolute;top:14px;right:20px;font-size:52px;animation:sway 4s ease-in-out infinite">☀️</div>
+      ${Array.from({length:6}).map((_,i)=>`
+        <div style="position:absolute;left:${5+i*16}%;bottom:${i%2*6}%;font-size:${50+i*6}px;transform-origin:bottom center;animation:sway ${3+i*.7}s ease-in-out infinite">🌳</div>
+      `).join('')}
+      <div style="position:absolute;bottom:0;left:0;right:0;height:38px;background:linear-gradient(180deg,#22543d,#1a365d);opacity:.8"></div>
+      <div style="position:absolute;left:20%;bottom:8px;font-size:22px;animation:float 3s ease-in-out infinite">🦋</div>
+      <div style="position:absolute;left:60%;bottom:14px;font-size:18px;animation:float 3.5s ease-in-out infinite 1s">🐿️</div>
+    </div>`,
+  butterfly: `
+    <div style="position:relative;height:260px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#fef3c7 0%,#bbf7d0 100%)">
+      <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);font-size:48px;animation:sway 5s ease-in-out infinite">🌻</div>
+      <div style="position:absolute;top:80px;left:12px;font-size:32px;animation:butterfly1 6s ease-in-out infinite">🦋</div>
+      <div style="position:absolute;top:40px;right:20px;font-size:26px;animation:butterfly2 7s ease-in-out infinite 1s">🦋</div>
+      <div style="position:absolute;bottom:30px;left:45%;font-size:28px;animation:butterfly1 5.5s ease-in-out infinite 2s">🦋</div>
+      ${Array.from({length:5}).map((_,i)=>`<div style="position:absolute;bottom:${i*12}px;left:${15+i*18}%;font-size:18px">🌸</div>`).join('')}
+    </div>`,
+  ocean: `
+    <div style="position:relative;height:260px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#60a5fa 0%,#1e40af 60%,#172554 100%)">
+      <div style="position:absolute;top:0;left:0;right:0;height:14px;background:linear-gradient(180deg,rgba(255,255,255,.6),transparent);animation:wave 3s ease-in-out infinite"></div>
+      <div style="position:absolute;top:40px;left:-40px;font-size:34px;animation:swim1 6s linear infinite">🐠</div>
+      <div style="position:absolute;top:90px;left:-60px;font-size:28px;animation:swim2 7s linear infinite 1.5s">🐟</div>
+      <div style="position:absolute;top:140px;left:-50px;font-size:30px;animation:swim1 8s linear infinite 3s">🐡</div>
+      <div style="position:absolute;bottom:10px;left:10px;font-size:40px">🪸</div>
+      <div style="position:absolute;bottom:8px;right:14px;font-size:34px">🌿</div>
+      ${Array.from({length:4}).map((_,i)=>`<div style="position:absolute;bottom:${40+i*18}px;left:${20+i*18}%;font-size:14px;animation:bubbleRise ${4+i}s ease-in infinite ${i*.8}s">🫧</div>`).join('')}
+    </div>`,
+  sky: `
+    <div style="position:relative;height:260px;border-radius:12px;overflow:hidden;background:linear-gradient(180deg,#fbbf24 0%,#fb923c 40%,#f472b6 80%,#a78bfa 100%)">
+      <div style="position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:64px;animation:sway 6s ease-in-out infinite">🌤️</div>
+      <div style="position:absolute;top:60px;left:-120px;font-size:40px;animation:cloudDrift 14s linear infinite">☁️</div>
+      <div style="position:absolute;top:120px;left:-160px;font-size:34px;animation:cloudDrift 18s linear infinite 5s">☁️</div>
+      <div style="position:absolute;top:170px;left:-140px;font-size:30px;animation:cloudDrift 16s linear infinite 8s">☁️</div>
+      <div style="position:absolute;top:90px;left:-60px;font-size:18px;animation:birdFly 10s linear infinite">🕊️</div>
+    </div>`
+};
+
+const VIDEO_SCENE_CSS = `
+@keyframes sway { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+@keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+@keyframes bubbleRise { 0% { transform: translateY(0); opacity: 0 } 20% { opacity: 1 } 100% { transform: translateY(-200px); opacity: 0 } }
+@keyframes wave { 0%,100% { transform: translateX(-10px) } 50% { transform: translateX(10px) } }
+@keyframes swim1 { 0% { transform: translateX(0) scaleX(1) } 49% { transform: translateX(400px) scaleX(1) } 50% { transform: translateX(400px) scaleX(-1) } 99% { transform: translateX(0) scaleX(-1) } 100% { transform: translateX(0) scaleX(1) } }
+@keyframes swim2 { 0% { transform: translateX(0) scaleX(1) } 49% { transform: translateX(420px) scaleX(1) } 50% { transform: translateX(420px) scaleX(-1) } 99% { transform: translateX(0) scaleX(-1) } 100% { transform: translateX(0) scaleX(1) } }
+@keyframes butterfly1 { 0% { transform: translate(0,0) rotate(0) } 25% { transform: translate(20px,-30px) rotate(15deg) } 50% { transform: translate(60px,-10px) rotate(-10deg) } 75% { transform: translate(30px,-50px) rotate(10deg) } 100% { transform: translate(0,0) rotate(0) } }
+@keyframes butterfly2 { 0% { transform: translate(0,0) rotate(0) } 25% { transform: translate(-30px,-20px) rotate(-15deg) } 50% { transform: translate(-70px,10px) rotate(10deg) } 75% { transform: translate(-40px,-40px) rotate(-5deg) } 100% { transform: translate(0,0) rotate(0) } }
+@keyframes cloudDrift { 0% { transform: translateX(0) } 100% { transform: translateX(800px) } }
+@keyframes birdFly { 0% { transform: translateX(0) translateY(0) } 25% { transform: translateX(200px) translateY(-15px) } 50% { transform: translateX(400px) translateY(0) } 75% { transform: translateX(600px) translateY(-10px) } 100% { transform: translateX(800px) translateY(0) } }
+`;
+// 注入关键帧
+(function(){ const s = document.createElement('style'); s.textContent = VIDEO_SCENE_CSS; document.head.appendChild(s); })();
+
+function showVideo(scene, name) {
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <h3 style="text-align:center;margin:6px 0;color:#4a5568">${name}</h3>
+    ${VIDEO_SCENES[scene] || VIDEO_SCENES.forest}
+    <div style="color:#718096;font-size:12px;text-align:center;margin-top:8px">🎬 以上为演示动画 · 正式版将播放自然纪录片片段</div>`;
+  openModal(body);
+}
+
+/* ----- 接苹果 ----- */
+function openCatchApple() {
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-weight:700;padding:0 4px 6px">
+      <span>接住 <b id="ca-score">0</b> 个</span><span>剩余 <b id="ca-time">20</b> 秒</span>
+    </div>
+    <div class="mini-area" id="ca-area"></div>
+    <p class="mini-result">手机点屏幕左右侧｜电脑按 ← → 键</p>`;
+  openModal(body);
+  const area = document.getElementById('ca-area');
+  const basket = document.createElement('div');
+  basket.className = 'mini-basket'; basket.textContent = '🧺';
+  basket.style.left = '42%';
+  area.appendChild(basket);
+  let left = 42, score = 0, time = 20, ended = false;
+  const fruits = ['🍎','🍊','🍓','🍇','🍌','🍐'];
+  const setBasket = (p) => { left = Math.max(0, Math.min(86, p)); basket.style.left = left+'%'; };
+  body.addEventListener('mousemove', e => {
+    const rect = area.getBoundingClientRect();
+    setBasket((e.clientX - rect.left) / rect.width * 100 - 8);
+  });
+  body.addEventListener('touchmove', e => {
+    const t = e.touches[0]; const rect = area.getBoundingClientRect();
+    setBasket((t.clientX - rect.left) / rect.width * 100 - 8);
+  });
+  document.addEventListener('keydown', k => {
+    if (k.key === 'ArrowLeft') setBasket(left - 4);
+    if (k.key === 'ArrowRight') setBasket(left + 4);
+  });
+  // Spawn
+  const spawn = () => {
+    if (ended) return;
+    const f = document.createElement('div'); f.className='fruit';
+    f.textContent = fruits[Math.floor(Math.random()*fruits.length)];
+    f.style.left = (Math.random()*88+4)+'%'; f.style.top = '0%';
+    area.appendChild(f);
+    const speed = 0.8 + Math.random()*0.6;
+    let y = 0;
+    const anim = () => {
+      y += speed; f.style.top = y+'%';
+      const fl = parseFloat(f.style.left), bl = left + 7;
+      if (y > 85 && Math.abs(fl - bl) < 9) { score++; document.getElementById('ca-score').textContent = score; f.remove(); }
+      else if (y > 100) f.remove();
+      else requestAnimationFrame(anim);
+    };
+    requestAnimationFrame(anim);
+    setTimeout(spawn, 400 + Math.random()*600);
+  };
+  spawn();
+  const timer = setInterval(() => {
+    time--; document.getElementById('ca-time').textContent = time;
+    if (time <= 0) { ended = true; clearInterval(timer); area.innerHTML = `<p class="mini-result" style="font-size:18px;color:#764ba2;font-weight:700">🎉 接到了 ${score} 个水果！</p>`; }
+  }, 1000);
+  document.querySelector('.overlay').addEventListener('click', e => { if (e.target.classList.contains('overlay')) { ended = true; clearInterval(timer); } });
+}
+
+/* ----- 泡泡大作战 ----- */
+function openBubble() {
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-weight:700;padding:0 4px 6px">
+      <span>戳破 <b id="bb-score">0</b> 个</span><span>剩余 <b id="bb-time">20</b> 秒</span>
+    </div>
+    <div class="bubble-area" id="bb-area"></div>`;
+  openModal(body);
+  const area = document.getElementById('bb-area');
+  let score = 0, time = 20, ended = false;
+  const colors = ['#60a5fa','#a78bfa','#f472b6','#34d399','#fbbf24'];
+  const spawn = () => {
+    if (ended) return;
+    const b = document.createElement('div'); b.className='bubble';
+    const size = 28 + Math.random()*32;
+    b.style.width = size+'px'; b.style.height = size+'px';
+    b.style.left = (Math.random()*88+4)+'%'; b.style.bottom = '-40px';
+    b.style.background = `radial-gradient(circle at 30% 30%, rgba(255,255,255,.7), ${colors[Math.floor(Math.random()*colors.length)]})`;
+    const dur = 5 + Math.random()*4; b.style.animationDuration = dur+'s';
+    b.addEventListener('click', () => { score++; document.getElementById('bb-score').textContent = score; b.remove(); });
+    area.appendChild(b);
+    setTimeout(spawn, 300 + Math.random()*500);
+    setTimeout(() => b.remove(), dur*1000 + 400);
+  };
+  spawn();
+  const timer = setInterval(() => {
+    time--; document.getElementById('bb-time').textContent = time;
+    if (time <= 0) { ended = true; clearInterval(timer); area.innerHTML = ''; area.style.display = 'flex'; area.style.alignItems='center'; area.style.justifyContent='center'; area.innerHTML = `<p class="mini-result" style="font-size:18px;color:#764ba2;font-weight:700">🫧 戳破了 ${score} 个泡泡！</p>`; }
+  }, 1000);
+  document.querySelector('.overlay').addEventListener('click', e => { if (e.target.classList.contains('overlay')) { ended = true; clearInterval(timer); } });
+}
+
+/* ----- 记忆翻牌 ----- */
+function openMemory() {
+  const emojis = ['🐶','🐱','🐰','🦊','🐻','🐼'];
+  const deck = [...emojis, ...emojis].sort(() => Math.random()-0.5);
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="text-align:center;font-weight:700;padding:0 4px 6px">步数：<b id="mm-step">0</b></div>
+    <div class="memory-grid" id="mm-grid"></div>`;
+  openModal(body);
+  const grid = document.getElementById('mm-grid');
+  let flipped = [], matched = 0, step = 0, lock = false;
+  deck.forEach((e, i) => {
+    const c = document.createElement('div');
+    c.className = 'memory-card'; c.textContent = e; c.dataset.emoji = e;
+    c.addEventListener('click', () => {
+      if (lock || c.classList.contains('flipped') || c.classList.contains('matched')) return;
+      c.classList.add('flipped');
+      flipped.push(c);
+      if (flipped.length === 2) {
+        step++; document.getElementById('mm-step').textContent = step;
+        lock = true;
+        const [a, b] = flipped;
+        if (a.dataset.emoji === b.dataset.emoji) {
+          a.classList.add('matched'); b.classList.add('matched');
+          matched += 2; flipped = []; lock = false;
+          if (matched === deck.length) {
+            setTimeout(() => { grid.innerHTML += `<p class="mini-result" style="font-size:16px;color:#764ba2;font-weight:700;margin-top:14px">🎉 全部记住了！用了 ${step} 步</p>`; }, 300);
+          }
+        } else {
+          setTimeout(() => { a.classList.remove('flipped'); b.classList.remove('flipped'); flipped = []; lock = false; }, 700);
+        }
+      }
+    });
+    grid.appendChild(c);
+  });
+}
+
+/* ----- 钢琴 ----- */
+function openPiano() {
+  const keys = [['C4','Do'],['D4','Re'],['E4','Mi'],['F4','Fa'],['G4','Sol'],['A4','La'],['B4','Si'],['C5','Do']];
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="text-align:center;color:#718096;font-size:13px">点彩色琴键弹出声音，试试弹《小星星》：C C G G A A G</div>
+    <div class="piano" id="piano"></div>
+    <button class="btn-primary piano-play-btn" id="piano-song">▶ 自动弹《小星星》</button>`;
+  openModal(body);
+  const piano = document.getElementById('piano');
+  keys.forEach(([note, label]) => {
+    const k = document.createElement('div'); k.className = 'piano-key'; k.textContent = label;
+    k.addEventListener('mousedown', () => { ensureAudio(); playNote(note, 0.6); k.classList.add('active'); setTimeout(()=>k.classList.remove('active'),120); });
+    k.addEventListener('touchstart', e => { e.preventDefault(); ensureAudio(); playNote(note, 0.6); k.classList.add('active'); setTimeout(()=>k.classList.remove('active'),120); });
+    piano.appendChild(k);
+  });
+  document.getElementById('piano-song').addEventListener('click', () => playSong('twinkle'));
+}
+
+/* ================= 分发 ================= */
+function switchRewardModal(r) {
+  if (r.type === 'points') showPoints(r.points, r.name);
+  else if (r.type === 'song') showSong(r.song);
+  else if (r.type === 'video') showVideo(r.scene, r.name);
+  else if (r.type === 'minigame') {
+    if (r.game === 'catch-apple') openCatchApple();
+    else if (r.game === 'bubble') openBubble();
+    else if (r.game === 'memory') openMemory();
+    else if (r.game === 'piano') openPiano();
+  }
+}
+
+/* ================= 事件 ================= */
+document.getElementById('btn-open').addEventListener('click', () => { ensureAudio(); openChestPlay(); });
+document.getElementById('btn-open-x4').addEventListener('click', () => {
+  const results = [];
+  for (let i = 0; i < 4; i++) results.push(openChestSilent());
+  render();
+  const names = results.map(r => `${r.emoji}${r.name}`).join(' → ');
+  document.getElementById('result').innerHTML = `<span style="font-size:14px">⚡ 连开 4 个：</span><b>${names}</b>`;
+});
+document.getElementById('btn-reset').addEventListener('click', () => {
+  REWARDS.forEach(r => stats[r.id] = 0); simTotal = 0;
+  document.getElementById('result').innerHTML = '<span>已重置 · 重新开箱吧 🎲</span>';
+  render();
+});
+document.querySelectorAll('[data-n]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const n = parseInt(btn.dataset.n, 10); btn.disabled = true; const orig = btn.textContent; btn.textContent = '模拟中…';
+    const batch = 5000; let done = 0;
+    const step = () => {
+      const chunk = Math.min(batch, n - done);
+      for (let i = 0; i < chunk; i++) rollOnceSilent();
+      done += chunk; render();
+      if (done < n) setTimeout(step, 0); else { btn.disabled = false; btn.textContent = orig; }
+    };
+    step();
+  });
+});
+
+// 首次交互解锁音频
+document.addEventListener('click', () => ensureAudio(), { once: true });
+
+render();
+</script>
+</body>
+</html>

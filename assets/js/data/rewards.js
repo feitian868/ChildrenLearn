@@ -115,14 +115,14 @@ export const CHEST_REWARDS = [
     desc: '祝你生日快乐，可以跟着一起唱。'
   },
 
-  /* ---------------- 自然小短片（≈25% 权重） ---------------- */
+  /* ---------------- 自然场景动画（CSS/SVG/Emoji，零网络依赖） ---------------- */
   {
     id: 'chest-video-forest',
     type: 'video',
     name: '自然小短片 · 森林里的一天',
     emoji: '🌳',
     weight: 7,
-    src: 'https://media.w3.org/2010/05/bunny/trailer.mp4',
+    scene: 'forest',
     desc: '跟着小动物一起走进森林，看看它们的一天。'
   },
   {
@@ -131,7 +131,7 @@ export const CHEST_REWARDS = [
     name: '自然小短片 · 蝴蝶飞呀飞',
     emoji: '🦋',
     weight: 7,
-    src: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    scene: 'butterfly',
     desc: '看看小动物们怎么在花丛中自由自在。'
   },
   {
@@ -140,7 +140,7 @@ export const CHEST_REWARDS = [
     name: '自然小短片 · 海洋世界',
     emoji: '🐠',
     weight: 7,
-    src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    scene: 'ocean',
     desc: '潜入海底看看五颜六色的鱼。'
   },
   {
@@ -149,7 +149,7 @@ export const CHEST_REWARDS = [
     name: '自然小短片 · 天空的云',
     emoji: '☁️',
     weight: 8,
-    src: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
+    scene: 'sky',
     desc: '抬头看看天上的云，变化多端真好看。'
   }
 ];
