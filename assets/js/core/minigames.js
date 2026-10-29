@@ -214,21 +214,33 @@ function openBubble() {
       text: ['🫧', '🎈', '💧', '🫧'][Math.floor(Math.random() * 4)],
       'aria-label': '戳泡泡'
     });
-    bubble.style.left = `${4 + Math.random() * 76}%`;
-    bubble.style.top = `${6 + Math.random() * 70}%`;
-    bubble.style.animationDelay = `${Math.random() * 0.3}s`;
-    bubble.addEventListener('click', () => {
+    // JS 传"中心点百分比"，CSS 用 translate(-50%,-50%) 自动居中泡泡
+    bubble.style.left = `${4 + Math.random() * 88}%`;
+    bubble.style.top = `${8 + Math.random() * 80}%`;
+    bubble.style.animationDelay = `${Math.random() * 0.6}s, ${Math.random() * 0.5}s`;
+    // 每次泡泡大小略有不同
+    const size = 44 + Math.round(Math.random() * 24);
+    bubble.style.setProperty('--tap', `${size}px`);
+    bubble.addEventListener('click', (e) => {
+      e.preventDefault();
       if (ended) return;
       score += 1;
       scoreNode.textContent = String(score);
       sfxClick();
-      bubble.remove();
+      bubble.style.transition = 'transform .12s, opacity .18s';
+      bubble.style.transform = 'translate(-50%, -50%) scale(1.4)';
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 180);
     });
     area.append(bubble);
-    setTimeout(() => bubble.remove(), 2600);
+    setTimeout(() => {
+      bubble.style.transition = 'opacity .4s';
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 420);
+    }, 2800);
   };
 
-  for (let i = 0; i < 5; i++) spawn();
+  for (let i = 0; i < 5; i++) setTimeout(spawn, i * 120);
 
   const spawnTimer = setInterval(spawn, 420);
   const countdown = setInterval(() => {

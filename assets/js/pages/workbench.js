@@ -49,68 +49,162 @@ let parentOpen = false;
   document.head.appendChild(s);
 })();
 
-/** 4 种纯 CSS 动画自然场景（零网络依赖） */
+/** Canvas 粒子层：星星 / 萤火虫 / 雪花 / 气泡 */
+function makeParticleCanvas(wrap, { count, color, size, speed, type }) {
+  const canvas = el('canvas', {
+    style: { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' }
+  });
+  wrap.prepend(canvas);
+  const resize = () => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    canvas.getContext('2d').scale(dpr, dpr);
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  const ctx = canvas.getContext('2d');
+  const W = () => canvas.clientWidth;
+  const H = () => canvas.clientHeight;
+
+  const particles = Array.from({ length: count }, () => ({
+    x: Math.random() * W(),
+    y: Math.random() * H(),
+    s: size[0] + Math.random() * (size[1] - size[0]),
+    vx: (Math.random() - 0.5) * speed[0] * 2,
+    vy: (Math.random() - 0.5) * speed[1] * 2,
+    a: Math.random() * Math.PI * 2,
+    alph: 0.4 + Math.random() * 0.6
+  }));
+
+  let raf;
+  const draw = () => {
+    ctx.clearRect(0, 0, W(), H());
+    for (const p of particles) {
+      p.a += 0.03;
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < -20) p.x = W() + 20;
+      if (p.x > W() + 20) p.x = -20;
+      if (p.y < -20) p.y = H() + 20;
+      if (p.y > H() + 20) p.y = -20;
+
+      ctx.save();
+      ctx.globalAlpha = type === 'firefly' ? 0.6 + 0.4 * Math.sin(p.a) : p.alph;
+      if (type === 'star') {
+        // 星星：圆角矩形 + 闪光
+        ctx.shadowColor = color; ctx.shadowBlur = 6;
+        ctx.fillStyle = color;
+        ctx.fillRect(p.x, p.y, p.s, p.s);
+      } else if (type === 'firefly') {
+        // 萤火虫：发光圆点
+        ctx.shadowColor = color; ctx.shadowBlur = 18;
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2); ctx.fill();
+      } else if (type === 'snow') {
+        // 雪花
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = 'rgba(255,255,255,.6)'; ctx.shadowBlur = 4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2); ctx.fill();
+      } else if (type === 'bubble') {
+        // 水里浮气泡
+        ctx.strokeStyle = color; ctx.lineWidth = 1.2;
+        ctx.fillStyle = 'rgba(255,255,255,.15)';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    raf = requestAnimationFrame(draw);
+  };
+  raf = requestAnimationFrame(draw);
+
+  return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); canvas.remove(); };
+}
+
+/** 4 种有 Canvas 粒子 + 渐变 + 多层 emoji 的场景，返回 { el, cleanup } */
 const VIDEO_SCENES = {
   forest: () => {
-    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#87ceeb 0%,#b4e7a5 60%,#2d5016 100%)' } });
+    const wrap = el('div', { style: { position: 'relative', height: '280px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#c9e9ff 0%,#a3d99b 55%,#3b6a2a 100%)' } });
     wrap.append(
-      el('div', { text: '☀️', style: { position: 'absolute', top: '14px', right: '20px', fontSize: '52px', animation: 'vs-sway 4s ease-in-out infinite' } })
+      el('div', { text: '☀️', style: { position: 'absolute', top: '10px', right: '14px', fontSize: '56px', animation: 'vs-sway 5s ease-in-out infinite' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '16px', left: '-80px', fontSize: '32px', animation: 'vs-cloud 20s linear infinite' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '48px', left: '-100px', fontSize: '24px', animation: 'vs-cloud 26s linear infinite 8s' } })
     );
-    for (let i = 0; i < 6; i++) {
+    // 树（近处大、远处小）
+    for (let i = 0; i < 3; i++) {
       wrap.append(el('div', {
-        text: '🌳',
-        style: {
-          position: 'absolute', left: `${5 + i * 16}%`, bottom: `${i % 2 * 6}%`,
-          fontSize: `${50 + i * 6}px`, transformOrigin: 'bottom center',
-          animation: `vs-sway ${3 + i * 0.7}s ease-in-out infinite`
-        }
+        text: '🌲', style: { position: 'absolute', left: `${8 + i * 30}%`, bottom: '18%', fontSize: '36px', animation: 'vs-sway 4s ease-in-out infinite', zIndex: 1 }
+      }));
+    }
+    for (let i = 0; i < 3; i++) {
+      wrap.append(el('div', {
+        text: '🌳', style: { position: 'absolute', left: `${18 + i * 28}%`, bottom: '4%', fontSize: `${46 + i * 10}px`, animation: `vs-sway ${3.5 + i}s ease-in-out infinite`, zIndex: 2 }
       }));
     }
     wrap.append(
-      el('div', { style: { position: 'absolute', bottom: '0', left: '0', right: '0', height: '38px', background: 'linear-gradient(180deg,#22543d,#1a365d)', opacity: '0.8' } }),
-      el('div', { text: '🦋', style: { position: 'absolute', left: '20%', bottom: '8px', fontSize: '22px', animation: 'vs-float 3s ease-in-out infinite' } }),
-      el('div', { text: '🐿️', style: { position: 'absolute', left: '60%', bottom: '14px', fontSize: '18px', animation: 'vs-float 3.5s ease-in-out infinite 1s' } })
+      el('div', { text: '🦋', style: { position: 'absolute', top: '90px', left: '20%', fontSize: '26px', animation: 'vs-butterfly1 7s ease-in-out infinite' } }),
+      el('div', { text: '🐿️', style: { position: 'absolute', bottom: '6px', left: '65%', fontSize: '22px', animation: 'vs-float 3.5s ease-in-out infinite' } }),
+      el('div', { style: { position: 'absolute', bottom: '0', left: '0', right: '0', height: '22px', background: 'linear-gradient(180deg,#4c7c3a,#27501a)' } })
     );
-    return wrap;
+    // Canvas 萤火虫
+    const cleanupParticles = makeParticleCanvas(wrap, { count: 18, color: '#fff3a8', size: [1.5, 3], speed: [0.6, 0.3], type: 'firefly' });
+    return { el: wrap, cleanup: cleanupParticles };
   },
+
   butterfly: () => {
-    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fef3c7 0%,#bbf7d0 100%)' } });
+    const wrap = el('div', { style: { position: 'relative', height: '280px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fff3a8 0%,#d4f4a3 60%,#8ed99a 100%)' } });
     wrap.append(
-      el('div', { text: '🌻', style: { position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)', fontSize: '48px', animation: 'vs-sway 5s ease-in-out infinite' } }),
-      el('div', { text: '🦋', style: { position: 'absolute', top: '80px', left: '12px', fontSize: '32px', animation: 'vs-butterfly1 6s ease-in-out infinite' } }),
-      el('div', { text: '🦋', style: { position: 'absolute', top: '40px', right: '20px', fontSize: '26px', animation: 'vs-butterfly2 7s ease-in-out infinite 1s' } }),
-      el('div', { text: '🦋', style: { position: 'absolute', bottom: '30px', left: '45%', fontSize: '28px', animation: 'vs-butterfly1 5.5s ease-in-out infinite 2s' } })
+      el('div', { text: '🌞', style: { position: 'absolute', top: '6px', right: '12px', fontSize: '46px' } }),
+      el('div', { text: '🌻', style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', fontSize: '52px', animation: 'vs-sway 5s ease-in-out infinite' } }),
+      el('div', { text: '🌸', style: { position: 'absolute', top: '110px', left: '8px', fontSize: '24px', animation: 'vs-float 3s ease-in-out infinite' } }),
+      el('div', { text: '🌷', style: { position: 'absolute', top: '150px', right: '10px', fontSize: '22px', animation: 'vs-float 3.4s ease-in-out infinite .6s' } }),
+      el('div', { text: '🌼', style: { position: 'absolute', bottom: '6px', left: '38%', fontSize: '20px', animation: 'vs-float 4s ease-in-out infinite' } })
     );
-    for (let i = 0; i < 5; i++) {
-      wrap.append(el('div', { text: '🌸', style: { position: 'absolute', bottom: `${i * 12}px`, left: `${15 + i * 18}%`, fontSize: '18px' } }));
-    }
-    return wrap;
+    // 3 只大蝴蝶 + 2 只小蝴蝶
+    wrap.append(
+      el('div', { text: '🦋', style: { position: 'absolute', top: '70px', left: '18%', fontSize: '34px', animation: 'vs-butterfly1 6s ease-in-out infinite' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', top: '40px', right: '18%', fontSize: '28px', animation: 'vs-butterfly2 7s ease-in-out infinite 1.2s' } }),
+      el('div', { text: '🦋', style: { position: 'absolute', bottom: '50px', left: '48%', fontSize: '30px', animation: 'vs-butterfly1 5.5s ease-in-out infinite 2.4s' } }),
+      el('div', { text: '🐝', style: { position: 'absolute', top: '100px', left: '62%', fontSize: '18px', animation: 'vs-butterfly2 4s ease-in-out infinite' } })
+    );
+    const cleanupParticles = makeParticleCanvas(wrap, { count: 22, color: '#ffd766', size: [1.5, 3.5], speed: [0.5, 0.2], type: 'firefly' });
+    return { el: wrap, cleanup: cleanupParticles };
   },
+
   ocean: () => {
-    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#60a5fa 0%,#1e40af 60%,#172554 100%)' } });
+    const wrap = el('div', { style: { position: 'relative', height: '280px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#a8dcff 0%,#3a78c8 45%,#0c1d4a 100%)' } });
     wrap.append(
-      el('div', { style: { position: 'absolute', top: '0', left: '0', right: '0', height: '14px', background: 'linear-gradient(180deg,rgba(255,255,255,.6),transparent)', animation: 'vs-wave 3s ease-in-out infinite' } }),
-      el('div', { text: '🐠', style: { position: 'absolute', top: '40px', left: '-40px', fontSize: '34px', animation: 'vs-swim1 6s linear infinite' } }),
-      el('div', { text: '🐟', style: { position: 'absolute', top: '90px', left: '-60px', fontSize: '28px', animation: 'vs-swim2 7s linear infinite 1.5s' } }),
-      el('div', { text: '🐡', style: { position: 'absolute', top: '140px', left: '-50px', fontSize: '30px', animation: 'vs-swim1 8s linear infinite 3s' } }),
-      el('div', { text: '🪸', style: { position: 'absolute', bottom: '10px', left: '10px', fontSize: '40px' } }),
-      el('div', { text: '🌿', style: { position: 'absolute', bottom: '8px', right: '14px', fontSize: '34px' } })
+      el('div', { text: '☀️', style: { position: 'absolute', top: '6px', right: '14px', fontSize: '42px', opacity: '0.85' } }),
+      el('div', { style: { position: 'absolute', top: '0', left: '0', right: '0', height: '16px', background: 'linear-gradient(180deg,rgba(255,255,255,.7),transparent)', animation: 'vs-wave 3.2s ease-in-out infinite' } }),
+      // 4 层鱼群
+      el('div', { text: '🐠', style: { position: 'absolute', top: '50px', left: '-40px', fontSize: '32px', animation: 'vs-swim1 5.5s linear infinite' } }),
+      el('div', { text: '🐟', style: { position: 'absolute', top: '90px', left: '-60px', fontSize: '26px', animation: 'vs-swim2 7s linear infinite 1.2s' } }),
+      el('div', { text: '🐡', style: { position: 'absolute', top: '140px', left: '-50px', fontSize: '30px', animation: 'vs-swim1 9s linear infinite 3s' } }),
+      el('div', { text: '🦑', style: { position: 'absolute', top: '170px', left: '-40px', fontSize: '26px', animation: 'vs-swim2 8s linear infinite 4s' } }),
+      // 海底
+      el('div', { text: '🪸', style: { position: 'absolute', bottom: '4px', left: '12px', fontSize: '40px' } }),
+      el('div', { text: '🌿', style: { position: 'absolute', bottom: '4px', right: '16px', fontSize: '30px', animation: 'vs-sway 4s ease-in-out infinite' } }),
+      el('div', { text: '🐚', style: { position: 'absolute', bottom: '2px', left: '45%', fontSize: '18px' } })
     );
-    for (let i = 0; i < 4; i++) {
-      wrap.append(el('div', { text: '🫧', style: { position: 'absolute', bottom: `${40 + i * 18}px`, left: `${20 + i * 18}%`, fontSize: '14px', animation: `vs-bubble ${4 + i}s ease-in infinite ${i * 0.8}s` } }));
-    }
-    return wrap;
+    const cleanupParticles = makeParticleCanvas(wrap, { count: 24, color: 'rgba(200,240,255,.7)', size: [2, 5], speed: [0.25, -0.45], type: 'bubble' });
+    return { el: wrap, cleanup: cleanupParticles };
   },
+
   sky: () => {
-    const wrap = el('div', { style: { position: 'relative', height: '260px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fbbf24 0%,#fb923c 40%,#f472b6 80%,#a78bfa 100%)' } });
+    const wrap = el('div', { style: { position: 'relative', height: '280px', borderRadius: '12px', overflow: 'hidden', background: 'linear-gradient(180deg,#fde68a 0%,#fb923c 35%,#f472b6 70%,#9b6cf4 100%)' } });
     wrap.append(
-      el('div', { text: '🌤️', style: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', fontSize: '64px', animation: 'vs-sway 6s ease-in-out infinite' } }),
-      el('div', { text: '☁️', style: { position: 'absolute', top: '60px', left: '-120px', fontSize: '40px', animation: 'vs-cloud 14s linear infinite' } }),
-      el('div', { text: '☁️', style: { position: 'absolute', top: '120px', left: '-160px', fontSize: '34px', animation: 'vs-cloud 18s linear infinite 5s' } }),
-      el('div', { text: '☁️', style: { position: 'absolute', top: '170px', left: '-140px', fontSize: '30px', animation: 'vs-cloud 16s linear infinite 8s' } }),
-      el('div', { text: '🕊️', style: { position: 'absolute', top: '90px', left: '-60px', fontSize: '18px', animation: 'vs-bird 10s linear infinite' } })
+      el('div', { text: '🌤️', style: { position: 'absolute', top: '14px', left: '50%', transform: 'translateX(-50%)', fontSize: '60px' } }),
+      // 4 层不同速度的云
+      el('div', { text: '☁️', style: { position: 'absolute', top: '50px', left: '-140px', fontSize: '44px', animation: 'vs-cloud 22s linear infinite' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '100px', left: '-160px', fontSize: '34px', animation: 'vs-cloud 28s linear infinite 6s' } }),
+      el('div', { text: '☁️', style: { position: 'absolute', top: '140px', left: '-180px', fontSize: '28px', animation: 'vs-cloud 34s linear infinite 12s' } }),
+      el('div', { text: '🕊️', style: { position: 'absolute', top: '70px', left: '-60px', fontSize: '18px', animation: 'vs-bird 12s linear infinite' } }),
+      el('div', { text: '🦅', style: { position: 'absolute', top: '160px', left: '-80px', fontSize: '20px', animation: 'vs-bird 15s linear infinite 5s' } })
     );
-    return wrap;
+    // Canvas 星星（黄昏背景中若隐若现）
+    const cleanupParticles = makeParticleCanvas(wrap, { count: 40, color: '#fff7b8', size: [1, 3], speed: [0.15, 0.1], type: 'star' });
+    return { el: wrap, cleanup: cleanupParticles };
   }
 };
 let day = null;
@@ -645,16 +739,16 @@ function handleOpenChest() {
 }
 
 function openVideo(reward) {
-  const overlay = el('div', { class: 'overlay' });
   const sceneFn = VIDEO_SCENES[reward.scene] || VIDEO_SCENES.forest;
-  const sceneEl = sceneFn();
+  const scene = sceneFn();  // { el, cleanup }
+  const overlay = el('div', { class: 'overlay' });
   const sheet = el('div', { class: 'sheet', style: { width: 'min(720px, 100%)' } }, [
     el('h3', { text: `${reward.emoji || '🎬'} ${reward.name}` }),
     el('p', { text: reward.desc || '', style: { color: '#718096', fontSize: '13px', margin: '4px 0 10px' } }),
-    sceneEl
+    scene.el
   ]);
   const close = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: '看完了' });
-  const closeAll = () => overlay.remove();
+  const closeAll = () => { scene.cleanup?.(); overlay.remove(); };
   close.addEventListener('click', closeAll);
   sheet.append(close);
   overlay.append(sheet);

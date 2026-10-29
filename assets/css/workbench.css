@@ -325,6 +325,7 @@
   touch-action: manipulation;
 }
 .mini-bubble {
+  --tap: 56px;
   position: absolute;
   width: var(--tap);
   height: var(--tap);
@@ -332,14 +333,28 @@
   display: grid;
   place-items: center;
   font-size: 34px;
-  background: rgba(255, 255, 255, .78);
+  background: radial-gradient(circle at 30% 25%, rgba(255,255,255,.95), rgba(180,220,255,.8) 50%, rgba(130,180,255,.6));
   border: 2px solid rgba(120, 170, 255, .45);
-  box-shadow: 0 6px 16px rgba(60, 110, 210, .18);
-  animation: popIn .28s var(--ease);
+  box-shadow: 0 6px 16px rgba(60, 110, 210, .22), inset 0 0 12px rgba(255,255,255,.5);
+  animation: popIn .28s var(--ease), bubbleFloat 2.6s ease-in-out infinite;
   touch-action: manipulation;
   user-select: none;
+  cursor: pointer;
 }
-.mini-bubble:active { transform: scale(.9); }
+@keyframes bubbleFloat {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50%      { transform: translate(-50%, -50%) translateY(-6px); }
+}
+.mini-bubble:active { transform: translate(-50%, -50%) scale(.85); }
+.mini-bubble::before {
+  content: '';
+  position: absolute;
+  top: 8%; left: 14%;
+  width: 34%; height: 28%;
+  border-radius: 50%;
+  background: rgba(255,255,255,.7);
+  filter: blur(1px);
+}
 
 .mini-grid {
   display: grid;
