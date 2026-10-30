@@ -1,4 +1,4 @@
-/**
+﻿/**
  * workbench.js —— 工作台：任务、打卡进度、宝箱、商店、数据管理、家长核对
  * 任务卡不可手动勾选，完成状态只由游戏页达标后回写。
  */
@@ -12,12 +12,12 @@ import {
   dayProgress,
   allSubjectsDone
 } from '../core/tasks.js';
-import { chestState, openChest } from '../core/chest.js?v=20261029a';
+import { chestState, openChest } from '../core/chest.js?v=20261030a';
 import { shopState, redeemItem } from '../core/shop.js';
 import { markCelebrated } from '../core/score.js';
 import { celebrate, playerName } from '../core/fx.js';
-import { openMinigame } from '../core/minigames.js?v=20261029a';
-import { SONGS, SONG_MAP, playSong } from '../core/songs.js?v=20261029a';
+import { openMinigame } from '../core/minigames.js?v=20261030a';
+import { SONGS, SONG_MAP, playSong } from '../core/songs.js?v=20261030a';
 import {
   setSoundEnabled,
   isSoundEnabled,

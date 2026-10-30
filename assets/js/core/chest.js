@@ -1,10 +1,10 @@
-/**
+﻿/**
  * chest.js —— 今日宝箱
- * 四科全部达标后点亮；当天只能开一次；奖励池来自 data/rewards.js?v=20261029a。
+ * 四科全部达标后点亮；当天只能开一次；奖励池来自 data/rewards.js?v=20261030a。
  */
 
 import * as store from './store.js';
-import { CHEST_REWARDS } from '../data/rewards.js?v=20261029a';
+import { CHEST_REWARDS } from '../data/rewards.js?v=20261030a';
 
 export function chestState(day = store.getToday()) {
   if (!day) return { state: 'locked', reward: null };

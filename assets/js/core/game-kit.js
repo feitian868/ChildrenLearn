@@ -1,4 +1,4 @@
-/**
+﻿/**
  * game-kit.js —— 四种题型渲染 + 首答正确统计 + 达标回写工作台
  * 游戏页只负责传入科目，其余全部由这里完成。
  */
@@ -11,7 +11,7 @@ import { celebrate, playerName } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
 import { shuffle } from './rng.js';
-import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261029a';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261030a';
 
 /** 一年级语文自动标拼音，其他年级/英语科学数学原样 */
 function pyHtml(grade, text) {
