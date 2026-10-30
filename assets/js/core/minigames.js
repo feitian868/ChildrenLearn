@@ -16,20 +16,8 @@ function shell({ title, desc, buttonText = '收下这份快乐' }) {
     desc ? el('p', { text: desc }) : null
   ]);
   const body = el('div', { class: 'mini-body' });
-
-  // 底部按钮区：默认只放"收下"按钮；小游戏结束时 setRestart 后变成"再来一局"+"收下"
-  const actionRow = el('div', { class: 'mini-actions' });
-  const restartBtn = el('button', {
-    class: 'btn btn-ghost',
-    type: 'button',
-    text: '🔄 再来一局',
-    style: 'display:none'
-  });
-  const closeBtn = el('button', { class: 'btn btn-gold', type: 'button', text: buttonText });
-  actionRow.append(restartBtn, closeBtn);
-
+  const closeBtn = el('button', { class: 'btn btn-gold btn-block', type: 'button', text: buttonText });
   let cleanup = null;
-  let restartFn = null;
 
   const close = () => {
     cleanup?.();
@@ -38,12 +26,11 @@ function shell({ title, desc, buttonText = '收下这份快乐' }) {
   };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
 
-  restartBtn.addEventListener('click', () => { sfxClick(); restartFn?.(); });
   closeBtn.addEventListener('click', () => { sfxClick(); close(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', onKey);
 
-  sheet.append(head, body, actionRow);
+  sheet.append(head, body, closeBtn);
   overlay.append(sheet);
   document.body.append(overlay);
 
@@ -52,8 +39,6 @@ function shell({ title, desc, buttonText = '收下这份快乐' }) {
     sheet,
     body,
     closeBtn,
-    /** 小游戏内部调用，让 shell 显示"再来一局"按钮。fn 会在关闭不弹窗的前提下重置游戏。 */
-    setRestart(fn) { restartFn = fn; restartBtn.style.display = ''; },
     onCleanup(fn) { cleanup = fn; }
   };
 }
@@ -85,17 +70,21 @@ function openCatchApple() {
   const result = el('p', { class: 'mini-result', text: '左右移动篮子，接住水果！' });
   ui.body.append(bar, area, result);
 
+  let score = 0;
+  let time = 20;
+  let ended = false;
+  let basketLeft = 42;  // 百分比
   const fruits = ['🍎', '🍊', '🍓', '🍇', '🍌', '🍐'];
 
-  // 键盘 ← →
-  const keys = { ArrowLeft: false, ArrowRight: false };
-  const onKeyDown = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = true; e.preventDefault(); } };
-  const onKeyUp = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = false; e.preventDefault(); } };
+  const setBasket = (pct) => {
+    basketLeft = Math.max(0, Math.min(86, pct));
+    basket.style.left = basketLeft + '%';
+  };
 
-  // 触屏
+  // 触屏：按屏幕左右半边移动
   let touchSide = null;
   const startTouch = (e) => {
-    if (!runtime || runtime.ended) return;
+    if (ended) return;
     const rect = area.getBoundingClientRect();
     const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     touchSide = x < rect.width / 2 ? -1 : 1;
@@ -106,16 +95,17 @@ function openCatchApple() {
   area.addEventListener('pointerleave', endTouch);
   area.addEventListener('pointercancel', endTouch);
 
-  let runtime = null;  // 当前这局的 timer/raf/state
-  let basketLeft = 42;
+  // 键盘 ← →
+  const keys = { ArrowLeft: false, ArrowRight: false };
+  const onKeyDown = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = true; e.preventDefault(); } };
+  const onKeyUp = (e) => { if (keys[e.key] !== undefined) { keys[e.key] = false; e.preventDefault(); } };
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
 
-  const setBasket = (pct) => {
-    basketLeft = Math.max(0, Math.min(86, pct));
-    basket.style.left = basketLeft + '%';
-  };
-
+  // 游戏主循环
+  const falling = [];  // {el, x%, y%, vy}
   const spawnFruit = () => {
-    if (!runtime || runtime.ended) return;
+    if (ended) return;
     const fruit = el('div', {
       class: 'mini-fruit',
       text: fruits[Math.floor(Math.random() * fruits.length)],
@@ -124,108 +114,71 @@ function openCatchApple() {
     const x = 6 + Math.random() * 86;
     fruit.style.left = x + '%';
     area.append(fruit);
-    runtime.falling.push({ el: fruit, x: x, y: -40, vy: 1.2 + Math.random() * 1.6 });
+    falling.push({ el: fruit, x: x, y: -40, vy: 1.2 + Math.random() * 1.6 });
   };
 
-  const stopRound = () => {
-    if (!runtime) return;
-    runtime.ended = true;
-    clearInterval(runtime.countdown);
-    cancelAnimationFrame(runtime.raf);
-    runtime.falling.forEach(f => f.el.remove());
-    runtime.falling.length = 0;
-  };
-
-  const startRound = () => {
-    stopRound();
-    // 重置 UI
-    scoreNode.textContent = '0';
-    timeNode.textContent = '20';
-    result.textContent = '左右移动篮子，接住水果！';
-    basketLeft = 42;
-    basket.style.left = basketLeft + '%';
-    area.querySelectorAll('.mini-fruit').forEach((f) => f.remove());
-    // 隐藏 restart 按钮，恢复"收下"文字
-    ui.closeBtn.textContent = '收下这份快乐';
-    ui.setRestart(null);  // 清空 restart 按钮（shell 里需要支持 setRestart(null) 隐藏按钮）
-
-    const falling = [];
-    let score = 0;
-    let time = 20;
-    let lastSpawn = 0;
-
-    const gameLoop = (now) => {
-      if (!runtime || runtime.ended) return;
-      if (now - lastSpawn > 750) { spawnFruit(); lastSpawn = now; }
-      if (touchSide) setBasket(basketLeft + touchSide * 2.2);
-      if (keys.ArrowLeft) setBasket(basketLeft - 2.5);
-      if (keys.ArrowRight) setBasket(basketLeft + 2.5);
-      const areaH = area.clientHeight;
-      const basketTop = areaH * 0.72;
-      for (let i = falling.length - 1; i >= 0; i--) {
-        const f = falling[i];
-        f.y += f.vy;
-        f.el.style.top = f.y + 'px';
-        if (f.y >= basketTop && f.y <= basketTop + 50) {
-          const dx = Math.abs(f.x - basketLeft - 7);
-          if (dx < 16) {
-            score += 1;
-            scoreNode.textContent = String(score);
-            sfxClick();
-            f.el.remove();
-            falling.splice(i, 1);
-            continue;
-          }
-        }
-        if (f.y > areaH + 40) {
+  let lastSpawn = 0;
+  let lastFrame = 0;
+  const gameLoop = (now) => {
+    if (ended) return;
+    // 生成水果
+    if (now - lastSpawn > 750) { spawnFruit(); lastSpawn = now; }
+    // 移动篮子（触屏方向 + 键盘）
+    if (touchSide) setBasket(basketLeft + touchSide * 2.2);
+    if (keys.ArrowLeft) setBasket(basketLeft - 2.5);
+    if (keys.ArrowRight) setBasket(basketLeft + 2.5);
+    // 更新水果
+    const areaH = area.clientHeight;
+    const basketTop = areaH * 0.72;  // 篮子大致在底部 8% + 高度
+    for (let i = falling.length - 1; i >= 0; i--) {
+      const f = falling[i];
+      f.y += f.vy;
+      f.el.style.top = f.y + 'px';
+      // 碰撞检测（篮子区域与水果）
+      if (f.y >= basketTop && f.y <= basketTop + 50) {
+        const dx = Math.abs(f.x - basketLeft - 7);  // 篮子中心在 basketLeft + 7%
+        if (dx < 16) {
+          // 接住了！
+          score += 1;
+          scoreNode.textContent = String(score);
+          sfxClick();
           f.el.remove();
           falling.splice(i, 1);
+          continue;
         }
       }
-      if (runtime) runtime.raf = requestAnimationFrame(gameLoop);
-    };
-
-    const countdown = setInterval(() => {
-      if (!runtime || runtime.ended) return;
-      time -= 1;
-      timeNode.textContent = String(Math.max(0, time));
-      if (time <= 0) {
-        runtime.ended = true;
-        clearInterval(countdown);
-        cancelAnimationFrame(runtime.raf);
-        falling.forEach(f => f.el.remove());
-        sfxWin();
-        result.textContent = `时间到！你接住了 ${score} 个水果 🎉`;
-        ui.closeBtn.textContent = '收下';
-        ui.setRestart(startRound);
+      // 掉出屏幕
+      if (f.y > areaH + 40) {
+        f.el.remove();
+        falling.splice(i, 1);
       }
-    }, 1000);
-
-    const raf = requestAnimationFrame(gameLoop);
-    runtime = { ended: false, falling, raf, countdown };
-  };
-
-  // 让 setRestart(null) 可以隐藏按钮
-  const origSetRestart = ui.setRestart;
-  ui.setRestart = (fn) => {
-    if (fn) origSetRestart(fn);
-    else {
-      // 隐藏：通过修改 DOM 直接处理
-      const row = ui.sheet.querySelector('.mini-actions');
-      const restartBtn = row?.querySelector('.btn-ghost');
-      if (restartBtn) restartBtn.style.display = 'none';
     }
+    raf = requestAnimationFrame(gameLoop);
   };
+  let raf = requestAnimationFrame(gameLoop);
 
-  document.addEventListener('keydown', onKeyDown);
-  document.addEventListener('keyup', onKeyUp);
+  // 倒计时
+  const countdown = setInterval(() => {
+    time -= 1;
+    timeNode.textContent = String(Math.max(0, time));
+    if (time <= 0) {
+      ended = true;
+      clearInterval(countdown);
+      cancelAnimationFrame(raf);
+      falling.forEach(f => f.el.remove());
+      sfxWin();
+      result.textContent = `时间到！你接住了 ${score} 个水果 🎉`;
+      ui.closeBtn.textContent = '我玩够了';
+    }
+  }, 1000);
+
   ui.onCleanup(() => {
-    stopRound();
+    clearInterval(countdown);
+    cancelAnimationFrame(raf);
+    ended = true;
     document.removeEventListener('keydown', onKeyDown);
     document.removeEventListener('keyup', onKeyUp);
   });
-
-  startRound();
 }
 
 /* ============================================================
@@ -249,88 +202,66 @@ function openBubble() {
   const result = el('p', { class: 'mini-result', text: '加油，越快越好！' });
   ui.body.append(bar, area, result);
 
-  let runtime = null;
+  let score = 0;
+  let time = 20;
+  let ended = false;
 
-  const stopRound = () => {
-    if (!runtime) return;
-    runtime.ended = true;
-    clearInterval(runtime.spawnTimer);
-    clearInterval(runtime.countdown);
-    area.querySelectorAll('.mini-bubble').forEach((b) => b.remove());
+  const spawn = () => {
+    if (ended) return;
+    const bubble = el('button', {
+      class: 'mini-bubble',
+      type: 'button',
+      text: ['🫧', '🎈', '💧', '🫧'][Math.floor(Math.random() * 4)],
+      'aria-label': '戳泡泡'
+    });
+    // JS 传"中心点百分比"，CSS 用 translate(-50%,-50%) 自动居中泡泡
+    bubble.style.left = `${4 + Math.random() * 88}%`;
+    bubble.style.top = `${8 + Math.random() * 80}%`;
+    bubble.style.animationDelay = `${Math.random() * 0.6}s, ${Math.random() * 0.5}s`;
+    // 每次泡泡大小略有不同
+    const size = 44 + Math.round(Math.random() * 24);
+    bubble.style.setProperty('--tap', `${size}px`);
+    bubble.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (ended) return;
+      score += 1;
+      scoreNode.textContent = String(score);
+      sfxClick();
+      bubble.style.transition = 'transform .12s, opacity .18s';
+      bubble.style.transform = 'translate(-50%, -50%) scale(1.4)';
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 180);
+    });
+    area.append(bubble);
+    setTimeout(() => {
+      bubble.style.transition = 'opacity .4s';
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 420);
+    }, 2800);
   };
 
-  const startRound = () => {
-    stopRound();
-    scoreNode.textContent = '0';
-    timeNode.textContent = '20';
-    result.textContent = '加油，越快越好！';
-    area.querySelectorAll('.mini-bubble').forEach((b) => b.remove());
-    ui.closeBtn.textContent = '收下';
-    // 隐藏 restart 按钮
-    const row = ui.sheet.querySelector('.mini-actions');
-    const rb = row?.querySelector('.btn-ghost');
-    if (rb) rb.style.display = 'none';
+  for (let i = 0; i < 5; i++) setTimeout(spawn, i * 120);
 
-    let score = 0;
-    let time = 20;
-    let ended = false;
+  const spawnTimer = setInterval(spawn, 420);
+  const countdown = setInterval(() => {
+    time -= 1;
+    timeNode.textContent = String(Math.max(0, time));
+    if (time <= 0) {
+      ended = true;
+      clearInterval(spawnTimer);
+      clearInterval(countdown);
+      area.querySelectorAll('.mini-bubble').forEach((b) => b.remove());
+      sfxWin();
+      result.textContent = `时间到！你一共戳破了 ${score} 个泡泡 🎉`;
+      ui.closeBtn.textContent = '我玩够了';
+    }
+  }, 1000);
 
-    const spawn = () => {
-      if (ended) return;
-      const bubble = el('button', {
-        class: 'mini-bubble',
-        type: 'button',
-        text: ['🫧', '🎈', '💧', '🫧'][Math.floor(Math.random() * 4)],
-        'aria-label': '戳泡泡'
-      });
-      bubble.style.left = `${4 + Math.random() * 88}%`;
-      bubble.style.top = `${8 + Math.random() * 80}%`;
-      bubble.style.animationDelay = `${Math.random() * 0.6}s, ${Math.random() * 0.5}s`;
-      const size = 44 + Math.round(Math.random() * 24);
-      bubble.style.setProperty('--tap', `${size}px`);
-      bubble.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (ended) return;
-        score += 1;
-        scoreNode.textContent = String(score);
-        sfxClick();
-        bubble.style.transition = 'transform .12s, opacity .18s';
-        bubble.style.transform = 'translate(-50%, -50%) scale(1.4)';
-        bubble.style.opacity = '0';
-        setTimeout(() => bubble.remove(), 180);
-      });
-      area.append(bubble);
-      setTimeout(() => {
-        bubble.style.transition = 'opacity .4s';
-        bubble.style.opacity = '0';
-        setTimeout(() => bubble.remove(), 420);
-      }, 2800);
-    };
-
-    for (let i = 0; i < 5; i++) setTimeout(spawn, i * 120);
-
-    const spawnTimer = setInterval(spawn, 420);
-    const countdown = setInterval(() => {
-      if (ended) return;
-      time -= 1;
-      timeNode.textContent = String(Math.max(0, time));
-      if (time <= 0) {
-        ended = true;
-        clearInterval(spawnTimer);
-        clearInterval(countdown);
-        area.querySelectorAll('.mini-bubble').forEach((b) => b.remove());
-        sfxWin();
-        result.textContent = `时间到！你一共戳破了 ${score} 个泡泡 🎉`;
-        ui.closeBtn.textContent = '收下';
-        ui.setRestart(startRound);
-      }
-    }, 1000);
-
-    runtime = { ended: false, spawnTimer, countdown };
-  };
-
-  ui.onCleanup(() => stopRound());
-  startRound();
+  ui.onCleanup(() => {
+    clearInterval(spawnTimer);
+    clearInterval(countdown);
+    ended = true;
+  });
 }
 
 /* ============================================================
@@ -343,83 +274,62 @@ function openMemory() {
   });
 
   const icons = ['🍎', '🐱', '🌈', '🚀', '🍰', '🐟'];
+  const deck = shuffle([...icons, ...icons]);
+  let first = null;
+  let second = null;
+  let lock = false;
+  let matched = 0;
+
   const grid = el('div', { class: 'mini-grid' });
   const result = el('p', { class: 'mini-result', text: '翻开两张相同的卡片试试。' });
   ui.body.append(grid, result);
 
-  let first = null;
-  let second = null;
-  let lock = false;
+  const cards = deck.map((icon, idx) => {
+    const btn = el('button', { class: 'mini-card', type: 'button', text: '', 'aria-label': '卡片' });
+    btn.dataset.icon = icon;
+    btn.dataset.index = String(idx);
+    btn.addEventListener('click', () => {
+      if (lock || btn.classList.contains('is-open') || btn.classList.contains('is-matched')) return;
+      sfxClick();
+      btn.textContent = icon;
+      btn.classList.add('is-open');
 
-  const hideRestartBtn = () => {
-    const row = ui.sheet.querySelector('.mini-actions');
-    const rb = row?.querySelector('.btn-ghost');
-    if (rb) rb.style.display = 'none';
-  };
-
-  const startRound = () => {
-    lock = true;  // 洗牌期间锁点击
-    grid.innerHTML = '';
-    first = second = null;
-
-    const deck = shuffle([...icons, ...icons]);
-    let matched = 0;
-    result.textContent = '翻开两张相同的卡片试试。';
-    ui.closeBtn.textContent = '收下';
-    hideRestartBtn();
-
-    const cards = deck.map((icon, idx) => {
-      const btn = el('button', { class: 'mini-card', type: 'button', text: '', 'aria-label': '卡片' });
-      btn.dataset.icon = icon;
-      btn.dataset.index = String(idx);
-      btn.addEventListener('click', () => {
-        if (lock || btn.classList.contains('is-open') || btn.classList.contains('is-matched')) return;
+      if (!first) {
+        first = btn;
+        return;
+      }
+      second = btn;
+      if (first.dataset.icon === second.dataset.icon) {
+        first.classList.add('is-matched');
+        second.classList.add('is-matched');
+        matched += 1;
+        first = null;
+        second = null;
         sfxClick();
-        btn.textContent = icon;
-        btn.classList.add('is-open');
-
-        if (!first) {
-          first = btn;
-          return;
+        if (matched === icons.length) {
+          sfxWin();
+          result.textContent = '全部找到啦！你的记忆力真棒 🎉';
         }
-        second = btn;
-        if (first.dataset.icon === second.dataset.icon) {
-          first.classList.add('is-matched');
-          second.classList.add('is-matched');
-          matched += 1;
-          first = null;
-          second = null;
-          sfxClick();
-          if (matched === icons.length) {
-            sfxWin();
-            result.textContent = '全部找到啦！你的记忆力真棒 🎉';
-            ui.closeBtn.textContent = '收下';
-            ui.setRestart(startRound);
-          }
-          return;
-        }
+        return;
+      }
 
-        lock = true;
-        result.textContent = '不一样，再记一记……';
-        setTimeout(() => {
-          first.textContent = '';
-          second.textContent = '';
-          first.classList.remove('is-open');
-          second.classList.remove('is-open');
-          first = null;
-          second = null;
-          lock = false;
-        }, 720);
-      });
-      return btn;
+      lock = true;
+      result.textContent = '不一样，再记一记……';
+      setTimeout(() => {
+        first.textContent = '';
+        second.textContent = '';
+        first.classList.remove('is-open');
+        second.classList.remove('is-open');
+        first = null;
+        second = null;
+        lock = false;
+      }, 720);
     });
+    return btn;
+  });
 
-    cards.forEach((card) => grid.append(card));
-    lock = false;
-  };
-
+  cards.forEach((card) => grid.append(card));
   ui.onCleanup(() => { lock = true; });
-  startRound();
 }
 
 /* ============================================================
