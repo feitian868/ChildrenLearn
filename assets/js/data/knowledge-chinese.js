@@ -723,7 +723,7 @@ export function chineseGenerated(grade, rng) {
     const [word, pos, meaning] = item;
     if (pos < 0 || pos >= word.length) return null;
     const right = word[pos];
-    const masked = word.slice(0, pos) + '□' + word.slice(pos + 1);
+    const masked = word.slice(0, pos) + '（ ）' + word.slice(pos + 1);
     const pool = uniqStr(idiom.map((x) => x[0]).join('').split('')).filter((ch) => ch !== right);
     const wrong = sample(rng, pool, 3);
     if (wrong.length < 3) return null;
