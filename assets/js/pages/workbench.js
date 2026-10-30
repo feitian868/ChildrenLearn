@@ -655,14 +655,6 @@ function renderChest() {
     btnText = '已领取，明天再来';
     btnClass = 'btn btn-ghost btn-block';
     btnDisabled = true;
-
-    // 非积分奖励当天可以再玩 / 再听 / 再看一次
-    if (state.reward && state.reward.type !== 'points') {
-      tip = `今天抽到了：${state.reward.name}，还想再来一次也可以。`;
-      btnText = replayText(state.reward);
-      btnClass = 'btn btn-primary btn-block';
-      btnDisabled = false;
-    }
   }
 
   const card = el('div', {
@@ -680,10 +672,6 @@ function renderChest() {
   const btn = el('button', { class: btnClass, type: 'button', text: btnText, disabled: btnDisabled });
   btn.addEventListener('click', () => {
     sfxClick();
-    if (state.state === 'opened' && state.reward && state.reward.type !== 'points') {
-      playReward(state.reward);
-      return;
-    }
     handleOpenChest();
   });
   card.append(btn);
