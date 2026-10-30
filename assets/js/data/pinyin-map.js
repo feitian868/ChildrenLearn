@@ -1,6 +1,682 @@
 /**
  * pinyin-map.js —— 全量汉字拼音映射（pypinyin 生成）
+ * 多音字修正：逐字查 PINYIN 前，先用 WORD_PINYIN_OVERRIDES 替换常见多音字词。
  */
+
+/**
+ * 词级拼音覆盖表：key=汉字词, value=带声拼音串（用空格分隔每个字）
+ * 常见多音字场景——字典只存一个默认音，但一年级/课文中的实际读音不同。
+ * 按词长从长到短排序（匹配时优先长词）。
+ */
+const WORD_PINYIN_OVERRIDES = Object.freeze({
+  // ===== 为什么 / 因为 =====
+  '为什么': 'wèi shén me',
+  '因为': 'yīn wéi',
+  '为了': 'wèi le',
+  '为什': 'wèi shén',
+  '认为': 'rèn wéi',
+  '以为': 'yǐ wéi',
+  '成为': 'chéng wéi',
+  '作为': 'zuò wéi',
+  '行为': 'xíng wéi',
+  '以为': 'yǐ wéi',
+
+  // ===== 数一数 / 数字 =====
+  '数一数': 'shǔ yī shǔ',
+  '数一下': 'shǔ yī xià',
+  '数不清': 'shǔ bù qīng',
+  '数数': 'shǔ shǔ',
+  '数学': 'shù xué',
+  '数字': 'shù zì',
+  '数目': 'shù mù',
+  '无数': 'wú shù',
+  '多数': 'duō shù',
+  '少数': 'shǎo shù',
+  '次数': 'cì shù',
+  '算数': 'suàn shù',
+  '指数': 'zhǐ shù',
+  '分数': 'fēn shù',
+  '小数': 'xiǎo shù',
+  '数量': 'shù liàng',
+  '重量': 'zhòng liàng',
+  '月亮': 'yuè liàng',
+  '明亮': 'míng liàng',
+  '光亮': 'guāng liàng',
+  '漂亮': 'piào liang',
+
+  // ===== 一的变调 =====
+  '一个': 'yī gè',
+  '一起': 'yī qǐ',
+  '一样': 'yī yàng',
+  '一些': 'yī xiē',
+  '一点': 'yī diǎn',
+  '一定': 'yī dìng',
+  '一起': 'yī qǐ',
+  '一共': 'yī gòng',
+  '一直': 'yī zhí',
+  '第一': 'dì yī',
+  '一次': 'yī cì',
+  '一下': 'yī xià',
+  '一起玩': 'yī qǐ wán',
+  '一年级': 'yī nián jí',
+  '一只': 'yī zhī',
+  '一天': 'yī tiān',
+  '一年': 'yī nián',
+  '一月': 'yī yuè',
+  '一日': 'yī rì',
+
+  // ===== 不的变调 =====
+  '不要': 'bù yào',
+  '不是': 'bù shì',
+  '不会': 'bù huì',
+  '不能': 'bù néng',
+  '不可以': 'bù kě yǐ',
+  '好不好': 'hǎo bu hǎo',
+  '行不行': 'xíng bu xíng',
+  '是不是': 'shì bu shì',
+  '对不对': 'duì bu duì',
+  '会不会': 'huì bu huì',
+  '能不能': 'néng bu néng',
+  '可以不': 'kě yǐ bu',
+  '走不走': 'zǒu bu zǒu',
+  '看不看': 'kàn bu kàn',
+  '听不听': 'tīng bu tīng',
+  '想不想': 'xiǎng bu xiǎng',
+
+  // ===== 好 =====
+  '好像': 'hǎo xiàng',
+  '你好': 'nǐ hǎo',
+  '你好吗': 'nǐ hǎo ma',
+  '好人': 'hǎo rén',
+  '好事': 'hǎo shì',
+  '好看': 'hǎo kàn',
+  '好听': 'hǎo tīng',
+  '好玩': 'hǎo wán',
+  '好吃': 'hǎo chī',
+  '爸爸好': 'bà ba hǎo',
+  '妈妈好': 'mā ma hǎo',
+  '老师好': 'lǎo shī hǎo',
+  '好学校': 'hǎo xué xiào',
+
+  // ===== 乐 =====
+  '快乐': 'kuài lè',
+  '快乐地': 'kuài lè de',
+  '欢乐': 'huān lè',
+  '乐意': 'lè yì',
+  '音乐': 'yīn yuè',
+  '乐器': 'yuè qì',
+  '乐谱': 'yuè pǔ',
+  '乐曲': 'yuè qǔ',
+
+  // ===== 长 =====
+  '长长的': 'cháng cháng de',
+  '长的': 'cháng de',
+  '长发': 'cháng fà',
+  '长江': 'cháng jiāng',
+  '长短': 'cháng duǎn',
+  '长大': 'zhǎng dà',
+  '成长': 'chéng zhǎng',
+  '长高': 'zhǎng gāo',
+  '班长': 'bān zhǎng',
+  '市长': 'shì zhǎng',
+  '校长': 'xiào zhǎng',
+
+  // ===== 行 =====
+  '行动': 'xíng dòng',
+  '行走': 'xíng zǒu',
+  '行为': 'xíng wéi',
+  '银行': 'yín háng',
+  '一行': 'yī háng',
+  '两行': 'liǎng háng',
+  '分行': 'fēn háng',
+
+  // ===== 重 =====
+  '重要': 'zhòng yào',
+  '重量': 'zhòng liàng',
+  '很重': 'hěn zhòng',
+  '太重': 'tài zhòng',
+  '重视': 'zhòng shì',
+  '重心': 'zhòng xīn',
+  '重复': 'chóng fù',
+  '重新': 'chóng xīn',
+  '重来': 'chóng lái',
+
+  // ===== 当 =====
+  '当然': 'dāng rán',
+  '当时': 'dāng shí',
+  '应当': 'yīng dāng',
+  '担当': 'dān dāng',
+  '上当': 'shàng dàng',
+  '当铺': 'dàng pù',
+  '当做': 'dàng zuò',
+  '当时': 'dāng shí',
+  '当年': 'dāng nián',
+  '当地': 'dāng dì',
+
+  // ===== 地 =====
+  '土地': 'tǔ dì',
+  '地方': 'dì fāng',
+  '地点': 'dì diǎn',
+  '草地': 'cǎo dì',
+  '空地': 'kòng dì',
+  '这里': 'zhè lǐ',
+  '那里': 'nà lǐ',
+  '外地': 'wài dì',
+  '地球': 'dì qiú',
+  '地图': 'dì tú',
+  '大地': 'dà dì',
+  '天地': 'tiān dì',
+
+  // ===== 的（de/dí）=====
+  '我的': 'wǒ de',
+  '你的': 'nǐ de',
+  '他的': 'tā de',
+  '她的': 'tā de',
+  '它的': 'tā de',
+  '我们的': 'wǒ men de',
+  '你们的': 'nǐ men de',
+  '他们的': 'tā men de',
+  '好的': 'hǎo de',
+  '白的': 'bái de',
+  '红的': 'hóng de',
+  '大的': 'dà de',
+  '小的': 'xiǎo de',
+  '多的': 'duō de',
+  '少的': 'shǎo de',
+  '可爱的': 'kě ài de',
+  '美丽的': 'měi lì de',
+  '聪明的': 'cōng míng de',
+  '快乐的': 'kuài lè de',
+  '高兴的': 'gāo xìng de',
+  '认真的': 'rèn zhēn de',
+  '仔细的': 'zǐ xì de',
+  '重要的': 'zhòng yào de',
+  '正确的': 'zhèng què de',
+  '主要的': 'zhǔ yào de',
+
+  // ===== 得（de/dé）=====
+  '跑得': 'pǎo de',
+  '飞得': 'fēi de',
+  '写得': 'xiě de',
+  '做得': 'zuò de',
+  '读得': 'dú de',
+  '说得': 'shuō de',
+  '画得': 'huà de',
+  '睡得': 'shuì de',
+  '走得': 'zǒu de',
+  '跑得快': 'pǎo de kuài',
+  '飞得高': 'fēi de gāo',
+  '做得好': 'zuò de hǎo',
+  '对的': 'duì de',
+
+  // ===== 着 =====
+  '看着': 'kàn zhe',
+  '听着': 'tīng zhe',
+  '走着': 'zǒu zhe',
+  '跑着': 'pǎo zhe',
+  '飞着': 'fēi zhe',
+  '坐着': 'zuò zhe',
+  '站着': 'zhàn zhe',
+  '躺着': 'tǎng zhe',
+  '睡着': 'shuì zháo',
+  '着火': 'zháo huǒ',
+  '着急': 'zháo jí',
+  '着迷': 'zháo mí',
+  '等着': 'děng zhe',
+  '吃着': 'chī zhe',
+  '喝着': 'hē zhe',
+  '笑着': 'xiào zhe',
+  '哭着': 'kū zhe',
+  '想着': 'xiǎng zhe',
+  '拿着': 'ná zhe',
+  '推着': 'tuī zhe',
+  '拉着': 'lā zhe',
+  '抱着': 'bào zhe',
+  '穿着': 'chuān zhe',
+  '戴着': 'dài zhe',
+  '挂着': 'guà zhe',
+  '放着': 'fàng zhe',
+
+  // ===== 了 =====
+  '来了': 'lái le',
+  '去了': 'qù le',
+  '走了': 'zǒu le',
+  '跑了': 'pǎo le',
+  '吃了': 'chī le',
+  '喝了': 'hē le',
+  '看了': 'kàn le',
+  '听了': 'tīng le',
+  '说': 'shuō', '说了': 'shuō le',
+  '写了': 'xiě le',
+  '画了': 'huà le',
+  '读了': 'dú le',
+  '给了': 'gěi le',
+  '买了': 'mǎi le',
+  '卖了': 'mài le',
+  '做了': 'zuò le',
+  '玩了': 'wán le',
+  '睡了': 'shuì le',
+  '醒了': 'xǐng le',
+  '好了': 'hǎo le',
+  '对了': 'duì le',
+  '错了': 'cuò le',
+  '有了': 'yǒu le',
+  '没了': 'méi le',
+  '完了': 'wán le',
+
+  // ===== 过 =====
+  '过来': 'guò lái',
+  '过去': 'guò qù',
+  '走过': 'zǒu guò',
+  '路过': 'lù guò',
+  '飞过': 'fēi guò',
+  '看过': 'kàn guò',
+  '听过': 'tīng guò',
+  '说过': 'shuō guò',
+  '做过': 'zuò guò',
+  '吃过': 'chī guò',
+  '玩过': 'wán guò',
+  '玩过': 'wán guò',
+  '周末': 'zhōu mò',
+  '过去': 'guò qù',
+  '过年': 'guò nián',
+  '过节': 'guò jié',
+  '过生日': 'guò shēng rì',
+
+  // ===== 还 =====
+  '还有': 'hái yǒu',
+  '还在': 'hái zài',
+  '还是': 'hái shì',
+  '还要': 'hái yào',
+  '还没': 'hái méi',
+  '还可以': 'hái kě yǐ',
+  '还好': 'hái hǎo',
+  '还走': 'hái zǒu',
+  '还书': 'huán shū',
+  '归还': 'guī huán',
+  '还钱': 'huán qián',
+
+  // ===== 和 =====
+  '和好': 'hé hǎo',
+  '和平': 'hé píng',
+  '温暖': 'wēn nuǎn',
+  '暖和': 'nuǎn huo',
+  '和': 'hé',
+
+  // ===== 都 =====
+  '都是': 'dōu shì',
+  '都来': 'dōu lái',
+  '都去': 'dōu qù',
+  '都好': 'dōu hǎo',
+  '都要': 'dōu yào',
+  '都有': 'dōu yǒu',
+  '都没': 'dōu méi',
+  '都会': 'dōu huì',
+  '都能': 'dōu néng',
+
+  // ===== 背 =====
+  '背书包': 'bēi shū bāo',
+  '背着': 'bēi zhe',
+  '背包': 'bēi bāo',
+  '背诵': 'bèi sòng',
+  '背书': 'bèi shū',
+  '背景': 'bèi jǐng',
+  '后背': 'hòu bèi',
+
+  // ===== 没 =====
+  '没有': 'méi yǒu',
+  '没来': 'méi lái',
+  '没去': 'méi qù',
+  '没走': 'méi zǒu',
+  '没看': 'méi kàn',
+  '没听': 'méi tīng',
+  '没说': 'méi shuō',
+  '没写': 'méi xiě',
+  '没做': 'méi zuò',
+  '没吃': 'méi chī',
+  '没喝': 'méi hē',
+  '没玩': 'méi wán',
+  '没睡': 'méi shuì',
+  '没错': 'méi cuò',
+  '没关系': 'méi guān xì',
+
+  // ===== 哪 =====
+  '哪里': 'nǎ lǐ',
+  '在哪儿': 'zài nǎr',
+  '哪位': 'nǎ wèi',
+  '哪个': 'nǎ gè',
+  '哪些': 'nǎ xiē',
+  '哪天': 'nǎ tiān',
+  '哪年': 'nǎ nián',
+  '哪儿': 'nǎr',
+  '好哪': 'hǎo na',
+  '谢谢哪': 'xiè xie na',
+
+  // ===== 一 / 不 变调（处理"一"在阴平/阳平/去声前读去声，在去声前读阳平；"不"在去声前读阳平）=====
+  '一定': 'yī dìng',
+  '一起': 'yī qǐ',
+  '一起玩': 'yī qǐ wán',
+  '一样': 'yī yàng',
+  '一起走': 'yī qǐ zǒu',
+  '一起玩': 'yī qǐ wán',
+  '一边': 'yī biān',
+  '一起唱': 'yī qǐ chàng',
+  '一起跳': 'yī qǐ tiào',
+  '一起读': 'yī qǐ dú',
+  '一起写': 'yī qǐ xiě',
+  '一起画': 'yī qǐ huà',
+  '一起做': 'yī qǐ zuò',
+  '一起看': 'yī qǐ kàn',
+  '一起听': 'yī qǐ tīng',
+
+  // ===== 给 =====
+  '给我': 'gěi wǒ',
+  '给你': 'gěi nǐ',
+  '给他': 'gěi tā',
+  '给她': 'gěi tā',
+  '给我看': 'gěi wǒ kàn',
+  '给你看': 'gěi nǐ kàn',
+  '给我听': 'gěi wǒ tīng',
+  '给你听': 'gěi nǐ tīng',
+  '给你讲': 'gěi nǐ jiǎng',
+  '带给': 'dài gěi',
+  '送给': 'sòng gěi',
+  '交给': 'jiāo gěi',
+  '还给': 'huán gěi',
+  '分给': 'fēn gěi',
+
+  // ===== 作 =====
+  '作业': 'zuò yè',
+  '作文': 'zuò wén',
+  '作者': 'zuò zhě',
+  '作曲': 'zuò qǔ',
+  '作诗': 'zuò shī',
+  '作画': 'zuò huà',
+  '作乐': 'zuò yuè',
+  '工作': 'gōng zuò',
+  '写作': 'xiě zuò',
+  '创作': 'chuàng zuò',
+  '制作': 'zhì zuò',
+  '合作': 'hé zuò',
+  '用作': 'yòng zuò',
+  '当做': 'dàng zuò',
+
+  // ===== 看 =====
+  '看书': 'kàn shū',
+  '看图': 'kàn tú',
+  '看电视': 'kàn diàn shì',
+  '看电影': 'kàn diàn yǐng',
+  '看见': 'kàn jiàn',
+  '看起来': 'kàn qǐ lái',
+  '看看': 'kàn kan',
+  '看不到': 'kàn bu dào',
+  '看得见': 'kàn de jiàn',
+  '看好': 'kàn hǎo',
+  '照看': 'zhào kàn',
+  '好看': 'hǎo kàn',
+
+  // ===== 正 =====
+  '正在': 'zhèng zài',
+  '正好': 'zhèng hǎo',
+  '正确': 'zhèng què',
+  '真正': 'zhēn zhèng',
+  '正是': 'zhèng shì',
+  '正方': 'zhèng fāng',
+  '正方形': 'zhèng fāng xíng',
+  '正面': 'zhèng miàn',
+  '正经': 'zhèng jīng',
+  '改正': 'gǎi zhèng',
+  '订正': 'dìng zhèng',
+  '校正': 'jiào zhèng',
+  '正月': 'zhēng yuè',
+
+  // ===== 只 =====
+  '只有': 'zhǐ yǒu',
+  '只是': 'zhǐ shì',
+  '只要': 'zhǐ yào',
+  '只能': 'zhǐ néng',
+  '只好': 'zhǐ hǎo',
+  '只是': 'zhǐ shì',
+  '一只': 'yī zhī',
+  '两只': 'liǎng zhī',
+  '三只': 'sān zhī',
+  '四只': 'sì zhī',
+  '五只': 'wǔ zhī',
+  '六只': 'liù zhī',
+  '七只': 'qī zhī',
+  '八只': 'bā zhī',
+  '九只': 'jiǔ zhī',
+  '十只': 'shí zhī',
+  '只': 'zhī',
+
+  // ===== 少 =====
+  '多少': 'duō shǎo',
+  '不少': 'bù shǎo',
+  '稀少': 'xī shǎo',
+  '很少': 'hěn shǎo',
+  '太少': 'tài shǎo',
+  '年少': 'nián shào',
+  '少年': 'shào nián',
+  '少女': 'shào nǚ',
+  '少先队': 'shào xiān duì',
+  '少先队员': 'shào xiān duì yuán',
+  '少有': 'shǎo yǒu',
+
+  // ===== 比 =====
+  '比较': 'bǐ jiào',
+  '比赛': 'bǐ sài',
+  '比如': 'bǐ rú',
+  '比喻': 'bǐ yù',
+  '比美': 'bǐ měi',
+  '比高': 'bǐ gāo',
+  '比大': 'bǐ dà',
+  '比小': 'bǐ xiǎo',
+  '比多少': 'bǐ duō shǎo',
+  '比一比': 'bǐ yī bǐ',
+  '比一比看': 'bǐ yī bǐ kàn',
+
+  // ===== 好 =====
+  '好吗': 'hǎo ma',
+  '好的': 'hǎo de',
+  '好啊': 'hǎo a',
+  '真好': 'zhēn hǎo',
+  '更好': 'gèng hǎo',
+  '最好': 'zuì hǎo',
+  '很好': 'hěn hǎo',
+  '太好了': 'tài hǎo le',
+  '你好': 'nǐ hǎo',
+  '老师好': 'lǎo shī hǎo',
+  '同学好': 'tóng xué hǎo',
+  '大家好': 'dà jiā hǎo',
+  '爸爸妈妈好': 'bà ba mā ma hǎo',
+  '好学校': 'hǎo xué xiào',
+  '好学生': 'hǎo xué shēng',
+  '好习惯': 'hǎo xí guàn',
+  '好榜样': 'hǎo bǎng yàng',
+  '好朋友': 'hǎo péng yǒu',
+  '好伙伴': 'hǎo huǒ bàn',
+  '好办法': 'hǎo bàn fǎ',
+  '好主意': 'hǎo zhǔ yì',
+  '好问题': 'hǎo wèn tí',
+  '好答案': 'hǎo dá àn',
+  '好天气': 'hǎo tiān qì',
+  '好时节': 'hǎo shí jié',
+
+  // ===== 更多一年级高频词 =====
+  '老师': 'lǎo shī',
+  '学校': 'xué xiào',
+  '同学': 'tóng xué',
+  '班级': 'bān jí',
+  '教室': 'jiào shì',
+  '上课': 'shàng kè',
+  '下课': 'xià kè',
+  '读书': 'dú shū',
+  '写字': 'xiě zì',
+  '画画': 'huà huà',
+  '唱歌': 'chàng gē',
+  '跳舞': 'tiào wǔ',
+  '跑步': 'pǎo bù',
+  '吃饭': 'chī fàn',
+  '喝水': 'hē shuǐ',
+  '睡觉': 'shuì jiào',
+  '起床': 'qǐ chuáng',
+  '刷牙': 'shuā yá',
+  '洗脸': 'xǐ liǎn',
+  '洗手': 'xǐ shǒu',
+  '放学': 'fàng xué',
+  '回家': 'huí jiā',
+  '吃饭': 'chī fàn',
+  '散步': 'sàn bù',
+  '玩游戏': 'wán yóu xì',
+  '朋友': 'péng yǒu',
+  '小伙伴': 'xiǎo huǒ bàn',
+  '爸爸妈妈': 'bà ba mā ma',
+  '爷爷奶奶': 'yé ye nǎi nai',
+  '哥哥姐姐': 'gē ge jiě jie',
+  '弟弟妹妹': 'dì di mèi mei',
+  '叔叔阿姨': 'shū shu ā yí',
+  '大树小树': 'dà shù xiǎo shù',
+  '红花黄花': 'hóng huā huáng huā',
+  '白云蓝天': 'bái yún lán tiān',
+  '白天黑夜': 'bái tiān hēi yè',
+  '春夏秋冬': 'chūn xià qiū dōng',
+  '东西南北': 'dōng xī nán běi',
+  '上下左右': 'shàng xià zuǒ yòu',
+  '前后里外': 'qián hòu lǐ wài',
+  '大小多少': 'dà xiǎo duō shǎo',
+  '长短高低': 'cháng duǎn gāo dī',
+  '远近新旧': 'yuǎn jìn xīn jiù',
+  '轻重快慢': 'qīng zhòng kuài màn',
+  '笑哈哈': 'xiào hā hā',
+  '亮晶晶': 'liàng jīng jīng',
+  '胖乎乎': 'pàng hū hū',
+  '绿油油': 'lǜ yóu yóu',
+  '白花花': 'bái huā huā',
+  '红通通': 'hóng tōng tōng',
+  '黄澄澄': 'huáng dēng dēng',
+  '黑乎乎': 'hēi hū hū',
+  '静悄悄': 'jìng qiāo qiāo',
+  '香喷喷': 'xiāng pēn pēn',
+  '懒洋洋': 'lǎn yáng yáng',
+  '急匆匆': 'jí cōng cōng',
+  '慢吞吞': 'màn tūn tūn',
+  '水灵灵': 'shuǐ líng líng',
+  '水汪汪': 'shuǐ wāng wāng',
+  '滴溜溜': 'dī liū liū',
+  '圆溜溜': 'yuán liū liū',
+  '光秃秃': 'guāng tū tū',
+  '光溜溜': 'guāng liū liū',
+  '毛茸茸': 'máo rōng rōng',
+  '热乎乎': 'rè hū hū',
+  '热腾腾': 'rè téng téng',
+  '凉丝丝': 'liáng sī sī',
+  '冷冰冰': 'lěng bīng bīng',
+  '暖烘烘': 'nuǎn hōng hōng',
+  '喜洋洋': 'xǐ yáng yáng',
+  '笑眯眯': 'xiào mī mī',
+  '笑盈盈': 'xiào yíng yíng',
+  '笑哈哈': 'xiào hā hā',
+  '气呼呼': 'qì hū hū',
+  '气冲冲': 'qì chōng chōng',
+  '兴冲冲': 'xìng chōng chōng',
+  '哭哭啼啼': 'kū kū tī tī',
+  '嘻嘻哈哈': 'xī xī hā hā',
+  '说说笑笑': 'shuō shuō xiào xiào',
+  '蹦蹦跳跳': 'bèng bèng tiào tiào',
+  '跑跑跳跳': 'pǎo pǎo tiào tiào',
+  '打打闹闹': 'dǎ dǎ nào nào',
+  '吵吵闹闹': 'chǎo chǎo nào nào',
+  '干干净净': 'gān gān jìng jìng',
+  '整整齐齐': 'zhěng zhěng qí qí',
+  '漂漂亮亮': 'piào piào liàng liàng',
+  '清清楚楚': 'qīng qīng chǔ chǔ',
+  '明明白白': 'míng míng bái bái',
+  '认认真真': 'rèn rèn zhēn zhēn',
+  '仔仔细细': 'zǐ zǐ xì xì',
+  '高高兴兴': 'gāo gāo xìng xìng',
+  '快快乐乐': 'kuài kuài lè lè',
+  '安安静静': 'ān ān jìng jìng',
+  '平平安安': 'píng píng ān ān',
+  '顺顺利利': 'shùn shùn lì lì',
+  '圆圆满满': 'yuán yuán mǎn mǎn',
+  '满满当当': 'mǎn mǎn dāng dāng',
+  '热热闹闹': 'rè rè nào nào',
+  '冷冷清清': 'lěng lěng qīng qīng',
+  '家家户户': 'jiā jiā hù hù',
+  '千千万万': 'qiān qiān wàn wàn',
+  '千千万万': 'qiān qiān wàn wàn',
+
+  // 额外覆盖（之前被 PINYIN 单字字典的默认值覆盖的错音）
+  '没': 'méi',
+  '乐': 'yuè',
+  '行': 'háng',
+  '长': 'cháng',
+  '当': 'dāng',
+  '重': 'zhòng',
+  '量': 'liàng',
+  '都': 'dōu',
+  '看': 'kàn',
+  '背': 'bèi',
+  '更': 'gèng',
+  '少': 'shǎo',
+  '正': 'zhèng',
+  '地': 'dì',
+  '的': 'de',
+  '得': 'dé',
+  '了': 'le',
+  '过': 'guò',
+  '还': 'hái',
+  '和': 'hé',
+  '要': 'yào',
+  '比': 'bǐ',
+  '只': 'zhī',
+  '作': 'zuò',
+  '给': 'gěi',
+  '着': 'zhe',
+  '一': 'yī',
+  '不': 'bù',
+
+  // 具体用户报的案例
+  '为什么': 'wèi shén me',
+  '数一数': 'shǔ yī shǔ'
+});
+
+/** 按词长从长到短排序，pinyinize 会优先匹配长词 */
+const OVERRIDE_KEYS = Object.keys(WORD_PINYIN_OVERRIDES).sort((a, b) => b.length - a.length);
+
+/**
+ * 词级替换：把 text 里的常见词替换成带拼音的 <ruby> 片段。
+ * 处理后的片段用临时占位符 __PYn__ 包裹，逐字阶段会跳过这些占位符。
+ */
+function applyWordOverrides(text) {
+  if (!text) return { text, map: new Map() };
+  let out = text;
+  const used = new Map();  // __PY012__ -> ruby HTML
+  let idx = 0;
+  for (const word of OVERRIDE_KEYS) {
+    if (!out.includes(word)) continue;
+    const py = WORD_PINYIN_OVERRIDES[word];
+    const rubies = word.split('').map((ch, i) => {
+      const rt = py.split(' ')[i] || '';
+      return `<ruby>${ch}<rt>${rt}</rt></ruby>`;
+    }).join('');
+    const token = `__PY${String(idx).padStart(4, '0')}__`;
+    used.set(token, rubies);
+    // 全局替换同一个词的所有出现
+    out = out.split(word).join(token);
+    idx++;
+  }
+  return { text: out, map: used };
+}
+
+/** 把 __PYnnnn__ 占位符还原成 ruby HTML */
+function restoreOverrides(text, map) {
+  let out = text;
+  for (const [token, html] of map) {
+    out = out.split(token).join(html);
+  }
+  return out;
+}
 
 export const PINYIN = {
   '啊': 'a',
@@ -1984,6 +2660,10 @@ const PINYIN_LETTERS = /^[a-zA-Zā-ǖĀ-Ǖ]+$/u;
 
 export function pinyinize(text) {
   if (!text) return '';
+  // 1) 词级多音字覆盖：先替换常见多音字词为 __PYnnnn__ 占位符
+  const { text: preprocessed, map } = applyWordOverrides(text);
+  // 2) 按占位符分段——literal 段走逐字查 PINYIN，token 段直接透传
+  const SEG_RE = /(__PY\d{4}__)/g;
   let out = "";
   let pyBuf = "";
   function flushPyBuf() {
@@ -1992,17 +2672,29 @@ export function pinyinize(text) {
     else out += pyBuf;
     pyBuf = "";
   }
-  for (const ch of String(text)) {
-    if (PINYIN_LETTERS.test(ch)) { pyBuf += ch; continue; }
-    flushPyBuf();
-    if (PINYIN[ch]) {
-      out += `<ruby>${ch}<rt>${PINYIN[ch]}</rt></ruby>`;
+  const segments = String(preprocessed).split(SEG_RE);
+  for (const seg of segments) {
+    if (!seg) continue;
+    if (/^__PY\d{4}__$/.test(seg)) {
+      // 占位符：直接拼进输出，restoreOverrides 会把它换成 <ruby>
+      flushPyBuf();
+      out += seg;
     } else {
-      out += ch;
+      // 常规文本：逐字走原逻辑
+      for (const ch of seg) {
+        if (PINYIN_LETTERS.test(ch)) { pyBuf += ch; continue; }
+        flushPyBuf();
+        if (PINYIN[ch]) {
+          out += `<ruby>${ch}<rt>${PINYIN[ch]}</rt></ruby>`;
+        } else {
+          out += ch;
+        }
+      }
     }
   }
   flushPyBuf();
-  return out;
+  // 3) 还原占位符为预构建的 <ruby> HTML（覆盖正确的声调）
+  return restoreOverrides(out, map);
 }
 
 export function needsPinyin(grade) {

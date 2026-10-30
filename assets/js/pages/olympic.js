@@ -12,7 +12,7 @@ import { el, clear, toast } from '../core/ui.js?v=20261028h';
 import { celebrate } from '../core/fx.js?v=20261028h';
 import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js?v=20261028h';
 import { mulberry32, hashString } from '../core/rng.js?v=20261028h';
-import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261028h';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261029a';
 
 const BASE_CAP = 5;
 const OVER_CAP = 8;   // 四科全完成后的上限

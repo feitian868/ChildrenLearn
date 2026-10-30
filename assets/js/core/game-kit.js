@@ -11,7 +11,7 @@ import { celebrate, playerName } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
 import { shuffle } from './rng.js';
-import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261029a';
 
 /** 一年级语文自动标拼音，其他年级/英语科学数学原样 */
 function pyHtml(grade, text) {
