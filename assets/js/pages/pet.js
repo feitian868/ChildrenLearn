@@ -14,7 +14,10 @@
 
 import * as store from '../core/store.js';
 import { el, clear, toast } from '../core/ui.js';
-import { sfxClick, sfxWin, unlockAudio } from '../core/audio.js';
+import { sfxClick, sfxWin, unlockAudio,
+  sfxPetPet, sfxPetEat, sfxPetPlay, sfxPetClean,
+  sfxPetLevelUp, sfxPetYawn, sfxPetWalk, sfxPetHappy, sfxPetSad, sfxPetUnlock
+} from '../core/audio.js';
 import {
   stateOf, createPet, feed, touch, play, clean,
   equipDeco, unequipDeco, changeScene, changeNickname,
@@ -165,7 +168,7 @@ function resetPetAnim(petWrap) {
 /** 喂养：手从上落 + 食物飞入 + 宠物张嘴吃 + 舔嘴 */
 function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪') {
   resetPetAnim(petWrap);
-  sfxClick();
+  sfxPetEat();
   petWrap.classList.add('pet-feed');
 
   // 手从上方落下
@@ -185,7 +188,7 @@ function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪') {
 /** 抚摸：手左右扫 + 宠物耳朵贴平 + 眯眼享受 */
 function triggerTouch(sceneWrap, petWrap) {
   resetPetAnim(petWrap);
-  sfxClick();
+  sfxPetPet();
   petWrap.classList.add('pet-touching');
   touch();
 
@@ -200,7 +203,7 @@ function triggerTouch(sceneWrap, petWrap) {
 function triggerPlay(sceneWrap, petWrap) {
   const r = play();
   if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天玩过啦，明天再来' : r.reason, 'bad'); return; }
-  sfxClick();
+  sfxPetPlay();
   resetPetAnim(petWrap);
   petWrap.classList.add('pet-play');
 
@@ -215,7 +218,7 @@ function triggerPlay(sceneWrap, petWrap) {
 function triggerClean(sceneWrap, petWrap) {
   const r = clean();
   if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天清洁过啦' : r.reason, 'bad'); return; }
-  sfxClick();
+  sfxPetClean();
   resetPetAnim(petWrap);
   petWrap.classList.add('pet-clean');
 
@@ -251,6 +254,8 @@ function scheduleIdleBehaviors() {
           !petWrap.classList.contains('pet-touching')) {
         const act = idleActions[Math.floor(Math.random() * idleActions.length)];
         petWrap.classList.add('pet-idle-' + act);
+        if (act === 'yawn') sfxPetYawn();
+        else if (act === 'hop') sfxPetHappy();
         setTimeout(() => petWrap.classList.remove('pet-idle-' + act), 1500);
       }
       scheduleNextIdle();
@@ -268,6 +273,7 @@ function scheduleIdleBehaviors() {
         scheduleNextWalk();
         return;
       }
+      sfxPetWalk();
       walkStep(arena, petWrap);
       scheduleNextWalk();
     }, delay);
@@ -358,11 +364,14 @@ function renderPanel(pet) {
             const res = feed(f.id);
             if (res.ok) {
               toast(`吃饱啦！饥饿 +${f.hunger}`, 'ok');
-              if (res.leveledUp) toast('🎉 升级啦！', 'ok');
-              // 触发喂养动画（找当前舞台）
+              // 触发喂养动画 + 音效（找当前舞台）
               const arena = document.querySelector('.pet-arena');
               const pw = document.querySelector('.pet-wrap');
               if (arena && pw) triggerFeed(arena, pw, f.emoji);
+              if (res.leveledUp) {
+                sfxPetLevelUp();
+                toast('🎉 升级啦！', 'ok');
+              }
               setTimeout(() => render(), 1200); // 动画播完再刷新
             }
           });
@@ -393,7 +402,7 @@ function renderPanel(pet) {
             if (!owned) { toast('去商店解锁吧', 'bad'); return; }
             sfxClick();
             if (wornHere) { unequipDeco(d.slot); toast('脱下了', 'ok'); }
-            else { equipDeco(d.id); toast('穿上啦！', 'ok'); }
+            else { equipDeco(d.id); sfxPetUnlock(); toast('穿上啦！', 'ok'); }
             render();
           });
           return box;
@@ -421,7 +430,7 @@ function renderPanel(pet) {
           box.addEventListener('click', () => {
             if (!owned) { toast('去商店解锁吧', 'bad'); return; }
             if (cur) return;
-            sfxClick(); changeScene(s.id); render();
+            sfxPetUnlock(); changeScene(s.id); render();
           });
           return box;
         })

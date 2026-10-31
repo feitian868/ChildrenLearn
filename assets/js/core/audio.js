@@ -36,7 +36,8 @@ export function getAudioContext() {
   return ensureContext();
 }
 
-function tone(freq, delay, duration, { type = 'sine', gain = 0.12 } = {}) {
+/** tone 基础合成；portamento = 起始滑到结束频率 */
+function tone(freq, delay, duration, { type = 'sine', gain = 0.12, portamento = null } = {}) {
   const c = ensureContext();
   if (!c) return;
   const osc = c.createOscillator();
@@ -44,7 +45,13 @@ function tone(freq, delay, duration, { type = 'sine', gain = 0.12 } = {}) {
   const t0 = c.currentTime + delay;
 
   osc.type = type;
-  osc.frequency.setValueAtTime(freq, t0);
+  if (portamento) {
+    // 从 portamento 滑到 freq，营造"啾"的可爱感
+    osc.frequency.setValueAtTime(portamento, t0);
+    osc.frequency.exponentialRampToValueAtTime(freq, t0 + duration * 0.7);
+  } else {
+    osc.frequency.setValueAtTime(freq, t0);
+  }
   vol.gain.setValueAtTime(0.0001, t0);
   vol.gain.exponentialRampToValueAtTime(gain, t0 + 0.02);
   vol.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
@@ -52,6 +59,94 @@ function tone(freq, delay, duration, { type = 'sine', gain = 0.12 } = {}) {
   osc.connect(vol).connect(c.destination);
   osc.start(t0);
   osc.stop(t0 + duration + 0.05);
+}
+
+/** 多 tone 叠加（和弦感） */
+function chord(notes, delay = 0, duration = 0.2, opts = {}) {
+  notes.forEach((f, i) => tone(f, delay + (opts.stagger || 0) * i, duration, opts));
+}
+
+/* ============================================================
+   宠物专属音效（软萌风，给小朋友的电子合成音）
+   ============================================================ */
+
+/** 🐾 抚摸：柔和啾 + 高音甜（喵~） */
+export function sfxPetPet() {
+  tone(660, 0, 0.18, { type: 'sine', gain: 0.08, portamento: 880 });
+  tone(990, 0.12, 0.22, { type: 'sine', gain: 0.06, portamento: 1200 });
+}
+
+/** 🍪 喂养：短促"吧唧" + 下一个音表示饱了 */
+export function sfxPetEat() {
+  // 吧唧嘴声：短促的三角波 + 滑音
+  tone(520, 0, 0.08, { type: 'triangle', gain: 0.12, portamento: 780 });
+  tone(650, 0.12, 0.1, { type: 'triangle', gain: 0.1, portamento: 500 });
+  // 满足感小和弦
+  tone(784, 0.24, 0.2, { gain: 0.07 });
+  tone(988, 0.28, 0.2, { gain: 0.06 });
+}
+
+/** 🎾 玩耍：活泼三连跳音 + 球弹跳 */
+export function sfxPetPlay() {
+  // 跳 1 跳 2 跳 3 成功
+  tone(520, 0, 0.1, { type: 'square', gain: 0.05 });
+  tone(660, 0.1, 0.1, { type: 'square', gain: 0.05 });
+  tone(880, 0.2, 0.1, { type: 'square', gain: 0.06 });
+  // 叮！接到了
+  tone(1320, 0.35, 0.25, { type: 'sine', gain: 0.08, portamento: 880 });
+}
+
+/** 🛁 清洁：水滴 + 泡泡 pop */
+export function sfxPetClean() {
+  // 3 颗水滴
+  [0, 0.1, 0.2].forEach((d, i) => {
+    tone(880 + i * 120, d, 0.12, { type: 'sine', gain: 0.07, portamento: 440 + i * 80 });
+  });
+  // 泡泡破的高频
+  tone(1760, 0.32, 0.08, { type: 'sine', gain: 0.05 });
+  tone(1980, 0.36, 0.08, { type: 'sine', gain: 0.05 });
+  // 满足的长音
+  tone(660, 0.45, 0.3, { type: 'sine', gain: 0.06 });
+}
+
+/** 🎉 升级：闪亮上扬 5 音琶音 */
+export function sfxPetLevelUp() {
+  [523, 659, 784, 1046, 1318].forEach((f, i) => {
+    tone(f, i * 0.08, 0.2, { gain: 0.09, type: 'triangle' });
+  });
+  // 最后一个低音定音
+  tone(1568, 0.5, 0.35, { gain: 0.08 });
+}
+
+/** 😴 打哈欠：滑音从高到低（懒洋洋） */
+export function sfxPetYawn() {
+  tone(1100, 0, 0.6, { type: 'sine', gain: 0.05, portamento: 520 });
+}
+
+/** 🐾 走路：轻轻"嗒嗒"两步 */
+export function sfxPetWalk() {
+  tone(200, 0, 0.05, { type: 'square', gain: 0.025 });
+  tone(220, 0.15, 0.05, { type: 'square', gain: 0.025 });
+}
+
+/** 💝 心情好：小鸟欢叫（两个快速滑音） */
+export function sfxPetHappy() {
+  tone(880, 0, 0.12, { type: 'sine', gain: 0.07, portamento: 1320 });
+  tone(1100, 0.14, 0.12, { type: 'sine', gain: 0.07, portamento: 1600 });
+  tone(880, 0.28, 0.14, { type: 'sine', gain: 0.06, portamento: 1320 });
+}
+
+/** 😢 心情差：低沉慢音（温柔安慰感，不刺耳） */
+export function sfxPetSad() {
+  tone(440, 0, 0.3, { type: 'sine', gain: 0.06, portamento: 330 });
+  tone(330, 0.25, 0.35, { type: 'sine', gain: 0.05, portamento: 262 });
+}
+
+/** 🎁 解锁装饰/乐园：闪亮叮 */
+export function sfxPetUnlock() {
+  tone(1046, 0, 0.15, { type: 'triangle', gain: 0.08 });
+  tone(1318, 0.08, 0.15, { type: 'triangle', gain: 0.07 });
+  tone(1568, 0.16, 0.2, { type: 'triangle', gain: 0.06 });
 }
 
 export function sfxClick() {

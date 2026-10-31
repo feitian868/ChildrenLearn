@@ -29,6 +29,9 @@ import {
   setSoundEnabled,
   isSoundEnabled,
   sfxClick,
+  sfxPetPet,
+  sfxPetEat,
+  sfxPetLevelUp,
   unlockAudio
 } from '../core/audio.js';
 import { el, clear, dialog, longPress, toast } from '../core/ui.js';
@@ -748,11 +751,13 @@ function renderPet() {
   btnFeed.addEventListener('click', () => {
     const res = petFeed('cookie');
     if (res.ok) {
-      sfxClick(); refresh();
+      sfxPetEat();
+      if (res.leveledUp) sfxPetLevelUp();
+      refresh();
     }
   });
   const btnTouch = el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲摸' });
-  btnTouch.addEventListener('click', () => { sfxClick(); petTouch(); refresh(); });
+  btnTouch.addEventListener('click', () => { sfxPetPet(); petTouch(); refresh(); });
   const btnPlay = el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾玩', title: pet.daily.played ? '今天玩过啦' : '每天一次' });
   btnPlay.addEventListener('click', () => { sfxClick(); window.location.href = 'pet.html'; });
 
