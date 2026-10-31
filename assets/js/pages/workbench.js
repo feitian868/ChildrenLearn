@@ -703,8 +703,9 @@ function renderPet() {
       el('button', {
         class: 'btn btn-gold btn-block',
         type: 'button',
-        text: '🐾 去领养宠物'
-      }).on('click', () => { sfxClick(); window.location.href = 'pet.html'; }),
+        text: '🐾 去领养宠物',
+        onclick: () => { sfxClick(); window.location.href = 'pet.html'; }
+      }),
     );
     return card;
   }
@@ -765,7 +766,8 @@ function renderPet() {
     el('div', { class: 'pet-actions' }, [btnFeed, btnTouch, btnPlay,
       el('button', {
         class: 'btn btn-primary', type: 'button', text: '去乐园',
-      }).on('click', () => { sfxClick(); window.location.href = 'pet.html'; }),
+        onclick: () => { sfxClick(); window.location.href = 'pet.html'; }
+      }),
     ]),
   );
   return card;

@@ -92,11 +92,11 @@ function renderArena(pet) {
 
   // 顶部返回
   const topBar = el('div', { style: 'display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:white; border-bottom:1px solid #eee;' }, [
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '← 回工作台' }).on('click', () => {
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '← 回工作台', onclick: () => {
       sfxClick(); window.location.href = 'index.html';
-    }),
+    }}),
     el('div', { style: 'font-weight:700; font-size:15px;' }, { text: `${pet.speciesEmoji} ${pet.nickname} · Lv.${pet.level}` }),
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🔄', title: '刷新' }).on('click', () => render()),
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '🔄', title: '刷新', onclick: () => render() }),
   ]);
 
   // 乐园舞台
@@ -122,24 +122,24 @@ function renderArena(pet) {
     position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
     display: 'flex', gap: '8px', zIndex: '10',
   } }, [
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲 抚摸', title: '无限次' }).on('click', () => {
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲 抚摸', title: '无限次', onclick: () => {
       sfxClick(); petSvg.classList.remove('pet-petting'); void petSvg.offsetWidth; petSvg.classList.add('pet-petting');
       touch(); spawnParticles(sceneWrap, '💖', 1); render();
-    }),
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾 玩耍' + (pet.daily.played ? ' ✓' : ''), title: '每天一次' }).on('click', () => {
+    }}),
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾 玩耍' + (pet.daily.played ? ' ✓' : ''), title: '每天一次', onclick: () => {
       sfxClick();
       const r = play();
       if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天玩过啦，明天再来' : r.reason, 'bad'); return; }
       spawnParticles(sceneWrap, '⭐', 5);
       render();
-    }),
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🛁 清洁' + (pet.daily.cleaned ? ' ✓' : ''), title: '每天一次' }).on('click', () => {
+    }}),
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '🛁 清洁' + (pet.daily.cleaned ? ' ✓' : ''), title: '每天一次', onclick: () => {
       sfxClick();
       const r = clean();
       if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天清洁过啦' : r.reason, 'bad'); return; }
       spawnParticles(sceneWrap, '✨', 3);
       render();
-    }),
+    }}),
   ]);
   sceneWrap.append(actionRow);
 
@@ -308,12 +308,12 @@ function renderPanel(pet) {
           placeholder: '最多 8 个字',
           id: 'nick-input',
         }),
-        el('button', { class: 'btn btn-gold', type: 'button', text: '保存' }).on('click', () => {
+        el('button', { class: 'btn btn-gold', type: 'button', text: '保存', onclick: () => {
           const v = document.getElementById('nick-input')?.value;
           const r = changeNickname(v);
           if (r.ok) { sfxClick(); toast('改好啦！', 'ok'); render(); }
           else toast(r.reason || '失败', 'bad');
-        }),
+        }}),
       ]),
       el('h3', { text: '今天', style: { fontSize: '14px', marginTop: '16px' } }),
       el('ul', { style: { fontSize: '13px', color: 'var(--ink2)', lineHeight: '1.9', paddingLeft: '18px', marginTop: '4px' } }, [
