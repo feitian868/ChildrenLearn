@@ -14,6 +14,13 @@ import {
 } from '../core/tasks.js';
 import { chestState, openChest } from '../core/chest.js?v=20261030a';
 import { shopState, redeemItem } from '../core/shop.js';
+import {
+  stateOf as petStateOf,
+  touch as petTouch,
+  feed as petFeed,
+  addFood as petAddFood,
+  LEVEL_THRESHOLDS,
+} from '../core/pet.js?v=20261031b';
 import { markCelebrated } from '../core/score.js';
 import { celebrate, playerName } from '../core/fx.js';
 import { openMinigame } from '../core/minigames.js?v=20261030a';
@@ -227,7 +234,7 @@ function render(data) {
     renderGradeBar(data),
     el('div', { class: 'wb-grid' }, [
       el('div', { class: 'wb-main' }, [renderProgress(), renderSubjects()]),
-      el('div', { class: 'wb-side' }, [renderChest(), renderShop(), renderData()])
+      el('div', { class: 'wb-side' }, [renderChest(), renderPet(), renderShop(), renderData()])
     ]),
     renderGrowth(data),
     renderParent(),
@@ -678,6 +685,92 @@ function renderChest() {
   return card;
 }
 
+/* ------------------------- 宠物 ------------------------- */
+
+function renderPet() {
+  const pet = petStateOf(); // null = 还没领养
+
+  const card = el('div', { class: 'card pet-card' });
+
+  if (!pet) {
+    // 未领养状态
+    card.append(
+      el('h3', { text: '🐾 宠物乐园' }),
+      el('div', { class: 'pet-stage', style: { background: 'linear-gradient(180deg, #E0E0E0 0%, #BDBDBD 100%)' } }, [
+        el('div', { style: { fontSize: '60px', opacity: 0.35 } }, { text: '🐾' }),
+      ]),
+      el('p', { class: 'chest-tip', style: { marginTop: '8px' }, text: '还没有小伙伴哦，选一只来陪你学习吧！' }),
+      el('button', {
+        class: 'btn btn-gold btn-block',
+        type: 'button',
+        text: '🐾 去领养宠物'
+      }).on('click', () => { sfxClick(); window.location.href = 'pet.html'; }),
+    );
+    return card;
+  }
+
+  // 已领养
+  const expNext = pet.levelNextAt - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
+  const expCur  = pet.exp - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
+  const expPct = expNext > 0 ? Math.round((expCur / expNext) * 100) : 100;
+
+  const svgWrap = el('div', { class: `pet-stage ${pet.moodClass}` }, [
+    el('div', { class: 'pet-wrap-inline', innerHTML: pet.speciesSvg, style: { width: '100px', height: '100px', transform: 'translate(-50%, -50%)', position: 'absolute', left: '50%', bottom: '10%' } }),
+  ]);
+  svgWrap.addEventListener('click', () => { window.location.href = 'pet.html'; });
+
+  // 宠物身上还带没带食物
+  const cookieCount = pet.inventory?.food?.cookie || 0;
+
+  const barHunger = el('div', { class: 'bar-row hunger' }, [
+    el('span', { class: 'lbl', text: '饿' }),
+    el('div', { class: 'bar' }, [el('div', { class: 'fill', style: { width: pet.hunger + '%' } })]),
+    el('span', { class: 'val', text: pet.hunger }),
+  ]);
+  const barMood = el('div', { class: 'bar-row mood' }, [
+    el('span', { class: 'lbl', text: '心情' }),
+    el('div', { class: 'bar' }, [el('div', { class: 'fill', style: { width: pet.mood + '%' } })]),
+    el('span', { class: 'val', text: pet.mood }),
+  ]);
+  const barExp = el('div', { class: 'bar-row exp' }, [
+    el('span', { class: 'lbl', text: 'Lv.' + pet.level }),
+    el('div', { class: 'bar' }, [el('div', { class: 'fill', style: { width: expPct + '%' } })]),
+    el('span', { class: 'val', text: expPct + '%' }),
+  ]);
+
+  const btnFeed = el('button', {
+    class: 'btn btn-ghost', type: 'button',
+    text: '🍪喂',
+    disabled: cookieCount <= 0,
+    title: cookieCount > 0 ? `还有 ${cookieCount} 个饼干` : '背包空了，去商店买吧',
+  });
+  btnFeed.addEventListener('click', () => {
+    const res = petFeed('cookie');
+    if (res.ok) {
+      sfxClick(); refresh();
+    }
+  });
+  const btnTouch = el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲摸' });
+  btnTouch.addEventListener('click', () => { sfxClick(); petTouch(); refresh(); });
+  const btnPlay = el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾玩', title: pet.daily.played ? '今天玩过啦' : '每天一次' });
+  btnPlay.addEventListener('click', () => { sfxClick(); window.location.href = 'pet.html'; });
+
+  card.append(
+    el('h3', {}, [
+      el('span', { class: 'pet-name', text: `${pet.speciesEmoji} ${pet.nickname}` }),
+      el('span', { class: 'pet-lv', text: `Lv.${pet.level}` }),
+    ]),
+    svgWrap,
+    el('div', { class: 'pet-bars' }, [barHunger, barMood, barExp]),
+    el('div', { class: 'pet-actions' }, [btnFeed, btnTouch, btnPlay,
+      el('button', {
+        class: 'btn btn-primary', type: 'button', text: '去乐园',
+      }).on('click', () => { sfxClick(); window.location.href = 'pet.html'; }),
+    ]),
+  );
+  return card;
+}
+
 /** 已开过的奖励，再玩一次按钮文案 */
 function replayText(reward) {
   if (reward.type === 'minigame') return '再玩一次';
@@ -711,6 +804,28 @@ function handleOpenChest() {
       points: reward.points,
       variant: 'chest',
       buttonText: '太棒了'
+    });
+    return;
+  }
+
+  // 宠物食物包：自动进背包
+  if (reward.type === 'pet-food-pack') {
+    const hasPet = Boolean(petStateOf());
+    if (hasPet) {
+      petAddFood(reward.foodId, reward.count);
+    }
+    celebrate({
+      emoji: reward.emoji || '🍪',
+      title: reward.name,
+      subtitle: hasPet
+        ? `已送到宠物背包！去宠物乐园看看吧`
+        : `领养宠物后自动进背包，先去领养一只吧`,
+      variant: 'chest',
+      buttonText: hasPet ? '去看看宠物' : '去领养宠物',
+      speech: hasPet
+        ? `宝箱给${playerName()}的宠物送了${reward.count}个食物！`
+        : `${playerName()}先去领养一只宠物吧`,
+      onClose: () => { window.location.href = 'pet.html'; }
     });
     return;
   }

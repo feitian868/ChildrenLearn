@@ -1,0 +1,356 @@
+/**
+ * pet.css —— 宠物模块全部样式
+ * 包含：SVG 层动画 keyframes + 工作台小卡片 + 大舞台 + 4 Tab + 乐园场景
+ */
+
+/* ============ 通用 ============ */
+.pet-svg { display: block; width: 100%; height: 100%; }
+
+/* ============================================================
+   SVG 层动画 keyframes（全部用 CSS infinite，零 JS 循环）
+   ============================================================ */
+
+/* 1. 呼吸：身体轻微起伏 */
+@keyframes breathe {
+  0%, 100% { transform: scaleY(1) translateY(0); }
+  50%      { transform: scaleY(1.04) translateY(-1px); }
+}
+.body-layer {
+  animation: breathe 2.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+/* 2. 眨眼：眼睛纵向压扁 */
+@keyframes blink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  94%           { transform: scaleY(0.08); }
+}
+.eye-left, .eye-right {
+  animation: blink 4s infinite;
+  transform-origin: center;
+}
+
+/* 3. 耳朵抽动：随机间隔轻抖 */
+@keyframes earTwitch {
+  0%, 82%, 100% { transform: rotate(0deg); }
+  86%           { transform: rotate(-7deg); }
+  89%           { transform: rotate(0deg); }
+  92%           { transform: rotate(5deg); }
+}
+.ear-left  { animation: earTwitch 5.5s infinite; }
+.ear-right { animation: earTwitch 5.8s infinite; }
+
+/* 4. 尾巴摇摆 */
+@keyframes tailWag {
+  0%, 100% { transform: rotate(-14deg); }
+  50%      { transform: rotate(20deg); }
+}
+.tail-layer { animation: tailWag 1.2s ease-in-out infinite; }
+
+/* 5. 开心跳（加 pet-happy 类触发） */
+@keyframes happyJump {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25%      { transform: translateY(-22px) rotate(-4deg); }
+  50%      { transform: translateY(0) rotate(0deg); }
+  75%      { transform: translateY(-14px) rotate(4deg); }
+}
+.pet-happy .head-layer { animation: happyJump 0.8s ease-out; }
+.pet-happy .tail-layer { animation: tailWag 0.5s ease-in-out infinite; }
+
+/* 6. 抚摸时耳朵往前贴平 */
+@keyframes earLieFlat {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(-22deg); }
+  100% { transform: rotate(0deg); }
+}
+.pet-petting .ear-left  { animation: earLieFlat 0.7s ease-in-out; }
+.pet-petting .ear-right { animation: earLieFlat 0.7s ease-in-out; }
+
+/* 7. 吃东西：身体小幅晃动 + 嘴张大 */
+@keyframes eatWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-3deg); }
+  75%      { transform: rotate(3deg); }
+}
+.pet-eating .head-layer { animation: eatWiggle 0.5s ease-in-out 2; }
+.pet-eating .m-default { display: none !important; }
+.pet-eating .m-happy   { display: block !important; }
+
+/* 8. 难过：嘴角下拉 + 眼睛变月牙 */
+.pet-sad .m-default { display: none !important; }
+.pet-sad .m-sad     { display: block !important; }
+.pet-sad .eye-shape { transform: scaleY(0.4) translateY(3px); transform-origin: center; }
+
+/* 9. 睡觉：眼睛横向压扁一条线 + 嘴一条线 + 尾巴停摆 */
+.pet-sleep .eye-shape { transform: scaleY(0.1); transform-origin: center; }
+.pet-sleep .m-default { display: none !important; }
+.pet-sleep .m-sleep   { display: block !important; }
+.pet-sleep .tail-layer { animation: none; transform: rotate(0deg); }
+
+/* ============================================================
+   工作台右侧 · 小卡片
+   ============================================================ */
+.pet-card { padding: 14px 16px; }
+.pet-card h3 { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.pet-card h3 .pet-name { font-size: 16px; }
+.pet-card h3 .pet-lv { font-size: 12px; color: var(--ink2); background: var(--bg-soft); padding: 2px 8px; border-radius: 10px; }
+
+.pet-stage {
+  height: 120px;
+  background: linear-gradient(180deg, #D6EAF8 0%, #A8E6CF 100%);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.pet-stage:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+.pet-stage .pet-svg { width: 100px; height: 100px; }
+
+.pet-bars { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.pet-bars .bar-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.pet-bars .bar-row .lbl { width: 38px; color: var(--ink2); }
+.pet-bars .bar-row .bar { flex: 1; height: 10px; background: #E8E8E8; border-radius: 5px; overflow: hidden; }
+.pet-bars .bar-row .fill { height: 100%; border-radius: 5px; transition: width .35s; }
+.pet-bars .bar-row.hunger .fill { background: linear-gradient(90deg, #FF6B6B, #FFD93D); }
+.pet-bars .bar-row.mood   .fill { background: linear-gradient(90deg, #6BCB77, #4DA6FF); }
+.pet-bars .bar-row.exp    .fill { background: linear-gradient(90deg, #9B59B6, #FF6B8A); }
+.pet-bars .bar-row .val { width: 26px; text-align: right; color: var(--ink2); }
+
+.pet-actions { margin-top: 10px; display: flex; gap: 6px; }
+.pet-actions .btn { flex: 1; padding: 6px 0; font-size: 13px; }
+
+/* ============================================================
+   宠物大舞台（pet.html）
+   ============================================================ */
+.pet-page { min-height: 100vh; background: #FAFAFA; display: flex; flex-direction: column; }
+
+.pet-arena {
+  position: relative;
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+  transition: background .5s;
+}
+.pet-arena .scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+.pet-arena .pet-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 15%;
+  transform: translateX(-50%);
+  width: 240px;
+  height: 240px;
+  z-index: 5;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 大舞台装饰定位（slot 决定放哪） */
+.pet-wrap [data-deco] { display: block; }
+.pet-wrap [data-deco="red-bow"],
+.pet-wrap [data-deco="crown"],
+.pet-wrap [data-deco="xmas-hat"] { transform: translateY(-40px); }
+.pet-wrap [data-deco="scarf"],
+.pet-wrap [data-deco="collar"],
+.pet-wrap [data-deco="tie"] { transform: translateY(-15px); }
+.pet-wrap [data-deco="sunglass"] { transform: translateY(-4px); }
+.pet-wrap [data-deco="wings"] { transform: translateY(-10px); }
+
+/* 宠物漂浮的爱心/星星粒子 */
+.particle {
+  position: absolute;
+  pointer-events: none;
+  font-size: 28px;
+  z-index: 10;
+  animation: particleFloat 1.2s ease-out forwards;
+}
+@keyframes particleFloat {
+  0%   { opacity: 1; transform: translate(-50%, 0) scale(0.5); }
+  30%  { transform: translate(-50%, -30px) scale(1.2); }
+  100% { opacity: 0; transform: translate(-50%, -100px) scale(0.8); }
+}
+
+/* ============ 底部 Tab 栏 ============ */
+.pet-tabs {
+  display: flex;
+  background: white;
+  border-top: 1px solid #E8E8E8;
+  box-shadow: 0 -2px 12px rgba(0,0,0,.05);
+}
+.pet-tabs .tab {
+  flex: 1;
+  padding: 14px 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: color .2s, background .2s;
+}
+.pet-tabs .tab:hover { background: #F5F5F5; }
+.pet-tabs .tab.active { color: var(--primary, #4DA6FF); font-weight: 600; border-top: 3px solid var(--primary, #4DA6FF); }
+
+/* ============ Tab 内容面板 ============ */
+.pet-panel { display: none; padding: 18px; background: white; max-height: 45vh; overflow-y: auto; }
+.pet-panel.active { display: block; }
+
+.pet-panel h3 { font-size: 15px; margin-bottom: 10px; color: var(--ink1); }
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.panel-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform .15s, border-color .15s;
+  background: #FAFAFA;
+}
+.panel-item:hover { transform: translateY(-2px); }
+.panel-item.can-buy { border-color: #4DA6FF; background: #EBF5FF; }
+.panel-item.owned { border-color: #4CAF50; background: #F0FFF0; }
+.panel-item.equipped { border-color: #FFD700; background: #FFFEF0; }
+.panel-item.disabled { opacity: 0.5; cursor: not-allowed; }
+
+.panel-item .emoji { font-size: 30px; margin-bottom: 4px; }
+.panel-item .name { font-size: 12px; color: var(--ink1); text-align: center; }
+.panel-item .price { font-size: 11px; color: var(--ink2); margin-top: 2px; }
+.panel-item .count { font-size: 11px; color: #4CAF50; margin-top: 2px; }
+
+/* ============ 首次领养：6 选 1 弹窗 ============ */
+.adopt-modal .sheet { max-width: 600px; }
+.adopt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.adopt-card {
+  border: 3px solid transparent;
+  border-radius: 14px;
+  padding: 10px;
+  cursor: pointer;
+  background: #FAFAFA;
+  transition: border-color .2s, transform .15s;
+  text-align: center;
+}
+.adopt-card:hover { transform: translateY(-3px); }
+.adopt-card.selected { border-color: #4DA6FF; background: #EBF5FF; }
+.adopt-card .pet-svg { width: 100px; height: 100px; margin: 0 auto; }
+.adopt-card .species-name { font-size: 14px; margin-top: 4px; color: var(--ink1); }
+
+.adopt-name-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  border: 2px solid #E0E0E0;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+.adopt-name-input:focus { outline: none; border-color: #4DA6FF; }
+
+/* ============ 乐园场景动效 ============ */
+
+/* 花园花轻摆 */
+.flower { animation: sway 3s ease-in-out infinite; transform-origin: bottom center; }
+.flower:nth-child(2) { animation-delay: -1s; }
+.flower:nth-child(3) { animation-delay: -2s; }
+@keyframes sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50%      { transform: rotate(4deg); }
+}
+
+/* 海滩海浪 */
+@keyframes wave {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(-20px); }
+}
+
+/* 雪花 */
+.snow-particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.snow-particles span {
+  position: absolute;
+  top: -10px;
+  font-size: 14px;
+  color: white;
+  opacity: 0.8;
+  animation: snowfall linear infinite;
+}
+.snow-particles span:nth-child(1) { left: 10%;  animation-duration: 8s;  animation-delay: 0s; }
+.snow-particles span:nth-child(2) { left: 25%;  animation-duration: 10s; animation-delay: -2s; }
+.snow-particles span:nth-child(3) { left: 40%;  animation-duration: 7s;  animation-delay: -4s; }
+.snow-particles span:nth-child(4) { left: 55%;  animation-duration: 11s; animation-delay: -1s; }
+.snow-particles span:nth-child(5) { left: 70%;  animation-duration: 9s;  animation-delay: -3s; }
+.snow-particles span:nth-child(6) { left: 85%;  animation-duration: 8s;  animation-delay: -5s; }
+.snow-particles span:nth-child(7) { left: 15%;  animation-duration: 12s; animation-delay: -6s; }
+.snow-particles span:nth-child(8) { left: 48%;  animation-duration: 6s;  animation-delay: -2s; }
+.snow-particles span:nth-child(9) { left: 78%;  animation-duration: 10s; animation-delay: -7s; }
+.snow-particles span:nth-child(10){ left: 92%;  animation-duration: 9s;  animation-delay: -4s; }
+@keyframes snowfall {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 0.8; }
+  100% { transform: translateY(440px) translateX(20px); opacity: 0; }
+}
+
+/* 太空星星闪烁 */
+.star-field .st { animation: starTwinkle 2.5s ease-in-out infinite; }
+.star-field .st:nth-child(odd)  { animation-delay: -0.8s; }
+.star-field .st:nth-child(3n)   { animation-delay: -1.5s; }
+@keyframes starTwinkle {
+  0%, 100% { opacity: 1; r: 1.5; }
+  50%      { opacity: 0.3; r: 1; }
+}
+
+/* 糖果王国无额外动画，本身够炫 */
+
+/* ============ 等级进度 ============ */
+.pet-level-bar {
+  background: #E8E8E8;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 6px 0;
+}
+.pet-level-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, #9B59B6, #FF6B8A);
+  border-radius: 6px;
+  transition: width .5s;
+}
+
+/* ============ 我的 Tab ============ */
+.pet-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.pet-stat-box {
+  background: #FAFAFA;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+}
+.pet-stat-box .num { font-size: 22px; font-weight: 700; color: #4DA6FF; }
+.pet-stat-box .lbl { font-size: 12px; color: var(--ink2); margin-top: 2px; }
+
+/* ============ 响应式 ============ */
+@media (max-width: 480px) {
+  .pet-arena { min-height: 360px; }
+  .pet-wrap { width: 180px; height: 180px; }
+  .adopt-grid { grid-template-columns: repeat(2, 1fr); }
+  .panel-grid { grid-template-columns: repeat(3, 1fr); }
+}

@@ -151,6 +151,28 @@ export const CHEST_REWARDS = [
     weight: 8,
     scene: 'sky',
     desc: '抬头看看天上的云，变化多端真好看。'
+  },
+
+  /* ---------------- 宠物食物包 ---------------- */
+  {
+    id: 'chest-pet-pack-1',
+    type: 'pet-food-pack',
+    name: '宠物小粮包',
+    emoji: '🍪',
+    weight: 3,
+    foodId: 'cookie',
+    count: 2,
+    desc: '给宠物送 2 个小饼干。'
+  },
+  {
+    id: 'chest-pet-pack-2',
+    type: 'pet-food-pack',
+    name: '宠物精选粮包',
+    emoji: '🐟',
+    weight: 1,
+    foodId: 'fish',
+    count: 2,
+    desc: '稀有奖励！给宠物送 2 个小鱼干。'
   }
 ];
 

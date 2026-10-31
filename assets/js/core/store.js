@@ -13,7 +13,7 @@
 
 export const APP_USERS_KEY = 'app_users';
 export const APP_CURRENT_KEY = 'app_currentUser';
-export const VERSION = 3;
+export const VERSION = 4;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
 
 export const SUBJECTS = ['chinese', 'english', 'math', 'science'];
@@ -72,6 +72,7 @@ function defaultData(grade = 3) {
       lastFullDate: null,
       streakBonusDays: []
     },
+    pet: null, // null = 未领养；完整结构见 pet.js 的 createPet()
     days: {},
     dailyHistory: {}, // { [dateKey]: { completed, total, pointsEarned, chestOpened, streak, firstTry:{correct,total} } }
     recentQuestions: {}, // { [questionId]: 最后使用日期 }，抽题回避用，保留 365 天
@@ -236,6 +237,7 @@ function normalize(raw) {
     speakingRecent: raw.speakingRecent && typeof raw.speakingRecent === 'object' ? raw.speakingRecent : {},
     speakingAward: raw.speakingAward && typeof raw.speakingAward === 'object' ? raw.speakingAward : {},
     orders: Array.isArray(raw.orders) ? raw.orders : [],
+    pet: raw.pet ?? base.pet,
     settings: { ...base.settings, ...(raw.settings || {}) }
   };
   if (!Array.isArray(data.profile.streakBonusDays)) data.profile.streakBonusDays = [];
