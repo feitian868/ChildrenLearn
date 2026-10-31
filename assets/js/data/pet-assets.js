@@ -370,79 +370,171 @@ export const DECO_SVG = {
    乐园场景（CSS 渐变 + 少量 SVG 点缀，完全无 JS 循环）
    ============================================================ */
 export const SCENES = [
-  { id: 'garden', name: '花园草地', bg: 'linear-gradient(180deg, #A8E6CF 0%, #7ED957 100%)', extra: `
+  { id: 'garden', name: '花园草地', bg: 'linear-gradient(180deg, #87CEEB 0%, #B0E0A8 55%, #7ED957 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <ellipse cx="50" cy="180" rx="40" ry="25" fill="#5AC44A" opacity="0.4"/>
-      <ellipse cx="350" cy="185" rx="50" ry="30" fill="#5AC44A" opacity="0.4"/>
+      <!-- 远山 -->
+      <path d="M0,140 Q50,110 100,130 Q150,145 200,125 Q250,105 300,130 Q350,145 400,125 L400,160 L0,160 Z" fill="#7BC87B" opacity="0.5"/>
+      <!-- 云朵 -->
+      <g class="cloud">
+        <ellipse cx="80" cy="35" rx="30" ry="12" fill="white"/>
+        <ellipse cx="100" cy="30" rx="22" ry="14" fill="white"/>
+      </g>
+      <g class="cloud" style="animation-delay: -10s; animation-duration: 16s">
+        <ellipse cx="280" cy="45" rx="26" ry="10" fill="white"/>
+      </g>
+      <!-- 太阳 -->
+      <circle cx="350" cy="40" r="18" fill="#FFE066"/>
+      <circle cx="350" cy="40" r="22" fill="#FFE066" opacity="0.2"/>
+      <!-- 树 -->
+      <rect x="30" y="120" width="8" height="40" fill="#8B4513"/>
+      <circle cx="34" cy="115" r="28" fill="#4CAF50" stroke="#2E7D32" stroke-width="1.5"/>
+      <rect x="365" y="115" width="10" height="45" fill="#8B4513"/>
+      <circle cx="370" cy="108" r="32" fill="#388E3C" stroke="#1B5E20" stroke-width="1.5"/>
+      <!-- 草丛 -->
+      <ellipse cx="50" cy="185" rx="45" ry="12" fill="#5AC44A" opacity="0.5"/>
+      <ellipse cx="200" cy="190" rx="60" ry="12" fill="#5AC44A" opacity="0.4"/>
+      <ellipse cx="340" cy="185" rx="50" ry="14" fill="#5AC44A" opacity="0.5"/>
       <!-- 花 -->
-      <g class="flower" style="transform-origin: 60px 160px">
-        <circle cx="60" cy="155" r="4" fill="#FF6B8A"/><line x1="60" y1="160" x2="60" y2="180" stroke="#4A9A3A" stroke-width="2"/>
+      <g class="flower" style="transform-origin: 70px 170px">
+        <circle cx="70" cy="165" r="5" fill="#FF6B8A"/><circle cx="70" cy="165" r="2" fill="#FFD700"/><line x1="70" y1="170" x2="70" y2="190" stroke="#4A9A3A" stroke-width="2"/>
       </g>
-      <g class="flower" style="transform-origin: 130px 170px">
-        <circle cx="130" cy="165" r="4" fill="#FFD700"/><line x1="130" y1="170" x2="130" y2="190" stroke="#4A9A3A" stroke-width="2"/>
+      <g class="flower" style="transform-origin: 140px 178px">
+        <circle cx="140" cy="173" r="5" fill="#FFD700"/><circle cx="140" cy="173" r="2" fill="#FF6B8A"/><line x1="140" y1="178" x2="140" y2="195" stroke="#4A9A3A" stroke-width="2"/>
       </g>
-      <g class="flower" style="transform-origin: 280px 165px">
-        <circle cx="280" cy="160" r="4" fill="#9B59B6"/><line x1="280" y1="165" x2="280" y2="185" stroke="#4A9A3A" stroke-width="2"/>
+      <g class="flower" style="transform-origin: 250px 172px">
+        <circle cx="250" cy="167" r="5" fill="#9B59B6"/><circle cx="250" cy="167" r="2" fill="#FFD700"/><line x1="250" y1="172" x2="250" y2="192" stroke="#4A9A3A" stroke-width="2"/>
+      </g>
+      <g class="flower" style="transform-origin: 310px 180px">
+        <circle cx="310" cy="175" r="5" fill="#4DA6FF"/><circle cx="310" cy="175" r="2" fill="#FFD700"/><line x1="310" y1="180" x2="310" y2="198" stroke="#4A9A3A" stroke-width="2"/>
+      </g>
+      <!-- 蝴蝶 -->
+      <g class="butterfly" style="transform-origin: 200px 80px">
+        <circle cx="200" cy="80" r="3" fill="#FF6B8A"/>
+        <ellipse cx="194" cy="78" rx="6" ry="4" fill="#FF6B8A"/>
+        <ellipse cx="206" cy="78" rx="6" ry="4" fill="#FF6B8A"/>
       </g>
     </svg>` },
+
   { id: 'home', name: '温馨小窝', bg: 'linear-gradient(180deg, #FFF5E6 0%, #FFE4CC 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 地板 -->
-      <rect x="0" y="170" width="400" height="30" fill="#D4A574"/>
-      <rect x="0" y="170" width="400" height="4" fill="#B8864F"/>
+      <rect x="0" y="160" width="400" height="40" fill="#D4A574"/>
+      <rect x="0" y="160" width="400" height="4" fill="#B8864F"/>
+      <!-- 墙上线条 -->
+      <line x1="0" y1="160" x2="400" y2="160" stroke="#B8864F" stroke-width="3"/>
       <!-- 窗户 -->
-      <rect x="300" y="30" width="70" height="60" fill="#87CEEB" stroke="#2D1F1A" stroke-width="2"/>
-      <line x1="335" y1="30" x2="335" y2="90" stroke="#2D1F1A" stroke-width="2"/>
-      <line x1="300" y1="60" x2="370" y2="60" stroke="#2D1F1A" stroke-width="2"/>
-      <!-- 小地毯 -->
-      <ellipse cx="200" cy="185" rx="120" ry="15" fill="#E74C3C" opacity="0.3"/>
+      <rect x="30" y="25" width="80" height="70" fill="#87CEEB" stroke="#2D1F1A" stroke-width="2"/>
+      <line x1="70" y1="25" x2="70" y2="95" stroke="#2D1F1A" stroke-width="2"/>
+      <line x1="30" y1="60" x2="110" y2="60" stroke="#2D1F1A" stroke-width="2"/>
+      <!-- 窗帘 -->
+      <rect x="25" y="25" width="10" height="70" fill="#E74C3C"/>
+      <rect x="105" y="25" width="10" height="70" fill="#E74C3C"/>
+      <!-- 画框 -->
+      <rect x="170" y="40" width="60" height="40" fill="#FFD700" stroke="#2D1F1A" stroke-width="3"/>
+      <circle cx="200" cy="55" r="8" fill="#FF6B8A"/>
+      <rect x="190" y="62" width="20" height="8" fill="#4CAF50"/>
+      <!-- 地毯 -->
+      <ellipse cx="200" cy="185" rx="150" ry="14" fill="#E74C3C" opacity="0.3"/>
+      <ellipse cx="200" cy="185" rx="120" ry="10" fill="#E74C3C" opacity="0.2"/>
+      <!-- 毛线球 -->
+      <circle cx="340" cy="180" r="10" fill="#9B59B6"/>
+      <circle cx="340" cy="180" r="10" fill="none" stroke="#8E44AD" stroke-width="1.5"/>
+      <circle cx="340" cy="180" r="10" fill="none" stroke="#8E44AD" stroke-width="1" stroke-dasharray="3,3"/>
     </svg>` },
-  { id: 'beach', name: '海边沙滩', bg: 'linear-gradient(180deg, #87CEEB 0%, #F0E68C 55%, #F4D03F 100%)', extra: `
+
+  { id: 'beach', name: '海边沙滩', bg: 'linear-gradient(180deg, #FFB347 0%, #87CEEB 35%, #4DA6FF 55%, #F4D03F 80%, #F0E68C 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
       <!-- 太阳 -->
-      <circle cx="60" cy="50" r="30" fill="#FFD700" opacity="0.8"/>
-      <!-- 海浪 -->
-      <path d="M0,110 Q50,100 100,110 Q150,120 200,110 Q250,100 300,110 Q350,120 400,110 L400,130 L0,130 Z" fill="#4DA6FF" opacity="0.7"/>
-      <!-- 贝壳 -->
-      <g transform="translate(80,170)"><ellipse cx="0" cy="0" rx="8" ry="5" fill="#FFF5E6" stroke="#D4A574" stroke-width="1"/><line x1="-6" y1="-3" x2="6" y2="-3" stroke="#D4A574" stroke-width="0.5"/></g>
-      <g transform="translate(320,180)"><ellipse cx="0" cy="0" rx="6" ry="4" fill="#FFB6C1" stroke="#D4A574" stroke-width="1"/></g>
+      <circle cx="60" cy="50" r="32" fill="#FFD700"/>
+      <circle cx="60" cy="50" r="40" fill="#FFD700" opacity="0.2"/>
+      <!-- 云 -->
+      <ellipse cx="300" cy="35" rx="30" ry="10" fill="white" opacity="0.9"/>
+      <!-- 海浪多层 -->
+      <path d="M0,108 Q50,100 100,108 Q150,116 200,108 Q250,100 300,108 Q350,116 400,108 L400,120 L0,120 Z" fill="#3498DB" opacity="0.6"/>
+      <path d="M0,115 Q50,108 100,115 Q150,122 200,115 Q250,108 300,115 Q350,122 400,115 L400,130 L0,130 Z" fill="#4DA6FF" opacity="0.5"/>
+      <!-- 沙滩上的东西 -->
+      <g transform="translate(70,170)"><ellipse cx="0" cy="0" rx="10" ry="6" fill="#FFF5E6" stroke="#D4A574" stroke-width="1.5"/><line x1="-7" y1="-3" x2="7" y2="-3" stroke="#D4A574" stroke-width="0.5"/></g>
+      <g transform="translate(280,175)"><ellipse cx="0" cy="0" rx="8" ry="5" fill="#FFB6C1" stroke="#D4A574" stroke-width="1"/></g>
+      <g transform="translate(350,182)"><path d="M0,0 L3,-8 L6,0 Z" fill="#2ECC71"/></g>
+      <g transform="translate(20,178)"><path d="M0,0 Q3,-10 0,-15 Q-3,-10 0,0" fill="#27AE60"/></g>
+      <!-- 海鸥 -->
+      <path d="M150,45 Q160,38 170,45 Q180,38 190,45" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round"/>
+      <path d="M220,60 Q226,55 232,60 Q238,55 244,60" fill="none" stroke="#2D1F1A" stroke-width="1.5" stroke-linecap="round"/>
     </svg>` },
-  { id: 'snow', name: '雪山之巅', bg: 'linear-gradient(180deg, #D6EAF8 0%, #85C1E9 60%, #FFFFFF 100%)', extra: `
+
+  { id: 'snow', name: '雪山之巅', bg: 'linear-gradient(180deg, #1A2980 0%, #26D0CE 50%, #F0F8FF 80%, #FFFFFF 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 山 -->
-      <polygon points="0,180 100,60 200,140 300,40 400,160 400,200 0,200" fill="#BFC9CA"/>
-      <polygon points="100,60 140,100 60,100" fill="#FFFFFF"/>
-      <polygon points="300,40 330,80 270,80" fill="#FFFFFF"/>
+      <!-- 月亮 -->
+      <circle cx="70" cy="45" r="22" fill="#F5F0FF"/>
+      <circle cx="62" cy="40" r="5" fill="#D8D0E6"/>
+      <circle cx="76" cy="52" r="3" fill="#D8D0E6"/>
+      <!-- 远山 -->
+      <polygon points="0,180 80,80 160,150 230,60 310,140 400,90 400,200 0,200" fill="#BFC9CA" opacity="0.6"/>
+      <!-- 主山 -->
+      <polygon points="0,180 120,100 220,180" fill="#E8E8E8"/>
+      <polygon points="120,100 140,130 100,130" fill="#FFFFFF"/>
+      <polygon points="180,180 280,120 380,180" fill="#E8E8E8"/>
+      <polygon points="280,120 300,150 260,150" fill="#FFFFFF"/>
+      <!-- 小松树 -->
+      <polygon points="20,180 30,160 40,180" fill="#27AE60"/>
+      <rect x="28" y="175" width="4" height="6" fill="#8B4513"/>
+      <polygon points="370,180 378,162 386,180" fill="#27AE60"/>
+      <rect x="376" y="175" width="4" height="6" fill="#8B4513"/>
     </svg>
-    <!-- 雪花点用 CSS 动画，在 pet.css 里 -->
     <div class="snow-particles">
       <span></span><span></span><span></span><span></span><span></span>
       <span></span><span></span><span></span><span></span><span></span>
     </div>` },
-  { id: 'candy', name: '糖果王国', bg: 'linear-gradient(135deg, #FFB6C1 0%, #E6E6FA 50%, #FFD700 100%)', extra: `
-    <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
+
+  { id: 'candy', name: '糖果王国', bg: 'linear-gradient(135deg, #FFB6C1 0%, #FFD1DC 30%, #E6E6FA 60%, #FFE4B5 100%)', extra: `
+    <svg class="scene-svg rainbow" viewBox="0 0 400 200" preserveAspectRatio="none">
       <!-- 彩虹 -->
-      <path d="M50,120 Q200,-20 350,120" fill="none" stroke="#FF6B6B" stroke-width="8" stroke-linecap="round"/>
-      <path d="M58,125 Q200,-10 342,125" fill="none" stroke="#FFD93D" stroke-width="8" stroke-linecap="round"/>
-      <path d="M66,130 Q200,0 334,130" fill="none" stroke="#6BCB77" stroke-width="8" stroke-linecap="round"/>
-      <path d="M74,135 Q200,10 326,135" fill="none" stroke="#4D96FF" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50,130 Q200,-10 350,130" fill="none" stroke="#FF6B6B" stroke-width="10" stroke-linecap="round"/>
+      <path d="M60,138 Q200,0 340,138" fill="none" stroke="#FFD93D" stroke-width="10" stroke-linecap="round"/>
+      <path d="M70,146 Q200,10 330,146" fill="none" stroke="#6BCB77" stroke-width="10" stroke-linecap="round"/>
+      <path d="M80,154 Q200,20 320,154" fill="none" stroke="#4DA6FF" stroke-width="10" stroke-linecap="round"/>
+      <path d="M90,162 Q200,30 310,162" fill="none" stroke="#9B59B6" stroke-width="10" stroke-linecap="round"/>
+      <!-- 地面 -->
+      <rect x="0" y="165" width="400" height="35" fill="#FFD1DC"/>
+      <!-- 棒棒糖 -->
+      <circle cx="70" cy="175" r="14" fill="#FF6B8A" stroke="#2D1F1A" stroke-width="2"/>
+      <circle cx="70" cy="175" r="14" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+      <line x1="70" y1="189" x2="70" y2="200" stroke="#8B4513" stroke-width="3"/>
+      <circle cx="330" cy="180" r="12" fill="#4DA6FF" stroke="#2D1F1A" stroke-width="2"/>
+      <line x1="330" y1="192" x2="330" y2="200" stroke="#8B4513" stroke-width="3"/>
       <!-- 糖果 -->
-      <circle cx="80" cy="170" r="10" fill="#FF6B8A"/><polygon points="70,170 60,160 60,180" fill="#FF6B8A"/><polygon points="90,170 100,160 100,180" fill="#FF6B8A"/>
-      <circle cx="320" cy="175" r="9" fill="#9B59B6"/><polygon points="311,175 301,165 301,185" fill="#9B59B6"/><polygon points="329,175 339,165 339,185" fill="#9B59B6"/>
+      <circle cx="180" cy="185" r="10" fill="#FFD700"/>
+      <polygon points="170,185 160,175 160,195" fill="#FFD700"/>
+      <polygon points="190,185 200,175 200,195" fill="#FFD700"/>
+      <circle cx="250" cy="188" r="8" fill="#9B59B6"/>
+      <polygon points="242,188 234,180 234,196" fill="#9B59B6"/>
+      <polygon points="258,188 266,180 266,196" fill="#9B59B6"/>
+      <!-- 星星点缀 -->
+      <text x="100" y="50" font-size="18" fill="#FFD700">✦</text>
+      <text x="280" y="70" font-size="14" fill="#FF6B8A">✦</text>
+      <text x="180" y="40" font-size="16" fill="#9B59B6">✦</text>
     </svg>` },
-  { id: 'space', name: '太空乐园', bg: 'linear-gradient(180deg, #1A1A4A 0%, #2D1B5E 50%, #0F0F3C 100%)', extra: `
+
+  { id: 'space', name: '太空乐园', bg: 'linear-gradient(180deg, #0F0F3C 0%, #2D1B5E 40%, #4A235A 70%, #1A1A4A 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
       <!-- 星星 -->
       <g fill="#FFFFFF" class="star-field">
-        <circle cx="30" cy="40" r="1.5" class="st"/><circle cx="80" cy="70" r="1" class="st"/><circle cx="150" cy="30" r="2" class="st"/>
-        <circle cx="220" cy="80" r="1.2" class="st"/><circle cx="290" cy="50" r="1.5" class="st"/><circle cx="360" cy="30" r="1" class="st"/>
-        <circle cx="50" cy="120" r="1" class="st"/><circle cx="180" cy="140" r="1.8" class="st"/><circle cx="340" cy="110" r="1.3" class="st"/>
-        <circle cx="100" cy="170" r="1" class="st"/><circle cx="270" cy="180" r="1.2" class="st"/>
+        <circle cx="30" cy="40" r="1.8" class="st"/><circle cx="80" cy="70" r="1.2" class="st"/><circle cx="150" cy="30" r="2.2" class="st"/>
+        <circle cx="220" cy="80" r="1.5" class="st"/><circle cx="290" cy="50" r="1.8" class="st"/><circle cx="360" cy="30" r="1.2" class="st"/>
+        <circle cx="50" cy="120" r="1.2" class="st"/><circle cx="180" cy="140" r="2" class="st"/><circle cx="340" cy="110" r="1.6" class="st"/>
+        <circle cx="100" cy="170" r="1.2" class="st"/><circle cx="270" cy="180" r="1.5" class="st"/>
+        <circle cx="390" cy="160" r="1.8" class="st"/><circle cx="15" cy="150" r="1.4" class="st"/><circle cx="395" cy="100" r="1" class="st"/>
       </g>
       <!-- 月亮 -->
-      <circle cx="340" cy="55" r="20" fill="#F5F0FF"/>
-      <circle cx="333" cy="48" r="4" fill="#D8D0E6"/>
-      <circle cx="348" cy="62" r="3" fill="#D8D0E6"/>
+      <circle cx="340" cy="55" r="22" fill="#F5F0FF"/>
+      <circle cx="333" cy="48" r="5" fill="#D8D0E6"/>
+      <circle cx="348" cy="62" r="4" fill="#D8D0E6"/>
+      <circle cx="340" cy="68" r="3" fill="#D8D0E6"/>
+      <!-- 行星 -->
+      <circle cx="80" cy="100" r="16" fill="#E74C3C"/>
+      <ellipse cx="80" cy="100" rx="22" ry="4" fill="none" stroke="#F39C12" stroke-width="2"/>
+      <!-- 小流星 -->
+      <line x1="120" y1="20" x2="170" y2="50" stroke="#FFFFFF" stroke-width="1.5"/>
+      <circle cx="168" cy="48" r="2" fill="#FFD700"/>
     </svg>` },
 ];
 

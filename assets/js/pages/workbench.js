@@ -697,7 +697,7 @@ function renderPet() {
     card.append(
       el('h3', { text: '🐾 宠物乐园' }),
       el('div', { class: 'pet-stage', style: { background: 'linear-gradient(180deg, #E0E0E0 0%, #BDBDBD 100%)' } }, [
-        el('div', { style: { fontSize: '60px', opacity: 0.35 } }, { text: '🐾' }),
+        el('div', { style: { fontSize: '60px', opacity: 0.35 }, text: '🐾' }),
       ]),
       el('p', { class: 'chest-tip', style: { marginTop: '8px' }, text: '还没有小伙伴哦，选一只来陪你学习吧！' }),
       el('button', {
