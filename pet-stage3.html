@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>阶段 3 · 猫 · 只有 torso 呼吸（其余部件静止）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#EEF3F8;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#2C3542}
+  .wrap{max-width:600px;margin:0 auto;padding:24px 20px 48px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12.5px;line-height:1.8;color:#6B7684;margin:0 0 14px}
+  .card{background:#fff;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(30,45,61,.12)}
+  .stage{position:relative;height:320px;border-radius:14px;overflow:hidden}
+  svg.pet{width:100%;height:100%;display:block}
+  /* ---------- 阶段 2：骨骼关节（完整保留） ---------- */
+  svg.pet .torso      { transform-box: view-box; transform-origin: var(--hip-x) var(--hip-y); }
+  svg.pet .head       { transform-box: view-box; transform-origin: var(--neck-x) var(--neck-y); }
+  svg.pet .tail       { transform-box: view-box; transform-origin: var(--tail-x) var(--tail-y); }
+  svg.pet .ear-l      { transform-box: view-box; transform-origin: var(--ear-l-x) var(--ear-l-y); }
+  svg.pet .ear-r      { transform-box: view-box; transform-origin: var(--ear-r-x) var(--ear-r-y); }
+  svg.pet .foreleg-l  { transform-box: view-box; transform-origin: var(--arm-x) var(--arm-y); }
+  svg.pet .foreleg-r  { transform-box: view-box; transform-origin: var(--arm-r-x) var(--arm-r-y); }
+  svg.pet .hindleg-l  { transform-box: view-box; transform-origin: var(--hindleg-l-x) var(--hindleg-l-y); }
+  svg.pet .hindleg-r  { transform-box: view-box; transform-origin: var(--hindleg-r-x) var(--hindleg-r-y); }
+  /* ---------- 阶段 3：只加 torso 呼吸 ---------- */
+  /* 铁律 1：transform-only —— 只改 scaleY，全程不动 d/cx/cy/x/y/width/height */
+  /* 铁律 2：torso 内嵌套 foreleg-l/r / hindleg-l/r / head —— 呼吸时四肢和头自动跟随，肩顶无缝 */
+  svg.pet .torso {
+    animation: breathe-torso 2.4s cubic-bezier(.4,0,.2,1) infinite;
+  }
+  /* 阶段 3 明确不动：tail / ear / foreleg / hindleg / head 全部静止 */
+  /* ---------- keyframes ---------- */
+  @keyframes breathe-torso {
+    /* 原地 0ms：呼气到最低点 scaleY=0.97 */
+    0%   { transform: scaleY(0.97); }
+    /* 中间 1.2s：吸气到最高点 scaleY=1.03 —— 缓动曲线自然 */
+    50%  { transform: scaleY(1.03); }
+    /* 末端 2.4s：呼气回 0.97（与 0% 衔接，无跳变） */
+    100% { transform: scaleY(0.97); }
+  }
+  .joint-dot{pointer-events:none}
+  .dot-r{fill:#E74C3C}.dot-o{fill:#F39C12}.dot-b{fill:#2C7BE5}
+  .dot-g{fill:#27AE60}.dot-p{fill:#8E44AD}.dot-k{fill:#1B2A38}
+  .joint-label{font-size:6.5px;fill:#1B2A38;opacity:.75}
+  #report{background:#fff;border-radius:14px;padding:14px 16px;margin-top:14px;
+          font-size:12.5px;line-height:1.85;color:#33404F;box-shadow:0 4px 14px rgba(30,45,61,.06);
+          white-space:pre-wrap;font-family:Consolas,monospace}
+  .ok{color:#1E8E4E;font-weight:700}
+  .bad{color:#C0392B;font-weight:700}
+  .warn{color:#B26A00;font-weight:700}
+  button{font-family:inherit;font-size:12px;padding:4px 10px;border:1px solid #C4CCD6;border-radius:6px;background:#fff;cursor:pointer}
+  button:hover{background:#F2F5F9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>阶段 3 · 猫 · 只有 torso 呼吸</h1>
+  <p class="sub">
+    <b>只加这一条动画</b>：torso scaleY 0.97↔1.03，2.4s，原点 (100,176)。<br>
+    其余部件（tail / ear / foreleg / hindleg / head）全部静止，<b>但因为嵌套在 torso 内，会自动跟随呼吸</b>。<br>
+    脚底始终贴地面（原点在 176 地面线，脚不会飘）。<br>
+    stage1 / stage2 完整保留，本文件 pet-stage3.html 是新文件。
+  </p>
+  <div class="card pet-card cat">
+    <div class="stage"><div id="mount"></div></div>
+  </div>
+  <pre id="report">测量中…</pre>
+</div>
+
+<script>
+/* 阶段 3 代码与 stage2 完全相同，唯一区别：在 CSS 里给 .torso 加了 animation: breathe-torso 2.4s ...
+   其余部件的 transform-origin / 层级 / 几何 一律不动（transform-only 铁律） */
+const mirror = s => `<g transform="translate(200,0) scale(-1,1)">${s}</g>`;
+const armPath = (sx,sy, ex,ey, wx,wy, w1,w2) =>
+  `M${sx-w1/2},${sy} Q${ex-w1*0.62},${ey} ${wx-w2/2},${wy} `+
+  `Q${wx},${wy+w2*0.80} ${wx+w2/2},${wy} Q${ex+w1*0.46},${ey} ${sx+w1/2},${sy} `+
+  `Q${sx},${sy-w1*0.52} ${sx-w1/2},${sy} Z`;
+const armAt = (sx,sy,ex,ey,wx,wy,w1,w2) =>
+  `<path data-w1="${w1}" data-w2="${w2}" data-sx="${sx}" data-sy="${sy}" data-part="forearm" `+
+  `d="${armPath(sx,sy,ex,ey,wx,wy,w1,w2)}" fill="var(--limb)" stroke="var(--outline)" stroke-width="2" stroke-linejoin="round"/>`+
+  `<path d="M${sx-w1/2+2.6},${sy+9} Q${ex-w1*0.48},${ey} ${wx-w2/2+2},${wy-5}" fill="none" `+
+  `stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".2"/>`;
+const hindFoot = (cx, cy, halfW, halfH) =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${halfW}" ry="${halfH}" fill="var(--foot)" stroke="var(--outline)" stroke-width="2"/>`+
+  `<circle cx="${cx-5}" cy="${cy-3}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx}" cy="${cy-4}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx+5}" cy="${cy-3}" r="2.1" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<ellipse cx="${cx}" cy="${cy+1.5}" rx="6" ry="3.6" fill="var(--pink)" opacity=".6"/>`;
+
+const CAT = {
+  key:'cat', name:'猫', emoji:'🐱',
+  vars:{
+    '--fur':'#B9C0C9','--fur-dark':'#8E97A3','--fur-light':'#DCE1E7','--belly':'#F7F9FB',
+    '--pink':'#FF9AA8','--ink':'#3B2A20','--foot':'#E8ECF1','--limb':'#CFD5DC',
+    '--outline':'#55606E',
+    '--hip-x':'100px','--hip-y':'176px',
+    '--neck-x':'100px','--neck-y':'100px',
+    '--tail-x':'138px','--tail-y':'150px',
+    '--ear-l-x':'74px','--ear-l-y':'54px',
+    '--ear-r-x':'126px','--ear-r-y':'54px',
+    '--arm-x':'82px','--arm-y':'96px',
+    '--arm-r-x':'118px','--arm-r-y':'96px',
+    '--hindleg-l-x':'66px','--hindleg-l-y':'146px',
+    '--hindleg-r-x':'134px','--hindleg-r-y':'146px'
+  },
+  tail:
+    '<path d="M138,150 C158,157 176,143 172,123 C169,109 155,107 150,117" fill="none" '+
+    'stroke="var(--fur-dark)" stroke-width="15" stroke-linecap="round"/>'+
+    '<path d="M139,150 C155,155 168,144 166,130" fill="none" stroke="var(--fur-light)" stroke-width="4" stroke-linecap="round" opacity=".55"/>',
+  arm: armAt(82,96, 70,128, 80,165, 14,10),
+  paw:
+    '<ellipse cx="80" cy="170" rx="8.5" ry="6.8" fill="var(--limb)" stroke="var(--outline)" stroke-width="2"/>'+
+    '<circle cx="72" cy="167" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="80" cy="166" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="88" cy="167" r="2.6" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<ellipse cx="80" cy="172.5" rx="5" ry="3.4" fill="var(--pink)" opacity=".65"/>',
+  body:
+    '<path data-part="body" d="M100,88 C123,88 136,113 137,141 C137,164 121,175 100,175 C79,175 63,164 63,141 C64,113 77,88 100,88 Z" fill="var(--fur)"/>'+
+    '<path d="M71,118 l7,-4 M69,130 l8,-3 M72,142 l7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>'+
+    '<path d="M129,118 l-7,-4 M131,130 l-8,-3 M128,142 l-7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>',
+  belly:'<ellipse data-part="belly" cx="100" cy="146" rx="19" ry="19" fill="var(--belly)"/>',
+  hindL:'<ellipse data-part="hindleg-l" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>',
+  hindR: mirror('<ellipse data-part="hindleg-r" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>'),
+  hindFeet: hindFoot(66,169, 10.5,6.5) + hindFoot(134,169, 10.5,6.5),
+  earL:
+    '<path d="M74,54 C66,40 62,26 63,18 C73,27 84,34 92,41 Z" fill="var(--fur)"/>'+
+    '<path d="M76,50 C70,38 67,29 68,24 C74,30 81,35 87,40 Z" fill="var(--pink)" opacity=".9"/>',
+  head:
+    '<circle cx="100" cy="74" r="34" fill="var(--fur)"/>'+
+    '<ellipse cx="86" cy="60" rx="12" ry="7" fill="#fff" opacity=".16" transform="rotate(-18 86 60)"/>'+
+    '<path d="M94,45l2,11M100,43v12M106,45l-2,11" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>'+
+    '<ellipse cx="72" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<ellipse cx="128" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<path d="M96,87 Q100,84 104,87 Q100,93 96,87 Z" fill="#E8737A"/>'+
+    '<path d="M100,93 Q95,99 90,95 M100,93 Q105,99 110,95" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>'+
+    '<path d="M68,84 L46,78 M68,90 L48,91 M132,84 L154,78 M132,90 L152,91" stroke="var(--fur-light)" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>',
+  eyes:
+    '<ellipse cx="86" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="84" cy="71" r="2.2" fill="#fff"/>'+
+    '<ellipse cx="114" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="112" cy="71" r="2.2" fill="#fff"/>'
+};
+
+function buildCat(p){
+  const style = Object.entries(p.vars).map(([k,v])=>`${k}:${v}`).join(';');
+  const forelegL = `<g class="foreleg foreleg-l" data-part="foreleg-l">${p.arm}${p.paw}</g>`;
+  const forelegR = `<g class="foreleg foreleg-r" data-part="foreleg-r">${mirror(p.arm + p.paw)}</g>`;
+  const earL = `<g class="ear ear-l" data-part="ear-l">${p.earL}</g>`;
+  const earR = `<g class="ear ear-r" data-part="ear-r">${mirror(p.earL)}</g>`;
+  const hindlegL = `<g class="hindleg hindleg-l" data-part="hindleg-l">${p.hindL}</g>`;
+  const hindlegR = `<g class="hindleg hindleg-r" data-part="hindleg-r">${p.hindR}</g>`;
+  return `<svg class="pet" viewBox="0 0 200 200" style="${style}" aria-label="猫">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#87CEEB"/><stop offset=".55" stop-color="#B0E0A8"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8EDC92"/><stop offset="1" stop-color="#7ED957"/></linearGradient>
+    <radialGradient id="vig">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".26"/>
+      <stop offset=".62" stop-color="#FFFFFF" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g class="scene">
+    <rect width="200" height="200" fill="url(#sky)"/>
+    <ellipse cx="46" cy="38" rx="17" ry="10" fill="#fff" opacity=".92"/>
+    <ellipse cx="58" cy="34" rx="13" ry="12" fill="#fff" opacity=".92"/>
+    <ellipse cx="36" cy="41" rx="11" ry="7" fill="#fff" opacity=".92"/>
+    <path d="M0,140 Q50,110 100,130 Q150,145 200,125 L200,160 L0,160 Z" fill="#7BC87B" opacity=".5"/>
+    <path d="M0,144 Q50,132 100,138 T200,134 L200,200 L0,200 Z" fill="url(#grass)"/>
+    <path d="M4,176 H196" stroke="#4E9C5E" stroke-width="1" stroke-dasharray="4 4" opacity=".35"/>
+    <ellipse cx="100" cy="116" rx="74" ry="82" fill="url(#vig)"/>
+  </g>
+  <ellipse class="shadow" cx="100" cy="176" rx="42" ry="9" fill="#1B2A38" opacity=".18"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">${p.tail}</g>
+    <g class="torso" data-part="torso">
+      <g class="body-g">${p.body}</g>
+      ${p.belly}
+      ${hindlegL} ${hindlegR}
+      ${p.hindFeet}
+      ${forelegL} ${forelegR}
+      <g class="head" data-part="head">
+        ${earL} ${earR}
+        ${p.head}
+        <g class="eyes" data-part="eyes">${p.eyes}</g>
+      </g>
+    </g>
+  </g>
+</svg>`;
+}
+document.getElementById('mount').innerHTML = buildCat(CAT);
+const _svg = document.querySelector('svg.pet');
+_svg.style.width = '100%'; _svg.style.height = '100%'; _svg.style.display = 'block';
+
+/* 红点层（复用 stage2 的） */
+const NS = 'http://www.w3.org/2000/svg';
+function parseOrigin(decl){
+  if (!decl || decl === 'none' || decl.includes('center')) return [null,null];
+  const m = decl.match(/(-?\d*\.?\d+)(?:px)?\s+(-?\d*\.?\d+)(?:px)?/);
+  if (!m) return [null,null];
+  return [+m[1], +m[2]];
+}
+const JOINT_TABLE = [
+  { selector:'.torso',     label:'torso 呼吸',  color:'k', expect:[100,176] },
+  { selector:'.head',      label:'head 颈关节', color:'b', expect:[100,100] },
+  { selector:'.tail',      label:'tail 尾根',   color:'g', expect:[138,150] },
+  { selector:'.ear-l',     label:'ear-l 耳根',  color:'p', expect:[74,54] },
+  { selector:'.ear-r',     label:'ear-r 耳根',  color:'p', expect:[126,54] },
+  { selector:'.foreleg-l', label:'foreleg-l 肩',color:'o', expect:[82,96] },
+  { selector:'.foreleg-r', label:'foreleg-r 肩',color:'o', expect:[118,96] },
+  { selector:'.hindleg-l', label:'hindleg-l 髋',color:'r', expect:[66,146] },
+  { selector:'.hindleg-r', label:'hindleg-r 髋',color:'r', expect:[134,146] }
+];
+(function drawDots(){
+  const svg = document.querySelector('svg.pet');
+  [...svg.querySelectorAll('[data-joint]')].forEach(n=>n.remove());
+  JOINT_TABLE.forEach(j=>{
+    const el = svg.querySelector(j.selector);
+    if (!el) return;
+    const cs = getComputedStyle(el).transformOrigin;
+    const [ox, oy] = parseOrigin(cs);
+    const dot = document.createElementNS(NS,'circle');
+    dot.setAttribute('cx', ox); dot.setAttribute('cy', oy);
+    dot.setAttribute('r', 2.4); dot.setAttribute('class','joint-dot dot-'+j.color);
+    dot.setAttribute('data-joint','dot');
+    svg.appendChild(dot);
+  });
+})();
+
+/* ============================================================================
+   阶段 3 专用测量：
+   ① torso 的 animation-duration / iteration-count / timing-function 生效值
+   ② transform-origin 生效值（应该仍然是 (100,176)）
+   ③ 脚底 bbox 的 y+height 是否始终贴 176（不呼吸时漂移）
+   ④ getAnimations()—— 应该只有 1 个 animation 对象（torso 的）
+   ============================================================================ */
+function measureAndReport(){
+  const svg = document.querySelector('svg.pet');
+  const torso = svg.querySelector('.torso');
+  const cs = getComputedStyle(torso);
+
+  const lines = [];
+  lines.push('── 阶段 3 · torso 呼吸动画参数（读 getComputedStyle 真实生效值）──');
+  lines.push(`<span class="ok">animation-name: ${cs.animationName || '(none)'}</span>`);
+  lines.push(`<span class="ok">animation-duration: ${cs.animationDuration || '(none)'}</span>`);
+  lines.push(`<span class="ok">animation-timing-function: ${cs.animationTimingFunction || '(none)'}</span>`);
+  lines.push(`<span class="ok">animation-iteration-count: ${cs.animationIterationCount || '(none)'}</span>`);
+  lines.push(`<span class="ok">transform-origin: ${cs.transformOrigin}</span>`);
+  lines.push('');
+
+  /* 实时动画状态：用 document.getAnimations() 读当前正在跑的动画 */
+  const anims = document.getAnimations();
+  lines.push(`── 实时动画对象（应恰好 1 个 = torso 呼吸） ──`);
+  anims.forEach((a, i) => {
+    const target = a.effect && a.effect.target;
+    const tag = target && target.classList ? [...target.classList].join('.') : String(target);
+    lines.push(`<span class="ok">anim[${i}]: target=${tag}, duration=${a.effect && a.effect.timing && a.effect.timing.duration}ms, delay=${a.effect && a.effect.timing && a.effect.timing.delay}ms, iterationCount=${a.effect && a.effect.timing && a.effect.timing.iterationCount}, fill=${a.effect && a.effect.timing && a.effect.timing.fill}</span>`);
+  });
+  if (anims.length !== 1) lines.push(`<span class="bad">⚠ 动画数量 ≠ 1（当前 ${anims.length}），可能漏了或多了</span>`);
+  lines.push('');
+
+  /* 脚底是否贴地（呼吸缩放不应让脚离地）：原点在 176，脚底 bbox 应始终 ≈ 176 */
+  const GROUND = 176;
+  const pawBBox = svg.querySelector('.foreleg-l ellipse').getBBox();   /* 爪子主体 ellipse */
+  const hindFootBBox = svg.querySelector('[data-part="hindleg-l"]').getBBox();
+  lines.push('── 脚底离地量（原点在 176 地面线，理论上脚不应飘） ──');
+  lines.push(`前爪 bbox 底 y = ${+(pawBBox.y + pawBBox.height).toFixed(1)}  距地面 ${+(GROUND - (pawBBox.y + pawBBox.height)).toFixed(1)}px`);
+  lines.push(`后脚掌椭圆 bbox 底 y = ${+(hindFootBBox.y + hindFootBBox.height).toFixed(1)}  距地面 ${+(GROUND - (hindFootBBox.y + hindFootBBox.height)).toFixed(1)}px`);
+  lines.push('');
+  lines.push('── 静止部件自检（stage 3 明确只动 torso，tail/ear/foreleg/hindleg/head 不应有 animation） ──');
+  ['tail','head','ear-l','ear-r','foreleg-l','foreleg-r','hindleg-l','hindleg-r'].forEach(cls=>{
+    const el = svg.querySelector('svg.pet .'+cls);
+    const ac = getComputedStyle(el).animationName;
+    const animating = ac && ac !== 'none' && ac !== '0';
+    const cls2 = animating ? 'bad' : 'ok';
+    lines.push(`<span class="${cls2}">.${cls}: animationName="${ac}" ${animating?'⚠ 有动画':'静止 ✓'}</span>`);
+  });
+
+  document.getElementById('report').innerHTML = lines.join('\n');
+}
+measureAndReport();
+/* 1 秒后再测一次（等动画跑起来，getAnimations 才能读到对象） */
+setTimeout(measureAndReport, 800);
+</script>
+</body>
+</html>

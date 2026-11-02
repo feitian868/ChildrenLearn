@@ -1,302 +1,441 @@
 /**
- * pet-assets.js —— 6 只宠物的 SVG 矢量角色 + 装饰 SVG fragments + 乐园场景
+ * pet-assets.js v7 — 骨骼分层重构版
  *
- * 所有动物统一 viewBox="0 0 200 200"，层结构一致：
- *   .body-layer  身体（最底层）
- *   .tail-layer  尾巴
- *   .head-layer  头（含耳朵、眼睛、嘴、鼻子）
- *     .ear-left / .ear-right   耳朵（有独立 transform-origin）
- *     .eye-left / .eye-right   眼睛（眨眼动画）
- *     .mouth-layer             嘴（含 default/happy/sad/sleep 四套）
- *   .decorations 装饰层（运行时动态插入）
+ * 铁律（违反任意一条即不合格）：
+ * 1. transform-only：动画只改 transform；d/cx/cy/x/y/width/height 全程零改动
+ * 2. 父子嵌套：rig → (tail/paw/torso) → head → ear；子嵌父里，身体动→头跟着动
+ * 3. 关节即原点：transform-box:view-box + transform-origin = 关节坐标（所见即所得）
+ * 4. 几何只画一次：静态阶段画完，动画阶段只变换
+ * 5. 统一骨架：6 只共用同一套 CSS keyframes，差异只在 CSS 变量
  *
- * 每只动物返回 { species, name, emoji, bodyColor, bellyColor, eyeColor, svg }
+ * 关节命名：hip / neck / tail-base / ear-root-l / ear-root-r
+ * 变量：--fur / --fur-dark / --belly / --pink / --ink / --line
+ *       --hip-x --hip-y --neck-x --neck-y --tail-x --tail-y
+ *       --ear-l-x --ear-l-y --ear-r-x --ear-r-y
+ *       --t-breathe --t-nod --t-sway --t-twitch --delay
  */
 
 /* ============================================================
-   1. 小猫 cat
+   🐱 CAT —— 橘虎斑
+   关节表：
+   hip=(100,172) 脚底；neck=(100,104) 颈根；tail=(136,152) 尾根
+   ear-l=(85,46) ear-r=(115,46)
    ============================================================ */
 const CAT_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <!-- 身体 -->
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="140" rx="52" ry="45" fill="#FFB89E" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="150" rx="32" ry="25" fill="#FFD4C2"/>
+  <g class="rig" data-part="root">
+    <!-- 尾巴：画在躯干之前 → 永远在身体后面 -->
+    <g class="tail" data-part="tail">
+      <path d="M136,152 C156,160 174,148 172,128 C170,112 154,106 148,116"
+            fill="none" stroke="var(--fur-dark)" stroke-width="14" stroke-linecap="round"/>
+    </g>
+
+    <!-- 后爪：单独在 rig 里，不随 torso 挤压（脚要踩地） -->
+    <g class="paw paw-bl" data-part="backleg-l">
+      <ellipse cx="54" cy="168" rx="12" ry="8" fill="var(--fur)"/>
+    </g>
+    <g class="paw paw-br" data-part="backleg-r">
+      <ellipse cx="146" cy="168" rx="12" ry="8" fill="var(--fur)"/>
+    </g>
+    <!-- 前爪 -->
+    <g class="paw paw-fl" data-part="foreleg-l">
+      <ellipse cx="82" cy="166" rx="14" ry="9" fill="var(--belly)"/>
+    </g>
+    <g class="paw paw-fr" data-part="foreleg-r">
+      <ellipse cx="118" cy="166" rx="14" ry="9" fill="var(--belly)"/>
+    </g>
+
+    <!-- 躯干：闭合 path，head 嵌里面 -->
+    <g class="torso" data-part="torso">
+      <path d="M100,92 C126,92 140,116 140,140 C140,162 124,172 100,172
+               C76,172 60,162 60,140 C60,116 74,92 100,92 Z" fill="var(--fur)"/>
+      <ellipse cx="100" cy="143" rx="25" ry="24" fill="var(--belly)"/>
+      <!-- 虎斑条纹（装饰，不影响动画） -->
+      <path d="M72,110 Q76,104 72,98" fill="none" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M88,100 Q92,94 88,88" fill="none" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M112,100 Q108,94 112,88" fill="none" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>
+      <path d="M128,110 Q124,104 128,98" fill="none" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>
+
+      <g class="head" data-part="head">
+        <!-- 耳朵先画 → 被头圆盖住耳根，接缝永远不露 -->
+        <g class="ear ear-l" data-part="ear-l">
+          <path d="M76,52 C70,38 66,26 67,18 C78,28 88,34 94,40 Z" fill="var(--fur)"/>
+          <path d="M79,48 C75,37 72,29 73,24 C79,30 85,35 90,40 Z" fill="var(--pink)" opacity=".85"/>
+        </g>
+        <g class="ear ear-r" data-part="ear-r">
+          <path d="M124,52 C130,38 134,26 133,18 C122,28 112,34 106,40 Z" fill="var(--fur)"/>
+          <path d="M121,48 C125,37 128,29 127,24 C121,30 115,35 110,40 Z" fill="var(--pink)" opacity=".85"/>
+        </g>
+
+        <circle cx="100" cy="74" r="34" fill="var(--fur)"/>
+        <ellipse cx="73" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".45"/>
+        <ellipse cx="127" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".45"/>
+
+        <!-- 眼睛（表情切换用 mood class + CSS 显示/隐藏，不改几何） -->
+        <g class="eye-l" data-part="eye-l">
+          <ellipse cx="84" cy="76" rx="6" ry="7.5" fill="var(--ink)"/>
+          <circle cx="82" cy="73" r="2.2" fill="#fff"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <ellipse cx="116" cy="76" rx="6" ry="7.5" fill="var(--ink)"/>
+          <circle cx="114" cy="73" r="2.2" fill="#fff"/>
+        </g>
+
+        <path d="M96,86 Q100,84 104,86 Q100,93 96,86 Z" fill="#E8737A"/>
+        <g class="mouth-layer">
+          <path class="m-default" d="M100,93 Q95,99 90,95 M100,93 Q105,99 110,95" fill="none"
+                stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>
+          <path class="m-happy" d="M90,88 Q100,104 110,88" fill="#4A1530" stroke="var(--ink)" stroke-width="1.8" style="display:none"/>
+          <path class="m-sad" d="M92,98 Q100,90 108,98" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+          <path class="m-sleep" d="M94,94 L106,94" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+        </g>
+        <!-- 胡须 -->
+        <path d="M68,84L48,79M68,90L50,90M132,84L152,79M132,90L150,90"
+              stroke="var(--fur-dark)" stroke-width="1.8" stroke-linecap="round" opacity=".75"/>
+      </g>
+    </g>
+    <!-- 装饰品层：所有 wear 的装饰插在这里（rig 下最顶层） -->
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <!-- 尾巴 -->
-  <g class="tail-layer" style="transform-origin: 148px 140px">
-    <path d="M148,140 Q178,120 175,85 Q174,75 180,68" fill="none" stroke="#FFB89E" stroke-width="14" stroke-linecap="round"/>
-    <path d="M148,140 Q178,120 175,85 Q174,75 180,68" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
-  </g>
-  <!-- 头 -->
-  <g class="head-layer" style="transform-origin: 100px 82px">
-    <!-- 左耳 -->
-    <g class="ear-left" style="transform-origin: 72px 58px">
-      <path d="M72,58 L57,32 L88,48 Z" fill="#FFB89E" stroke="#2D1F1A" stroke-width="2.5"/>
-      <path d="M72,52 L63,36 L83,48 Z" fill="#FFC9B5"/>
-    </g>
-    <!-- 右耳 -->
-    <g class="ear-right" style="transform-origin: 128px 58px">
-      <path d="M128,58 L143,32 L112,48 Z" fill="#FFB89E" stroke="#2D1F1A" stroke-width="2.5"/>
-      <path d="M128,52 L137,36 L117,48 Z" fill="#FFC9B5"/>
-    </g>
-    <!-- 脸 -->
-    <circle cx="100" cy="82" r="44" fill="#FFB89E" stroke="#2D1F1A" stroke-width="3"/>
-    <!-- 腮红 -->
-    <circle cx="73" cy="96" r="7" fill="#FFB6C1" opacity="0.55"/>
-    <circle cx="127" cy="96" r="7" fill="#FFB6C1" opacity="0.55"/>
-    <!-- 眼睛 -->
-    <g class="eye-left" style="transform-origin: 83px 78px">
-      <ellipse class="eye-shape" cx="83" cy="78" rx="7" ry="9" fill="#1a1a1a"/>
-      <circle cx="85" cy="75" r="2.5" fill="white"/>
-    </g>
-    <g class="eye-right" style="transform-origin: 117px 78px">
-      <ellipse class="eye-shape" cx="117" cy="78" rx="7" ry="9" fill="#1a1a1a"/>
-      <circle cx="119" cy="75" r="2.5" fill="white"/>
-    </g>
-    <!-- 鼻子 -->
-    <path d="M96,93 L104,93 L100,98 Z" fill="#FF6B8A"/>
-    <!-- 嘴 -->
-    <g class="mouth-layer">
-      <path class="m-default" d="M100,98 Q95,105 90,102" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-default" d="M100,98 Q105,105 110,102" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-happy" d="M90,100 Q100,114 110,100" fill="#4A1530" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M92,106 Q100,99 108,106" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-      <path class="m-sleep" d="M95,103 L105,103" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-    </g>
-  </g>
-  <!-- 胡须（猫特有） -->
-  <g stroke="#2D1F1A" stroke-width="1.5" stroke-linecap="round" opacity="0.6">
-    <line x1="62" y1="94" x2="30" y2="88"/>
-    <line x1="62" y1="100" x2="30" y2="100"/>
-    <line x1="62" y1="106" x2="30" y2="112"/>
-    <line x1="138" y1="94" x2="170" y2="88"/>
-    <line x1="138" y1="100" x2="170" y2="100"/>
-    <line x1="138" y1="106" x2="170" y2="112"/>
-  </g>
-  <!-- 装饰层（运行时插入） -->
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   2. 小狗 dog（下垂耳 + 向上卷尾）
+   🐶 DOG —— 金毛
+   hip=(100,172) neck=(100,102) tail=(138,142)
+   ear-l=(72,72) ear-r=(128,72)
    ============================================================ */
 const DOG_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="142" rx="52" ry="44" fill="#E8C27A" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="152" rx="30" ry="23" fill="#F5D89F"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">
+      <path d="M138,142 C158,132 168,108 158,90 C154,82 146,84 146,94"
+            fill="none" stroke="var(--fur-dark)" stroke-width="16" stroke-linecap="round"/>
+    </g>
+
+    <g class="paw paw-bl" data-part="backleg-l">
+      <ellipse cx="54" cy="170" rx="13" ry="8" fill="var(--fur)"/>
+    </g>
+    <g class="paw paw-br" data-part="backleg-r">
+      <ellipse cx="146" cy="170" rx="13" ry="8" fill="var(--fur)"/>
+    </g>
+    <g class="paw paw-fl" data-part="foreleg-l">
+      <ellipse cx="78" cy="168" rx="14" ry="9" fill="var(--belly)"/>
+    </g>
+    <g class="paw paw-fr" data-part="foreleg-r">
+      <ellipse cx="122" cy="168" rx="14" ry="9" fill="var(--belly)"/>
+    </g>
+
+    <g class="torso" data-part="torso">
+      <path d="M100,88 C128,88 144,116 144,144 C144,164 126,172 100,172
+               C74,172 56,164 56,144 C56,116 72,88 100,88 Z" fill="var(--fur)"/>
+      <ellipse cx="100" cy="148" rx="28" ry="26" fill="var(--belly)"/>
+
+      <g class="head" data-part="head">
+        <!-- 下垂大耳 -->
+        <g class="ear ear-l" data-part="ear-l">
+          <path d="M72,50 C60,54 54,70 56,90 C60,104 70,110 76,104 C78,96 78,80 76,62 Z" fill="var(--fur-dark)"/>
+          <path d="M74,58 C66,64 62,78 64,94 C66,102 72,106 74,102" fill="var(--pink)" opacity=".5"/>
+        </g>
+        <g class="ear ear-r" data-part="ear-r">
+          <path d="M128,50 C140,54 146,70 144,90 C140,104 130,110 124,104 C122,96 122,80 124,62 Z" fill="var(--fur-dark)"/>
+          <path d="M126,58 C134,64 138,78 136,94 C134,102 128,106 126,102" fill="var(--pink)" opacity=".5"/>
+        </g>
+
+        <circle cx="100" cy="74" r="36" fill="var(--fur)"/>
+        <!-- 口鼻（在头圆下方突出） -->
+        <ellipse cx="100" cy="108" rx="22" ry="17" fill="var(--muzzle,var(--belly))"/>
+        <ellipse cx="100" cy="106" rx="9" ry="7" fill="var(--ink)"/>
+        <ellipse cx="97" cy="103" rx="2.5" ry="1.5" fill="white" opacity=".4"/>
+
+        <g class="eye-l" data-part="eye-l">
+          <ellipse cx="82" cy="70" rx="6.5" ry="7" fill="var(--ink)"/>
+          <circle cx="80" cy="67" r="2.2" fill="#fff"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <ellipse cx="118" cy="70" rx="6.5" ry="7" fill="var(--ink)"/>
+          <circle cx="116" cy="67" r="2.2" fill="#fff"/>
+        </g>
+
+        <g class="mouth-layer">
+          <path class="m-default" d="M100,114 Q95,122 88,118 M100,114 Q105,122 112,118" fill="none"
+                stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>
+          <path class="m-happy" d="M90,114 Q100,128 110,114" fill="#4A1530" stroke="var(--ink)" stroke-width="1.8" style="display:none"/>
+          <path class="m-sad" d="M92,122 Q100,114 108,122" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+          <path class="m-sleep" d="M94,118 L106,118" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+        </g>
+      </g>
+    </g>
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <g class="tail-layer" style="transform-origin: 148px 138px">
-    <path d="M148,138 Q162,118 160,100 Q158,88 168,82 Q178,78 175,88" fill="#E8C27A" stroke="#2D1F1A" stroke-width="2.5"/>
-  </g>
-  <g class="head-layer" style="transform-origin: 100px 82px">
-    <g class="ear-left" style="transform-origin: 75px 62px">
-      <path d="M75,62 L58,72 L62,105 L78,95 Z" fill="#D4A55A" stroke="#2D1F1A" stroke-width="2.5"/>
-    </g>
-    <g class="ear-right" style="transform-origin: 125px 62px">
-      <path d="M125,62 L142,72 L138,105 L122,95 Z" fill="#D4A55A" stroke="#2D1F1A" stroke-width="2.5"/>
-    </g>
-    <circle cx="100" cy="82" r="44" fill="#E8C27A" stroke="#2D1F1A" stroke-width="3"/>
-    <g class="eye-left" style="transform-origin: 83px 80px">
-      <ellipse class="eye-shape" cx="83" cy="80" rx="6" ry="8" fill="#1a1a1a"/>
-      <circle cx="85" cy="78" r="2" fill="white"/>
-    </g>
-    <g class="eye-right" style="transform-origin: 117px 80px">
-      <ellipse class="eye-shape" cx="117" cy="80" rx="6" ry="8" fill="#1a1a1a"/>
-      <circle cx="119" cy="78" r="2" fill="white"/>
-    </g>
-    <!-- 狗的大鼻子 -->
-    <ellipse cx="100" cy="96" rx="9" ry="7" fill="#2D1F1A"/>
-    <circle cx="100" cy="94" r="1.5" fill="white" opacity="0.5"/>
-    <g class="mouth-layer">
-      <path class="m-default" d="M100,103 Q95,112 88,108" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-default" d="M100,103 Q105,112 112,108" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-happy" d="M90,104 Q100,118 110,104" fill="#4A1530" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M92,110 Q100,102 108,110" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-      <path class="m-sleep" d="M95,107 L105,107" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-    </g>
-  </g>
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   3. 兔子 rabbit（超长直耳 + 短绒毛球尾 + 门牙）
+   🐰 RABBIT —— 雪白
+   hip=(100,172) neck=(100,110) tail=(140,150)
+   ear-l=(90,62) ear-r=(110,62)
    ============================================================ */
 const RABBIT_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="142" rx="50" ry="42" fill="#F5F0FF" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="152" rx="28" ry="22" fill="#FFFFFF"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">
+      <circle cx="140" cy="150" r="12" fill="var(--fur)" stroke="var(--line)" stroke-width="2"/>
+    </g>
+
+    <!-- 兔子后肢大，前肢小 -->
+    <g class="paw paw-bl" data-part="backleg-l">
+      <ellipse cx="52" cy="170" rx="17" ry="11" fill="var(--fur)" stroke="var(--line)" stroke-width="1.5"/>
+    </g>
+    <g class="paw paw-br" data-part="backleg-r">
+      <ellipse cx="148" cy="170" rx="17" ry="11" fill="var(--fur)" stroke="var(--line)" stroke-width="1.5"/>
+    </g>
+    <g class="paw paw-fl" data-part="foreleg-l">
+      <ellipse cx="78" cy="168" rx="10" ry="7" fill="var(--belly)" stroke="var(--line)" stroke-width="1.5"/>
+    </g>
+    <g class="paw paw-fr" data-part="foreleg-r">
+      <ellipse cx="122" cy="168" rx="10" ry="7" fill="var(--belly)" stroke="var(--line)" stroke-width="1.5"/>
+    </g>
+
+    <g class="torso" data-part="torso">
+      <path d="M100,104 C124,104 136,124 136,146 C136,164 122,172 100,172
+               C78,172 64,164 64,146 C64,124 76,104 100,104 Z"
+            fill="var(--fur)" stroke="var(--line)" stroke-width="2"/>
+      <ellipse cx="100" cy="150" rx="21" ry="18" fill="var(--belly)"/>
+
+      <g class="head" data-part="head">
+        <!-- 长耳：每只绕根部 rotate，单独 transform-origin -->
+        <g class="ear ear-l" data-part="ear-l">
+          <ellipse cx="90" cy="38" rx="9" ry="26" fill="var(--fur)" stroke="var(--line)" stroke-width="2"/>
+          <ellipse cx="90" cy="38" rx="4.5" ry="17" fill="var(--pink)" opacity=".7"/>
+        </g>
+        <g class="ear ear-r" data-part="ear-r">
+          <ellipse cx="110" cy="38" rx="9" ry="26" fill="var(--fur)" stroke="var(--line)" stroke-width="2"/>
+          <ellipse cx="110" cy="38" rx="4.5" ry="17" fill="var(--pink)" opacity=".7"/>
+        </g>
+
+        <circle cx="100" cy="82" r="32" fill="var(--fur)" stroke="var(--line)" stroke-width="2"/>
+        <ellipse cx="76" cy="94" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>
+        <ellipse cx="124" cy="94" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>
+
+        <g class="eye-l" data-part="eye-l">
+          <circle cx="86" cy="84" r="5.5" fill="#E05070"/>
+          <circle cx="86" cy="84" r="2.5" fill="#8B0000"/>
+          <circle cx="84" cy="81" r="2" fill="#fff"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <circle cx="114" cy="84" r="5.5" fill="#E05070"/>
+          <circle cx="114" cy="84" r="2.5" fill="#8B0000"/>
+          <circle cx="112" cy="81" r="2" fill="#fff"/>
+        </g>
+
+        <path d="M97,95 Q100,93 103,95 Q100,100 97,95 Z" fill="#F58FA0"/>
+        <g class="mouth-layer">
+          <g class="m-default">
+            <rect x="96.5" y="100" width="5" height="7" rx="1" fill="white" stroke="var(--line)" stroke-width="1.3"/>
+            <rect x="102.5" y="100" width="5" height="7" rx="1" fill="white" stroke="var(--line)" stroke-width="1.3"/>
+          </g>
+          <path class="m-happy" d="M93,102 Q100,112 107,102" fill="#FFB6C1" stroke="var(--ink)" stroke-width="1.8" style="display:none"/>
+          <path class="m-sad" d="M92,112 Q100,104 108,112" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+          <path class="m-sleep" d="M95,108 L105,108" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+        </g>
+      </g>
+    </g>
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <g class="tail-layer" style="transform-origin: 148px 145px">
-    <circle cx="148" cy="145" r="12" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2.5"/>
-  </g>
-  <g class="head-layer" style="transform-origin: 100px 100px">
-    <!-- 左长耳 -->
-    <g class="ear-left" style="transform-origin: 80px 55px">
-      <ellipse cx="80" cy="25" rx="9" ry="30" fill="#F5F0FF" stroke="#2D1F1A" stroke-width="2.5"/>
-      <ellipse cx="80" cy="26" rx="5" ry="22" fill="#FFC9B5"/>
-    </g>
-    <!-- 右长耳 -->
-    <g class="ear-right" style="transform-origin: 120px 55px">
-      <ellipse cx="120" cy="25" rx="9" ry="30" fill="#F5F0FF" stroke="#2D1F1A" stroke-width="2.5"/>
-      <ellipse cx="120" cy="26" rx="5" ry="22" fill="#FFC9B5"/>
-    </g>
-    <circle cx="100" cy="85" r="42" fill="#F5F0FF" stroke="#2D1F1A" stroke-width="3"/>
-    <circle cx="74" cy="100" r="6" fill="#FFB6C1" opacity="0.55"/>
-    <circle cx="126" cy="100" r="6" fill="#FFB6C1" opacity="0.55"/>
-    <g class="eye-left" style="transform-origin: 84px 82px">
-      <ellipse class="eye-shape" cx="84" cy="82" rx="7" ry="9" fill="#1a1a1a"/>
-      <circle cx="86" cy="79" r="2.5" fill="white"/>
-    </g>
-    <g class="eye-right" style="transform-origin: 116px 82px">
-      <ellipse class="eye-shape" cx="116" cy="82" rx="7" ry="9" fill="#1a1a1a"/>
-      <circle cx="118" cy="79" r="2.5" fill="white"/>
-    </g>
-    <!-- 兔鼻子 -->
-    <path d="M95,96 L105,96 L100,101 Z" fill="#FF6B8A"/>
-    <!-- 兔门牙 -->
-    <g class="mouth-layer">
-      <rect x="97" y="102" width="6" height="9" rx="1.5" fill="white" stroke="#2D1F1A" stroke-width="1.5"/>
-      <rect x="103" y="102" width="6" height="9" rx="1.5" fill="white" stroke="#2D1F1A" stroke-width="1.5"/>
-      <path class="m-happy" d="M90,102 Q100,118 110,102" fill="#4A1530" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M92,114 Q100,106 108,114" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-      <path class="m-sleep" d="M95,107 L105,107" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-    </g>
-  </g>
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   4. 熊猫 panda（黑眼圈 + 圆耳 + 短尾）
+   🐼 PANDA —— 黑白
+   hip=(100,172) neck=(100,92) tail=(150,140)
+   ear-l=(70,50) ear-r=(130,50)
    ============================================================ */
 const PANDA_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="142" rx="52" ry="44" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="152" rx="30" ry="23" fill="#FFFFFF"/>
-    <!-- 熊手脚 -->
-    <ellipse cx="55" cy="165" rx="15" ry="10" fill="#2D1F1A"/>
-    <ellipse cx="145" cy="165" rx="15" ry="10" fill="#2D1F1A"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">
+      <circle cx="150" cy="140" r="10" fill="var(--ink)"/>
+    </g>
+
+    <g class="paw paw-bl" data-part="backleg-l">
+      <ellipse cx="54" cy="174" rx="14" ry="10" fill="var(--ink)"/>
+    </g>
+    <g class="paw paw-br" data-part="backleg-r">
+      <ellipse cx="146" cy="174" rx="14" ry="10" fill="var(--ink)"/>
+    </g>
+    <g class="paw paw-fl" data-part="foreleg-l">
+      <ellipse cx="76" cy="172" rx="13" ry="9" fill="var(--ink)"/>
+    </g>
+    <g class="paw paw-fr" data-part="foreleg-r">
+      <ellipse cx="124" cy="172" rx="13" ry="9" fill="var(--ink)"/>
+    </g>
+
+    <g class="torso" data-part="torso">
+      <path d="M100,88 C130,88 148,116 148,144 C148,164 128,174 100,174
+               C72,174 52,164 52,144 C52,116 70,88 100,88 Z" fill="var(--fur)"/>
+      <!-- 肩部黑块（嵌在躯干里，不随动画分离） -->
+      <ellipse cx="58" cy="132" rx="16" ry="12" fill="var(--ink)"/>
+      <ellipse cx="142" cy="132" rx="16" ry="12" fill="var(--ink)"/>
+
+      <g class="head" data-part="head">
+        <g class="ear ear-l" data-part="ear-l">
+          <circle cx="70" cy="50" r="14" fill="var(--ink)"/>
+        </g>
+        <g class="ear ear-r" data-part="ear-r">
+          <circle cx="130" cy="50" r="14" fill="var(--ink)"/>
+        </g>
+
+        <circle cx="100" cy="82" r="44" fill="var(--fur)"/>
+        <!-- 黑眼圈 + 眼睛 -->
+        <ellipse cx="80" cy="80" rx="15" ry="17" fill="var(--ink)" transform="rotate(-20 80 80)"/>
+        <ellipse cx="120" cy="80" rx="15" ry="17" fill="var(--ink)" transform="rotate(20 120 80)"/>
+        <g class="eye-l" data-part="eye-l">
+          <ellipse cx="80" cy="80" rx="5" ry="6" fill="#fff"/>
+          <circle cx="81" cy="79" r="3" fill="var(--ink)"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <ellipse cx="120" cy="80" rx="5" ry="6" fill="#fff"/>
+          <circle cx="121" cy="79" r="3" fill="var(--ink)"/>
+        </g>
+
+        <ellipse cx="100" cy="96" rx="7" ry="5" fill="var(--ink)"/>
+        <g class="mouth-layer">
+          <path class="m-default" d="M100,101 Q96,107 92,105 M100,101 Q104,107 108,105" fill="none"
+                stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/>
+          <path class="m-happy" d="M93,102 Q100,114 107,102" fill="#4A1530" stroke="var(--ink)" stroke-width="1.8" style="display:none"/>
+          <path class="m-sad" d="M94,110 Q100,103 106,110" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+          <path class="m-sleep" d="M96,106 L104,106" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+        </g>
+      </g>
+    </g>
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <g class="tail-layer" style="transform-origin: 148px 140px">
-    <circle cx="148" cy="140" r="8" fill="#2D1F1A"/>
-  </g>
-  <g class="head-layer" style="transform-origin: 100px 85px">
-    <g class="ear-left" style="transform-origin: 68px 52px">
-      <circle cx="68" cy="52" r="12" fill="#2D1F1A"/>
-    </g>
-    <g class="ear-right" style="transform-origin: 132px 52px">
-      <circle cx="132" cy="52" r="12" fill="#2D1F1A"/>
-    </g>
-    <circle cx="100" cy="85" r="46" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="3"/>
-    <!-- 黑眼圈 -->
-    <ellipse cx="80" cy="82" rx="14" ry="16" fill="#2D1F1A" transform="rotate(-15 80 82)"/>
-    <ellipse cx="120" cy="82" rx="14" ry="16" fill="#2D1F1A" transform="rotate(15 120 82)"/>
-    <g class="eye-left" style="transform-origin: 80px 82px">
-      <ellipse class="eye-shape" cx="80" cy="82" rx="5" ry="6" fill="#FFFFFF"/>
-      <circle cx="81" cy="81" r="2" fill="#1a1a1a"/>
-    </g>
-    <g class="eye-right" style="transform-origin: 120px 82px">
-      <ellipse class="eye-shape" cx="120" cy="82" rx="5" ry="6" fill="#FFFFFF"/>
-      <circle cx="121" cy="81" r="2" fill="#1a1a1a"/>
-    </g>
-    <ellipse cx="100" cy="98" rx="5" ry="3.5" fill="#2D1F1A"/>
-    <g class="mouth-layer">
-      <path class="m-default" d="M100,101 Q96,107 92,105" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round"/>
-      <path class="m-default" d="M100,101 Q104,107 108,105" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round"/>
-      <path class="m-happy" d="M93,103 Q100,113 107,103" fill="#4A1530" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M94,110 Q100,104 106,110" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round" style="display:none"/>
-      <path class="m-sleep" d="M96,106 L104,106" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round" style="display:none"/>
-    </g>
-  </g>
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   5. 小鸡 chick（椭圆身体 + 尖嘴 + 小翅膀）
+   🐥 CHICK —— 亮黄（2 只脚）
+   hip=(100,170) neck=(100,94) tail=(148,140)
+   ear-l/r → 小鸡不用，改成翅膀
    ============================================================ */
 const CHICK_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="142" rx="46" ry="42" fill="#FFE44D" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="155" rx="28" ry="18" fill="#FFF27A"/>
-    <!-- 小翅膀 -->
-    <ellipse cx="58" cy="135" rx="14" ry="20" fill="#FFD633" stroke="#2D1F1A" stroke-width="2.5" transform="rotate(-10 58 135)"/>
-    <ellipse cx="142" cy="135" rx="14" ry="20" fill="#FFD633" stroke="#2D1F1A" stroke-width="2.5" transform="rotate(10 142 135)"/>
-    <!-- 脚 -->
-    <line x1="90" y1="180" x2="90" y2="192" stroke="#FF8C33" stroke-width="3" stroke-linecap="round"/>
-    <line x1="110" y1="180" x2="110" y2="192" stroke="#FF8C33" stroke-width="3" stroke-linecap="round"/>
-  </g>
-  <!-- 小鸡尾巴短小，直接加在身体上，tail-layer 简化 -->
-  <g class="tail-layer" style="transform-origin: 146px 140px">
-    <path d="M146,140 Q158,128 155,118" fill="none" stroke="#FFD633" stroke-width="8" stroke-linecap="round"/>
-  </g>
-  <g class="head-layer" style="transform-origin: 100px 80px">
-    <circle cx="100" cy="78" r="40" fill="#FFE44D" stroke="#2D1F1A" stroke-width="3"/>
-    <!-- 小冠 -->
-    <path d="M88,42 L92,32 L96,40 L100,28 L104,40 L108,32 L112,42 Z" fill="#FF4D4D" stroke="#2D1F1A" stroke-width="2"/>
-    <g class="eye-left" style="transform-origin: 86px 75px">
-      <circle cx="86" cy="75" r="7" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2"/>
-      <circle cx="87" cy="76" r="3" fill="#1a1a1a"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">
+      <path d="M148,140 Q162,126 158,112 Q154,122 152,128" fill="none" stroke="var(--fur-dark)" stroke-width="8" stroke-linecap="round"/>
     </g>
-    <g class="eye-right" style="transform-origin: 114px 75px">
-      <circle cx="114" cy="75" r="7" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2"/>
-      <circle cx="115" cy="76" r="3" fill="#1a1a1a"/>
+
+    <!-- 鸡只有 2 只脚，不参与 4 腿系统 -->
+    <g class="paw paw-l" data-part="leg-l">
+      <rect x="86" y="180" width="8" height="12" rx="2" fill="#FF8C33"/>
     </g>
-    <!-- 尖嘴 -->
-    <g class="mouth-layer">
-      <path class="m-default" d="M96,88 L104,88 L100,100 Z" fill="#FF8C33" stroke="#2D1F1A" stroke-width="2"/>
-      <path class="m-happy" d="M94,87 L106,87 L100,104 Z" fill="#FF8C33" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M96,91 L104,91 L100,100 Z" fill="#CC7026" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sleep" d="M92,92 L108,92" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
+    <g class="paw paw-r" data-part="leg-r">
+      <rect x="106" y="180" width="8" height="12" rx="2" fill="#FF8C33"/>
     </g>
+
+    <g class="torso" data-part="torso">
+      <circle cx="100" cy="142" r="46" fill="var(--fur)"/>
+      <ellipse cx="100" cy="154" rx="28" ry="22" fill="var(--belly)"/>
+      <!-- 小翅膀（不随耳朵动画，单独 class） -->
+      <g class="wing wing-l" data-part="wing-l" style="transform-origin:72px 138px">
+        <path d="M72,138 Q58,130 52,144 Q58,154 74,150 Z" fill="var(--fur-dark)" opacity=".8"/>
+      </g>
+      <g class="wing wing-r" data-part="wing-r" style="transform-origin:128px 138px">
+        <path d="M128,138 Q142,130 148,144 Q142,154 126,150 Z" fill="var(--fur-dark)" opacity=".8"/>
+      </g>
+
+      <g class="head" data-part="head">
+        <!-- 小鸡没有耳朵，但用 ear-l/r 关节名保持统一，动画改为翅膀 -->
+        <g class="ear ear-l" data-part="comb">
+          <path d="M88,44 Q90,32 94,40 Q100,26 106,40 Q110,32 112,44" fill="#FF4D4D"/>
+        </g>
+
+        <circle cx="100" cy="78" r="40" fill="var(--fur)"/>
+
+        <g class="eye-l" data-part="eye-l">
+          <circle cx="86" cy="74" r="7" fill="#fff"/>
+          <circle cx="87" cy="75" r="3.5" fill="var(--ink)"/>
+          <circle cx="88" cy="73" r="1.3" fill="#fff"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <circle cx="114" cy="74" r="7" fill="#fff"/>
+          <circle cx="115" cy="75" r="3.5" fill="var(--ink)"/>
+          <circle cx="116" cy="73" r="1.3" fill="#fff"/>
+        </g>
+
+        <g class="mouth-layer">
+          <path class="m-default" d="M94,86 L106,86 L100,98 Z" fill="#FF8C33" stroke="var(--ink)" stroke-width="1.5"/>
+          <path class="m-happy" d="M92,85 L108,85 L100,102 Z" fill="#FF8C33" stroke="var(--ink)" stroke-width="1.5" style="display:none"/>
+          <path class="m-sad" d="M95,90 L105,90 L100,98 Z" fill="#CC7026" stroke="var(--ink)" stroke-width="1.5" style="display:none"/>
+          <path class="m-sleep" d="M92,90 L108,90" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" style="display:none"/>
+        </g>
+      </g>
+    </g>
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   6. 考拉 koala（圆耳 + 大鼻子 + 几乎无尾）
+   🐨 KOALA —— 灰色（头比身体大是考拉特征）
+   hip=(100,172) neck=(100,106) tail=(146,142)
+   ear-l=(65,46) ear-r=(135,46)
    ============================================================ */
 const KOALA_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <g class="body-layer" style="transform-origin: 100px 170px">
-    <ellipse cx="100" cy="142" rx="50" ry="42" fill="#A8A29E" stroke="#2D1F1A" stroke-width="3"/>
-    <ellipse cx="100" cy="152" rx="28" ry="22" fill="#CFCBC6"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">
+      <ellipse cx="146" cy="142" rx="8" ry="6" fill="var(--fur-dark)"/>
+    </g>
+
+    <g class="paw paw-bl" data-part="backleg-l">
+      <ellipse cx="56" cy="174" rx="12" ry="9" fill="var(--fur-dark)"/>
+    </g>
+    <g class="paw paw-br" data-part="backleg-r">
+      <ellipse cx="144" cy="174" rx="12" ry="9" fill="var(--fur-dark)"/>
+    </g>
+    <g class="paw paw-fl" data-part="foreleg-l">
+      <ellipse cx="76" cy="172" rx="11" ry="8" fill="var(--fur-dark)"/>
+    </g>
+    <g class="paw paw-fr" data-part="foreleg-r">
+      <ellipse cx="124" cy="172" rx="11" ry="8" fill="var(--fur-dark)"/>
+    </g>
+
+    <g class="torso" data-part="torso">
+      <path d="M100,116 C122,116 134,132 134,150 C134,166 122,174 100,174
+               C78,174 66,166 66,150 C66,132 78,116 100,116 Z" fill="var(--fur)"/>
+      <ellipse cx="100" cy="156" rx="22" ry="18" fill="var(--belly)"/>
+
+      <g class="head" data-part="head">
+        <g class="ear ear-l" data-part="ear-l">
+          <circle cx="65" cy="46" r="16" fill="var(--fur)"/>
+          <circle cx="65" cy="46" r="8" fill="var(--fur-dark)"/>
+        </g>
+        <g class="ear ear-r" data-part="ear-r">
+          <circle cx="135" cy="46" r="16" fill="var(--fur)"/>
+          <circle cx="135" cy="46" r="8" fill="var(--fur-dark)"/>
+        </g>
+
+        <circle cx="100" cy="86" r="44" fill="var(--fur)"/>
+        <!-- 脸颊色块 -->
+        <ellipse cx="76" cy="100" rx="12" ry="8" fill="var(--fur-dark)" opacity=".5"/>
+        <ellipse cx="124" cy="100" rx="12" ry="8" fill="var(--fur-dark)" opacity=".5"/>
+
+        <g class="eye-l" data-part="eye-l">
+          <circle cx="82" cy="84" r="6" fill="var(--ink)"/>
+          <circle cx="84" cy="81" r="2.2" fill="#fff"/>
+        </g>
+        <g class="eye-r" data-part="eye-r">
+          <circle cx="118" cy="84" r="6" fill="var(--ink)"/>
+          <circle cx="120" cy="81" r="2.2" fill="#fff"/>
+        </g>
+
+        <ellipse cx="100" cy="102" rx="9" ry="6" fill="var(--ink)"/>
+        <g class="mouth-layer">
+          <path class="m-default" d="M100,108 Q96,114 92,112 M100,108 Q104,114 108,112" fill="none"
+                stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>
+          <path class="m-happy" d="M93,110 Q100,122 107,110" fill="#4A1530" stroke="var(--ink)" stroke-width="1.8" style="display:none"/>
+          <path class="m-sad" d="M94,117 Q100,110 106,117" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+          <path class="m-sleep" d="M96,113 L104,113" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" style="display:none"/>
+        </g>
+      </g>
+    </g>
+    <g class="decorations" data-part="decorations"></g>
   </g>
-  <g class="tail-layer" style="transform-origin: 148px 140px">
-    <!-- 考拉几乎没尾巴，给一个短 stub -->
-    <ellipse cx="146" cy="140" rx="8" ry="6" fill="#A8A29E" stroke="#2D1F1A" stroke-width="2"/>
-  </g>
-  <g class="head-layer" style="transform-origin: 100px 85px">
-    <g class="ear-left" style="transform-origin: 65px 48px">
-      <circle cx="65" cy="48" r="15" fill="#A8A29E" stroke="#2D1F1A" stroke-width="2.5"/>
-      <circle cx="65" cy="48" r="8" fill="#6B6663"/>
-    </g>
-    <g class="ear-right" style="transform-origin: 135px 48px">
-      <circle cx="135" cy="48" r="15" fill="#A8A29E" stroke="#2D1F1A" stroke-width="2.5"/>
-      <circle cx="135" cy="48" r="8" fill="#6B6663"/>
-    </g>
-    <circle cx="100" cy="85" r="46" fill="#A8A29E" stroke="#2D1F1A" stroke-width="3"/>
-    <g class="eye-left" style="transform-origin: 82px 82px">
-      <ellipse class="eye-shape" cx="82" cy="82" rx="7" ry="8" fill="#1a1a1a"/>
-      <circle cx="84" cy="79" r="2.5" fill="white"/>
-    </g>
-    <g class="eye-right" style="transform-origin: 118px 82px">
-      <ellipse class="eye-shape" cx="118" cy="82" rx="7" ry="8" fill="#1a1a1a"/>
-      <circle cx="120" cy="79" r="2.5" fill="white"/>
-    </g>
-    <!-- 考拉大鼻子 -->
-    <ellipse cx="100" cy="100" rx="7" ry="5" fill="#2D1F1A"/>
-    <ellipse cx="100" cy="99" rx="2" ry="1" fill="#4D4540"/>
-    <g class="mouth-layer">
-      <path class="m-default" d="M100,105 Q96,112 92,110" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-default" d="M100,105 Q104,112 108,110" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round"/>
-      <path class="m-happy" d="M93,107 Q100,119 107,107" fill="#4A1530" stroke="#2D1F1A" stroke-width="2" style="display:none"/>
-      <path class="m-sad" d="M94,114 Q100,107 106,114" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-      <path class="m-sleep" d="M96,110 L104,110" fill="none" stroke="#2D1F1A" stroke-width="2.5" stroke-linecap="round" style="display:none"/>
-    </g>
-  </g>
-  <g class="decorations"></g>
 </svg>`;
 
 /* ============================================================
-   动物表
+   物种表
    ============================================================ */
 export const SPECIES = [
   { id: 'cat',    name: '小猫', emoji: '🐱', svg: CAT_SVG },
@@ -310,232 +449,163 @@ export const SPECIES = [
 export function speciesOf(id) { return SPECIES.find((s) => s.id === id) || SPECIES[0]; }
 
 /* ============================================================
-   装饰 SVG fragments（插到 .decorations 组里）
-   每个 fragment 自带 style 定位到对应 slot
+   装饰 SVG —— 坐标以猫头为基准（头顶 y=40, 颈部 y=104）
+   装饰品插在 <g class="decorations"> 里，在 rig 最顶层
    ============================================================ */
 export const DECO_SVG = {
-  'red-bow': `<g data-deco="red-bow">
-    <path d="M85,40 Q95,55 115,40 Q105,55 115,40 Q105,55 115,40" fill="none"/>
-    <path d="M85,42 L95,50 L85,58 Z" fill="#E74C3C"/>
-    <path d="M115,42 L105,50 L115,58 Z" fill="#E74C3C"/>
-    <circle cx="100" cy="50" r="6" fill="#C0392B"/>
-  </g>`,
-
   'crown': `<g data-deco="crown">
-    <path d="M72,48 L82,22 L92,40 L100,18 L108,40 L118,22 L128,48 Z" fill="#FFD700" stroke="#B8860B" stroke-width="2"/>
-    <circle cx="100" cy="22" r="4" fill="#FF4D4D"/>
-    <circle cx="82" cy="32" r="3" fill="#4DA6FF"/>
-    <circle cx="118" cy="32" r="3" fill="#4DA6FF"/>
+    <path d="M70,36 L80,14 L92,28 L100,8 L108,28 L120,14 L130,36 Z" fill="#FFD700" stroke="#B8860B" stroke-width="2"/>
+    <circle cx="100" cy="14" r="4.5" fill="#FF4D4D" stroke="#2D1F1A" stroke-width="1"/>
+    <circle cx="80" cy="24" r="3" fill="#4DA6FF" stroke="#2D1F1A" stroke-width="1"/>
+    <circle cx="120" cy="24" r="3" fill="#4DA6FF" stroke="#2D1F1A" stroke-width="1"/>
   </g>`,
-
+  'red-bow': `<g data-deco="red-bow">
+    <path d="M82,32 Q92,18 100,28 Q108,18 118,32 Q108,36 100,30 Q92,36 82,32" fill="#E74C3C" stroke="#2D1F1A" stroke-width="1.8"/>
+    <circle cx="100" cy="32" r="4" fill="#C0392B"/>
+  </g>`,
   'xmas-hat': `<g data-deco="xmas-hat">
-    <path d="M75,48 L125,48 L110,20 Q105,15 95,18 Q80,25 75,48 Z" fill="#E74C3C" stroke="#2D1F1A" stroke-width="2"/>
-    <ellipse cx="100" cy="52" rx="28" ry="6" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2"/>
-    <circle cx="108" cy="20" r="5" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="1.5"/>
+    <path d="M72,36 L128,36 L110,8 Q104,4 94,8 Q80,16 72,36 Z" fill="#E74C3C" stroke="#2D1F1A" stroke-width="2"/>
+    <ellipse cx="100" cy="40" rx="30" ry="7" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2"/>
+    <circle cx="106" cy="8" r="6" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="1.5"/>
   </g>`,
-
-  'scarf': `<g data-deco="scarf">
-    <rect x="60" y="98" width="80" height="12" rx="4" fill="#E74C3C" stroke="#922B21" stroke-width="1.5"/>
-    <rect x="60" y="98" width="10" height="28" rx="2" fill="#C0392B" stroke="#922B21" stroke-width="1.5"/>
-    <rect x="130" y="98" width="10" height="22" rx="2" fill="#C0392B" stroke="#922B21" stroke-width="1.5"/>
-  </g>`,
-
-  'collar': `<g data-deco="collar">
-    <ellipse cx="100" cy="98" rx="30" ry="6" fill="#FF6B8A" stroke="#2D1F1A" stroke-width="1.5"/>
-    <circle cx="100" cy="104" r="5" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/>
-    <circle cx="100" cy="104" r="2" fill="#2D1F1A"/>
-  </g>`,
-
-  'tie': `<g data-deco="tie">
-    <path d="M93,98 L107,98 L104,118 L100,128 L96,118 Z" fill="#3498DB" stroke="#1A5276" stroke-width="2"/>
-  </g>`,
-
   'sunglass': `<g data-deco="sunglass">
-    <rect x="72" y="72" width="26" height="12" rx="4" fill="#1a1a1a"/>
-    <rect x="102" y="72" width="26" height="12" rx="4" fill="#1a1a1a"/>
-    <rect x="94" y="76" width="12" height="4" fill="#1a1a1a"/>
-    <rect x="75" y="75" width="8" height="5" fill="#333" opacity="0.6"/>
-    <rect x="105" y="75" width="8" height="5" fill="#333" opacity="0.6"/>
+    <rect x="70" y="74" width="28" height="13" rx="5" fill="#1a1a1a" stroke="#2D1F1A" stroke-width="1.5"/>
+    <rect x="102" y="74" width="28" height="13" rx="5" fill="#1a1a1a" stroke="#2D1F1A" stroke-width="1.5"/>
+    <rect x="96" y="78" width="8" height="3" fill="#1a1a1a"/>
+    <rect x="74" y="76" width="8" height="5" fill="#333" opacity="0.5"/>
+    <rect x="106" y="76" width="8" height="5" fill="#333" opacity="0.5"/>
   </g>`,
-
+  'scarf': `<g data-deco="scarf">
+    <ellipse cx="100" cy="104" rx="32" ry="7" fill="#E74C3C" stroke="#922B21" stroke-width="1.5"/>
+    <rect x="68" y="100" width="12" height="28" rx="3" fill="#C0392B" stroke="#922B21" stroke-width="1.5"/>
+    <rect x="120" y="100" width="12" height="22" rx="3" fill="#C0392B" stroke="#922B21" stroke-width="1.5"/>
+  </g>`,
+  'collar': `<g data-deco="collar">
+    <ellipse cx="100" cy="104" rx="30" ry="6" fill="#FF6B8A" stroke="#2D1F1A" stroke-width="1.5"/>
+    <circle cx="100" cy="110" r="6" fill="#FFD700" stroke="#B8860B" stroke-width="1.5"/>
+    <circle cx="100" cy="110" r="2.5" fill="#2D1F1A"/>
+  </g>`,
+  'tie': `<g data-deco="tie">
+    <path d="M93,104 L107,104 L105,124 L100,136 L95,124 Z" fill="#3498DB" stroke="#1A5276" stroke-width="2"/>
+  </g>`,
   'wings': `<g data-deco="wings">
-    <path d="M52,120 Q35,95 30,70 Q45,85 55,105" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2" opacity="0.85"/>
-    <path d="M148,120 Q165,95 170,70 Q155,85 145,105" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2" opacity="0.85"/>
-    <path d="M45,105 Q38,88 35,75" fill="none" stroke="#2D1F1A" stroke-width="1" opacity="0.3"/>
-    <path d="M155,105 Q162,88 165,75" fill="none" stroke="#2D1F1A" stroke-width="1" opacity="0.3"/>
+    <path d="M55,130 Q30,110 22,85 Q40,100 52,118 Z" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2" opacity="0.88"/>
+    <path d="M145,130 Q170,110 178,85 Q160,100 148,118 Z" fill="#FFFFFF" stroke="#2D1F1A" stroke-width="2" opacity="0.88"/>
   </g>`,
 };
 
 /* ============================================================
-   乐园场景（CSS 渐变 + 少量 SVG 点缀，完全无 JS 循环）
+   场景 —— 不变
    ============================================================ */
 export const SCENES = [
   { id: 'garden', name: '花园草地', bg: 'linear-gradient(180deg, #87CEEB 0%, #B0E0A8 55%, #7ED957 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 远山 -->
       <path d="M0,140 Q50,110 100,130 Q150,145 200,125 Q250,105 300,130 Q350,145 400,125 L400,160 L0,160 Z" fill="#7BC87B" opacity="0.5"/>
-      <!-- 云朵 -->
-      <g class="cloud">
-        <ellipse cx="80" cy="35" rx="30" ry="12" fill="white"/>
-        <ellipse cx="100" cy="30" rx="22" ry="14" fill="white"/>
-      </g>
-      <g class="cloud" style="animation-delay: -10s; animation-duration: 16s">
-        <ellipse cx="280" cy="45" rx="26" ry="10" fill="white"/>
-      </g>
-      <!-- 太阳 -->
-      <circle cx="350" cy="40" r="18" fill="#FFE066"/>
-      <circle cx="350" cy="40" r="22" fill="#FFE066" opacity="0.2"/>
-      <!-- 树 -->
-      <rect x="30" y="120" width="8" height="40" fill="#8B4513"/>
-      <circle cx="34" cy="115" r="28" fill="#4CAF50" stroke="#2E7D32" stroke-width="1.5"/>
-      <rect x="365" y="115" width="10" height="45" fill="#8B4513"/>
-      <circle cx="370" cy="108" r="32" fill="#388E3C" stroke="#1B5E20" stroke-width="1.5"/>
-      <!-- 草丛 -->
-      <ellipse cx="50" cy="185" rx="45" ry="12" fill="#5AC44A" opacity="0.5"/>
-      <ellipse cx="200" cy="190" rx="60" ry="12" fill="#5AC44A" opacity="0.4"/>
-      <ellipse cx="340" cy="185" rx="50" ry="14" fill="#5AC44A" opacity="0.5"/>
-      <!-- 花 -->
-      <g class="flower" style="transform-origin: 70px 170px">
-        <circle cx="70" cy="165" r="5" fill="#FF6B8A"/><circle cx="70" cy="165" r="2" fill="#FFD700"/><line x1="70" y1="170" x2="70" y2="190" stroke="#4A9A3A" stroke-width="2"/>
-      </g>
-      <g class="flower" style="transform-origin: 140px 178px">
-        <circle cx="140" cy="173" r="5" fill="#FFD700"/><circle cx="140" cy="173" r="2" fill="#FF6B8A"/><line x1="140" y1="178" x2="140" y2="195" stroke="#4A9A3A" stroke-width="2"/>
-      </g>
-      <g class="flower" style="transform-origin: 250px 172px">
-        <circle cx="250" cy="167" r="5" fill="#9B59B6"/><circle cx="250" cy="167" r="2" fill="#FFD700"/><line x1="250" y1="172" x2="250" y2="192" stroke="#4A9A3A" stroke-width="2"/>
-      </g>
-      <g class="flower" style="transform-origin: 310px 180px">
-        <circle cx="310" cy="175" r="5" fill="#4DA6FF"/><circle cx="310" cy="175" r="2" fill="#FFD700"/><line x1="310" y1="180" x2="310" y2="198" stroke="#4A9A3A" stroke-width="2"/>
-      </g>
-      <!-- 蝴蝶 -->
-      <g class="butterfly" style="transform-origin: 200px 80px">
-        <circle cx="200" cy="80" r="3" fill="#FF6B8A"/>
-        <ellipse cx="194" cy="78" rx="6" ry="4" fill="#FF6B8A"/>
-        <ellipse cx="206" cy="78" rx="6" ry="4" fill="#FF6B8A"/>
-      </g>
+      <g class="cloud"><ellipse cx="80" cy="32" rx="24" ry="14" fill="white"/><ellipse cx="100" cy="28" rx="20" ry="16" fill="white"/></g>
+      <circle cx="360" cy="38" r="18" fill="#FFE066"/>
+      <rect x="28" y="118" width="10" height="42" fill="#8B4513"/><circle cx="33" cy="112" r="28" fill="#4CAF50"/>
+      <rect x="362" y="112" width="12" height="48" fill="#8B4513"/><circle cx="368" cy="105" r="32" fill="#388E3C"/>
     </svg>` },
-
   { id: 'home', name: '温馨小窝', bg: 'linear-gradient(180deg, #FFF5E6 0%, #FFE4CC 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
       <rect x="0" y="160" width="400" height="40" fill="#D4A574"/>
-      <rect x="0" y="160" width="400" height="4" fill="#B8864F"/>
-      <!-- 墙上线条 -->
-      <line x1="0" y1="160" x2="400" y2="160" stroke="#B8864F" stroke-width="3"/>
-      <!-- 窗户 -->
-      <rect x="30" y="25" width="80" height="70" fill="#87CEEB" stroke="#2D1F1A" stroke-width="2"/>
-      <line x1="70" y1="25" x2="70" y2="95" stroke="#2D1F1A" stroke-width="2"/>
+      <rect x="30" y="25" width="80" height="70" fill="#87CEEB"/>
+      <path d="M70,25 L70,95" stroke="#2D1F1A" stroke-width="2"/>
       <line x1="30" y1="60" x2="110" y2="60" stroke="#2D1F1A" stroke-width="2"/>
-      <!-- 窗帘 -->
-      <rect x="25" y="25" width="10" height="70" fill="#E74C3C"/>
-      <rect x="105" y="25" width="10" height="70" fill="#E74C3C"/>
-      <!-- 画框 -->
-      <rect x="170" y="40" width="60" height="40" fill="#FFD700" stroke="#2D1F1A" stroke-width="3"/>
-      <circle cx="200" cy="55" r="8" fill="#FF6B8A"/>
-      <rect x="190" y="62" width="20" height="8" fill="#4CAF50"/>
-      <!-- 地毯 -->
-      <ellipse cx="200" cy="185" rx="150" ry="14" fill="#E74C3C" opacity="0.3"/>
-      <ellipse cx="200" cy="185" rx="120" ry="10" fill="#E74C3C" opacity="0.2"/>
-      <!-- 毛线球 -->
-      <circle cx="340" cy="180" r="10" fill="#9B59B6"/>
-      <circle cx="340" cy="180" r="10" fill="none" stroke="#8E44AD" stroke-width="1.5"/>
-      <circle cx="340" cy="180" r="10" fill="none" stroke="#8E44AD" stroke-width="1" stroke-dasharray="3,3"/>
+      <rect x="170" y="30" width="60" height="40" fill="#FFD700"/>
     </svg>` },
-
   { id: 'beach', name: '海边沙滩', bg: 'linear-gradient(180deg, #FFB347 0%, #87CEEB 35%, #4DA6FF 55%, #F4D03F 80%, #F0E68C 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 太阳 -->
       <circle cx="60" cy="50" r="32" fill="#FFD700"/>
-      <circle cx="60" cy="50" r="40" fill="#FFD700" opacity="0.2"/>
-      <!-- 云 -->
-      <ellipse cx="300" cy="35" rx="30" ry="10" fill="white" opacity="0.9"/>
-      <!-- 海浪多层 -->
-      <path d="M0,108 Q50,100 100,108 Q150,116 200,108 Q250,100 300,108 Q350,116 400,108 L400,120 L0,120 Z" fill="#3498DB" opacity="0.6"/>
-      <path d="M0,115 Q50,108 100,115 Q150,122 200,115 Q250,108 300,115 Q350,122 400,115 L400,130 L0,130 Z" fill="#4DA6FF" opacity="0.5"/>
-      <!-- 沙滩上的东西 -->
-      <g transform="translate(70,170)"><ellipse cx="0" cy="0" rx="10" ry="6" fill="#FFF5E6" stroke="#D4A574" stroke-width="1.5"/><line x1="-7" y1="-3" x2="7" y2="-3" stroke="#D4A574" stroke-width="0.5"/></g>
-      <g transform="translate(280,175)"><ellipse cx="0" cy="0" rx="8" ry="5" fill="#FFB6C1" stroke="#D4A574" stroke-width="1"/></g>
-      <g transform="translate(350,182)"><path d="M0,0 L3,-8 L6,0 Z" fill="#2ECC71"/></g>
-      <g transform="translate(20,178)"><path d="M0,0 Q3,-10 0,-15 Q-3,-10 0,0" fill="#27AE60"/></g>
-      <!-- 海鸥 -->
-      <path d="M150,45 Q160,38 170,45 Q180,38 190,45" fill="none" stroke="#2D1F1A" stroke-width="2" stroke-linecap="round"/>
-      <path d="M220,60 Q226,55 232,60 Q238,55 244,60" fill="none" stroke="#2D1F1A" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="260" y="100" width="8" height="60" fill="#8B4513"/>
+      <path d="M264,100 Q250,95 240,105 Q260,100 264,100" fill="#4CAF50"/>
+      <path d="M0,140 Q50,135 100,140 Q150,145 200,140 Q250,135 300,140 Q350,145 400,140 L400,160 L0,160 Z" fill="#FFE4B5" opacity="0.9"/>
     </svg>` },
-
   { id: 'snow', name: '雪山之巅', bg: 'linear-gradient(180deg, #1A2980 0%, #26D0CE 50%, #F0F8FF 80%, #FFFFFF 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 月亮 -->
-      <circle cx="70" cy="45" r="22" fill="#F5F0FF"/>
-      <circle cx="62" cy="40" r="5" fill="#D8D0E6"/>
-      <circle cx="76" cy="52" r="3" fill="#D8D0E6"/>
-      <!-- 远山 -->
-      <polygon points="0,180 80,80 160,150 230,60 310,140 400,90 400,200 0,200" fill="#BFC9CA" opacity="0.6"/>
-      <!-- 主山 -->
       <polygon points="0,180 120,100 220,180" fill="#E8E8E8"/>
-      <polygon points="120,100 140,130 100,130" fill="#FFFFFF"/>
       <polygon points="180,180 280,120 380,180" fill="#E8E8E8"/>
-      <polygon points="280,120 300,150 260,150" fill="#FFFFFF"/>
-      <!-- 小松树 -->
-      <polygon points="20,180 30,160 40,180" fill="#27AE60"/>
-      <rect x="28" y="175" width="4" height="6" fill="#8B4513"/>
-      <polygon points="370,180 378,162 386,180" fill="#27AE60"/>
-      <rect x="376" y="175" width="4" height="6" fill="#8B4513"/>
-    </svg>
-    <div class="snow-particles">
-      <span></span><span></span><span></span><span></span><span></span>
-      <span></span><span></span><span></span><span></span><span></span>
-    </div>` },
-
+    </svg>` },
   { id: 'candy', name: '糖果王国', bg: 'linear-gradient(135deg, #FFB6C1 0%, #FFD1DC 30%, #E6E6FA 60%, #FFE4B5 100%)', extra: `
-    <svg class="scene-svg rainbow" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 彩虹 -->
+    <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
       <path d="M50,130 Q200,-10 350,130" fill="none" stroke="#FF6B6B" stroke-width="10" stroke-linecap="round"/>
       <path d="M60,138 Q200,0 340,138" fill="none" stroke="#FFD93D" stroke-width="10" stroke-linecap="round"/>
       <path d="M70,146 Q200,10 330,146" fill="none" stroke="#6BCB77" stroke-width="10" stroke-linecap="round"/>
       <path d="M80,154 Q200,20 320,154" fill="none" stroke="#4DA6FF" stroke-width="10" stroke-linecap="round"/>
       <path d="M90,162 Q200,30 310,162" fill="none" stroke="#9B59B6" stroke-width="10" stroke-linecap="round"/>
-      <!-- 地面 -->
-      <rect x="0" y="165" width="400" height="35" fill="#FFD1DC"/>
-      <!-- 棒棒糖 -->
-      <circle cx="70" cy="175" r="14" fill="#FF6B8A" stroke="#2D1F1A" stroke-width="2"/>
-      <circle cx="70" cy="175" r="14" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
-      <line x1="70" y1="189" x2="70" y2="200" stroke="#8B4513" stroke-width="3"/>
-      <circle cx="330" cy="180" r="12" fill="#4DA6FF" stroke="#2D1F1A" stroke-width="2"/>
-      <line x1="330" y1="192" x2="330" y2="200" stroke="#8B4513" stroke-width="3"/>
-      <!-- 糖果 -->
-      <circle cx="180" cy="185" r="10" fill="#FFD700"/>
-      <polygon points="170,185 160,175 160,195" fill="#FFD700"/>
-      <polygon points="190,185 200,175 200,195" fill="#FFD700"/>
-      <circle cx="250" cy="188" r="8" fill="#9B59B6"/>
-      <polygon points="242,188 234,180 234,196" fill="#9B59B6"/>
-      <polygon points="258,188 266,180 266,196" fill="#9B59B6"/>
-      <!-- 星星点缀 -->
-      <text x="100" y="50" font-size="18" fill="#FFD700">✦</text>
-      <text x="280" y="70" font-size="14" fill="#FF6B8A">✦</text>
-      <text x="180" y="40" font-size="16" fill="#9B59B6">✦</text>
     </svg>` },
-
   { id: 'space', name: '太空乐园', bg: 'linear-gradient(180deg, #0F0F3C 0%, #2D1B5E 40%, #4A235A 70%, #1A1A4A 100%)', extra: `
     <svg class="scene-svg" viewBox="0 0 400 200" preserveAspectRatio="none">
-      <!-- 星星 -->
-      <g fill="#FFFFFF" class="star-field">
-        <circle cx="30" cy="40" r="1.8" class="st"/><circle cx="80" cy="70" r="1.2" class="st"/><circle cx="150" cy="30" r="2.2" class="st"/>
-        <circle cx="220" cy="80" r="1.5" class="st"/><circle cx="290" cy="50" r="1.8" class="st"/><circle cx="360" cy="30" r="1.2" class="st"/>
-        <circle cx="50" cy="120" r="1.2" class="st"/><circle cx="180" cy="140" r="2" class="st"/><circle cx="340" cy="110" r="1.6" class="st"/>
-        <circle cx="100" cy="170" r="1.2" class="st"/><circle cx="270" cy="180" r="1.5" class="st"/>
-        <circle cx="390" cy="160" r="1.8" class="st"/><circle cx="15" cy="150" r="1.4" class="st"/><circle cx="395" cy="100" r="1" class="st"/>
-      </g>
-      <!-- 月亮 -->
       <circle cx="340" cy="55" r="22" fill="#F5F0FF"/>
-      <circle cx="333" cy="48" r="5" fill="#D8D0E6"/>
-      <circle cx="348" cy="62" r="4" fill="#D8D0E6"/>
-      <circle cx="340" cy="68" r="3" fill="#D8D0E6"/>
-      <!-- 行星 -->
       <circle cx="80" cy="100" r="16" fill="#E74C3C"/>
-      <ellipse cx="80" cy="100" rx="22" ry="4" fill="none" stroke="#F39C12" stroke-width="2"/>
-      <!-- 小流星 -->
-      <line x1="120" y1="20" x2="170" y2="50" stroke="#FFFFFF" stroke-width="1.5"/>
-      <circle cx="168" cy="48" r="2" fill="#FFD700"/>
+      <ellipse cx="80" cy="100" rx="28" ry="6" fill="none" stroke="#F39C12" stroke-width="2.5"/>
     </svg>` },
 ];
 
 export function sceneOf(id) { return SCENES.find((s) => s.id === id) || SCENES[0]; }
+
+/**
+ * 每只动物的 CSS 关节变量表（用于 pet.css 里的变量覆盖）
+ * 给 pet-card.species 类设置这些变量即可
+ */
+export const SPECIES_VARS = {
+  cat: {
+    '--fur': '#F9A94E', '--fur-dark': '#E4862C', '--belly': '#FFF3DF', '--pink': '#FF9AA8',
+    '--ink': '#3B2A20', '--line': '#2D1F1A',
+    '--hip-x': '100px', '--hip-y': '172px',
+    '--neck-x': '100px', '--neck-y': '104px',
+    '--tail-x': '136px', '--tail-y': '152px',
+    '--ear-l-x': '85px', '--ear-l-y': '46px',
+    '--ear-r-x': '115px', '--ear-r-y': '46px',
+    '--t-breathe': '2.4s', '--t-nod': '3.2s', '--t-sway': '1.9s', '--t-twitch': '2.6s', '--delay': '0s',
+  },
+  dog: {
+    '--fur': '#E8C27A', '--fur-dark': '#C89554', '--belly': '#FFF5E6', '--pink': '#FFB6C1',
+    '--ink': '#2D1F1A', '--line': '#2D1F1A', '--muzzle': '#F5D89F',
+    '--hip-x': '100px', '--hip-y': '172px',
+    '--neck-x': '100px', '--neck-y': '102px',
+    '--tail-x': '138px', '--tail-y': '142px',
+    '--ear-l-x': '72px', '--ear-l-y': '72px',
+    '--ear-r-x': '128px', '--ear-r-y': '72px',
+    '--t-breathe': '2.5s', '--t-nod': '3.4s', '--t-sway': '2.1s', '--t-twitch': '2.8s', '--delay': '0.15s',
+  },
+  rabbit: {
+    '--fur': '#FBF7F0', '--fur-dark': '#E7DED1', '--belly': '#FFFFFF', '--pink': '#FFA6B5',
+    '--ink': '#3B2A20', '--line': '#E2D9CB',
+    '--hip-x': '100px', '--hip-y': '172px',
+    '--neck-x': '100px', '--neck-y': '110px',
+    '--tail-x': '140px', '--tail-y': '150px',
+    '--ear-l-x': '90px', '--ear-l-y': '62px',
+    '--ear-r-x': '110px', '--ear-r-y': '62px',
+    '--t-breathe': '2.1s', '--t-nod': '3.0s', '--t-sway': '2.3s', '--t-twitch': '2.4s', '--delay': '0.35s',
+  },
+  panda: {
+    '--fur': '#FFFFFF', '--fur-dark': '#2D1F1A', '--belly': '#FFFFFF', '--pink': '#FFB6C1',
+    '--ink': '#2D1F1A', '--line': '#2D1F1A',
+    '--hip-x': '100px', '--hip-y': '172px',
+    '--neck-x': '100px', '--neck-y': '92px',
+    '--tail-x': '150px', '--tail-y': '140px',
+    '--ear-l-x': '70px', '--ear-l-y': '50px',
+    '--ear-r-x': '130px', '--ear-r-y': '50px',
+    '--t-breathe': '2.6s', '--t-nod': '3.6s', '--t-sway': '2.0s', '--t-twitch': '3.0s', '--delay': '0.5s',
+  },
+  chick: {
+    '--fur': '#FFE44D', '--fur-dark': '#E8C900', '--belly': '#FFF27A', '--pink': '#FFB6C1',
+    '--ink': '#2D1F1A', '--line': '#2D1F1A',
+    '--hip-x': '100px', '--hip-y': '170px',
+    '--neck-x': '100px', '--neck-y': '94px',
+    '--tail-x': '148px', '--tail-y': '140px',
+    '--ear-l-x': '100px', '--ear-l-y': '36px', '--ear-r-x': '100px', '--ear-r-y': '36px',
+    '--t-breathe': '1.8s', '--t-nod': '2.8s', '--t-sway': '1.6s', '--t-twitch': '2.2s', '--delay': '0.7s',
+  },
+  koala: {
+    '--fur': '#A8A29E', '--fur-dark': '#6B6663', '--belly': '#CFCBC6', '--pink': '#FFB6C1',
+    '--ink': '#2D1F1A', '--line': '#2D1F1A',
+    '--hip-x': '100px', '--hip-y': '172px',
+    '--neck-x': '100px', '--neck-y': '106px',
+    '--tail-x': '146px', '--tail-y': '142px',
+    '--ear-l-x': '65px', '--ear-l-y': '46px',
+    '--ear-r-x': '135px', '--ear-r-y': '46px',
+    '--t-breathe': '2.8s', '--t-nod': '3.8s', '--t-sway': '2.4s', '--t-twitch': '3.2s', '--delay': '0.9s',
+  },
+};

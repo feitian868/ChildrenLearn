@@ -1,3 +1,3 @@
-import { mountGame } from '../core/game-kit.js?v=20261028f';
+﻿import { mountGame } from '../core/game-kit.js';
 
 mountGame('english');

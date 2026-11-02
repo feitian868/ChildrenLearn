@@ -1,488 +1,182 @@
-/**
- * pet.css —— 宠物模块全部样式（升级 v2）
- *
- * 核心动画体系：
- *   空闲态（持续循环）：呼吸 / 眨眼 / 耳朵抽动 / 尾巴摇摆
- *   自发行为（每 5-15 秒随机一次）：打哈欠 / 歪头 / 舔爪子 / 蹦跶
- *   走动（每 10-25 秒）：从左走到右 / 转身 / 停下
- *   互动触发（一次性播放）：
- *     pet-feed    → 手递食物 + 张嘴大吃 + 舔嘴
- *     pet-touch   → 手抚摸 + 耳朵贴平 + 眯眼享受
- *     pet-play    → 跳起来 + 接球 + 星星爆炸
- *     pet-clean   → 泡泡覆盖 + 抖动 + 闪闪亮
- *
- * 所有动画走 CSS @keyframes，JS 只负责加 class 触发
- */
+/* ==========================================================================
+   pet.css —— 骨骼分层动画系统 v7
+   
+   铁律：
+   1. 所有动画只改 transform / opacity —— d/cx/cy/x/y/width/height 一律不碰
+   2. transform-box: view-box → transform-origin 直接写 SVG 坐标（所见即所得）
+   3. 6 只动物共用同一套 @keyframes，差异只在 CSS 变量
+   4. 父子嵌套天然带动：torso 动 → head 自动跟着动（因为 head 在 torso 里）
+   ========================================================================== */
 
-/* ============ 通用 ============ */
-.pet-svg { display: block; width: 100%; height: 100%; }
+/* ---------- 基础：所有可动部件 ---------- */
+[data-part] { transform-box: view-box; }
 
-/* ============================================================
-   基础层动画（空闲时持续循环）
-   ============================================================ */
+/* ---------- 待机动画（共用 keyframes）---------- */
+.rig    { animation: bob      var(--t-breathe, 2.4s) var(--delay, 0s) infinite ease-in-out; }
+.torso  { transform-origin: var(--hip-x, 100px) var(--hip-y, 172px);
+          animation: breathe  var(--t-breathe, 2.4s) var(--delay, 0s) infinite ease-in-out; }
+.head   { transform-origin: var(--neck-x, 100px) var(--neck-y, 104px);
+          animation: nod      var(--t-nod,     3.2s) var(--delay, 0s) infinite ease-in-out; }
+.tail   { transform-origin: var(--tail-x, 136px) var(--tail-y, 152px);
+          animation: sway     var(--t-sway,    1.9s) var(--delay, 0s) infinite ease-in-out; }
+.ear-l  { transform-origin: var(--ear-l-x, 85px) var(--ear-l-y, 46px);
+          animation: twitch   var(--t-twitch,  2.6s) var(--delay, 0s) infinite ease-in-out; }
+.ear-r  { transform-origin: var(--ear-r-x, 115px) var(--ear-r-y, 46px);
+          animation: twitch   var(--t-twitch,  2.6s) calc(var(--delay, 0s) + .18s) infinite ease-in-out; }
 
-/* 呼吸：身体轻微起伏 */
-@keyframes breathe {
-  0%, 100% { transform: scaleY(1) translateY(0); }
-  50%      { transform: scaleY(1.04) translateY(-1px); }
+/* ---- 共用 keyframes：6 只动物只有这一份 ---- */
+@keyframes breathe { /* 原点在脚底：scaleY 0.97 ↔ 1.03，踩地不飘 */
+  0%,100% { transform: scale(1,1); }
+  50%     { transform: scale(1.025,.965); }
 }
-.body-layer { animation: breathe 2.8s ease-in-out infinite; transform-origin: center bottom; }
-
-/* 眨眼：眼睛纵向压成一条线 */
-@keyframes blink {
-  0%, 88%, 100% { transform: scaleY(1); }
-  94%           { transform: scaleY(0.08); }
+@keyframes nod {     /* 点头 ±2.5°，原点在颈根 */
+  0%,100% { transform: rotate(-2.5deg); }
+  50%     { transform: rotate(2.5deg); }
 }
-.eye-left, .eye-right { animation: blink 4.5s infinite; transform-origin: center; }
-
-/* 耳朵抽动 */
-@keyframes earTwitch {
-  0%, 82%, 100% { transform: rotate(0deg); }
-  86%           { transform: rotate(-7deg); }
-  89%           { transform: rotate(0deg); }
-  92%           { transform: rotate(5deg); }
+@keyframes sway {    /* 尾巴/耳朵摆动 ±7°（尾巴）*/
+  0%,100% { transform: rotate(-7deg); }
+  50%     { transform: rotate(9deg); }
 }
-.ear-left  { animation: earTwitch 5.5s infinite; }
-.ear-right { animation: earTwitch 5.9s infinite; }
-
-/* 尾巴摇摆 */
-@keyframes tailWag {
-  0%, 100% { transform: rotate(-14deg); }
-  50%      { transform: rotate(22deg); }
+@keyframes twitch {  /* 耳朵抽搐：大部分时间不动，偶尔 -9→4 抖一下 */
+  0%,90%,100% { transform: rotate(0); }
+  93% { transform: rotate(-9deg); }
+  96% { transform: rotate(4deg); }
 }
-.tail-layer { animation: tailWag 1.2s ease-in-out infinite; }
-
-/* ============================================================
-   互动动画 —— 喂养 pet-feed
-   ============================================================ */
-
-/* 喂养时：手从上方落下 + 头张大嘴 + 舔嘴 */
-@keyframes feedOpenMouth {
-  0%, 100% { transform: scale(1); }
-  30%, 60% { transform: scale(1.08); }
-}
-.pet-feed .head-layer { animation: feedOpenMouth 0.4s ease-in-out 3; }
-
-.pet-feed .m-default { display: none !important; }
-.pet-feed .m-happy   { display: block !important; }
-
-/* 喂食手势：小手从上方落下 */
-@keyframes feedHandDown {
-  0%   { transform: translate(-50%, -120%) rotate(-20deg) scale(0.8); opacity: 0; }
-  30%  { opacity: 1; }
-  60%  { transform: translate(-50%, -30%) rotate(-10deg) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -140%) rotate(-20deg) scale(0.8); opacity: 0; }
-}
-.feed-hand {
-  position: absolute;
-  z-index: 20;
-  left: 50%;
-  top: 40%;
-  font-size: 48px;
-  animation: feedHandDown 1.2s ease-out forwards;
-  pointer-events: none;
+@keyframes bob {     /* 整体浮动 ±3px */
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-3px); }
 }
 
-/* 食物飞进来 */
-@keyframes foodFlyIn {
-  0%   { transform: translate(0, -60px) scale(0.5); opacity: 0; }
-  30%  { opacity: 1; }
-  60%  { transform: translate(0, 10px) scale(1); }
-  100% { transform: translate(0, -20px) scale(0.3); opacity: 0; }
+/* ---------- 交互动作：同样只复用已有部件，不重画几何 ---------- */
+.pet.act-pat   .head  { animation: patHead   .9s cubic-bezier(.34,1.56,.64,1); }
+.pet.act-pat   .torso { animation: patSquash .9s cubic-bezier(.34,1.56,.64,1); }
+.pet.act-pat   .ear-l { animation: patEarL  .9s cubic-bezier(.34,1.56,.64,1); }
+.pet.act-pat   .ear-r { animation: patEarR  .9s cubic-bezier(.34,1.56,.64,1); }
+.pet.act-feed  .head  { animation: feedHead 1.1s ease-in-out; }
+.pet.act-play  .rig   { animation: hop      .9s cubic-bezier(.34,1.56,.64,1); }
+.pet.act-clean .rig   { animation: shake    .8s ease-in-out; }
+
+/* 交互 keyframes：入场带回弹 cubic-bezier(.34,1.56,.64,1) */
+@keyframes patHead {
+  0%   { transform: rotate(0); }
+  25%  { transform: rotate(-11deg); }
+  55%  { transform: rotate(6deg); }
+  100% { transform: rotate(0); }
 }
-.food-fly {
-  position: absolute;
-  z-index: 19;
-  left: 50%;
-  top: 45%;
-  font-size: 42px;
-  animation: foodFlyIn 1.0s ease-out forwards;
-  pointer-events: none;
-  transform: translateX(-50%);
+@keyframes patSquash {
+  0%   { transform: scale(1,1); }
+  30%  { transform: scale(1.06,.92); }
+  62%  { transform: scale(.97,1.04); }
+  100% { transform: scale(1,1); }
 }
-
-/* ============================================================
-   互动动画 —— 抚摸 pet-touch
-   ============================================================ */
-
-/* 抚摸时：手左右划过 + 耳朵贴平 + 眯眼享受 */
-@keyframes pettingEyeSquint {
-  0%, 100% { transform: scaleY(1); }
-  25%, 75% { transform: scaleY(0.3); }
+@keyframes patEarL {
+  0%,100% { transform: rotate(0); }
+  40%     { transform: rotate(-18deg); }
 }
-.pet-touching .eye-shape { animation: pettingEyeSquint 1.0s ease-in-out 2; transform-origin: center; }
-
-.pet-touching .ear-left  { animation: earLieFlat 0.6s ease-in-out 2; }
-.pet-touching .ear-right { animation: earLieFlat 0.6s ease-in-out 2; }
-
-@keyframes earLieFlat {
-  0%   { transform: rotate(0deg); }
-  50%  { transform: rotate(-25deg); }
-  100% { transform: rotate(0deg); }
+@keyframes patEarR {
+  0%,100% { transform: rotate(0); }
+  40%     { transform: rotate(18deg); }
 }
-
-/* 抚摸手势：手左右扫过 */
-@keyframes petHandSweep {
-  0%   { left: 10%; opacity: 0; }
-  10%  { opacity: 1; }
-  90%  { opacity: 1; }
-  100% { left: 90%; opacity: 0; }
+@keyframes feedHead {
+  0%,100% { transform: rotate(0); }
+  20%,60% { transform: rotate(7deg) translateY(2px); }
+  40%,80% { transform: rotate(1deg); }
 }
-.pet-hand {
-  position: absolute;
-  z-index: 20;
-  top: 45%;
-  font-size: 52px;
-  animation: petHandSweep 1.5s ease-in-out forwards;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-
-/* ============================================================
-   互动动画 —— 玩耍 pet-play
-   ============================================================ */
-
-/* 玩耍时：跳起来接球 + 尾巴摇更快 */
-@keyframes playJump {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  15%      { transform: translateY(-30px) rotate(-5deg); }
-  35%      { transform: translateY(-50px) rotate(3deg); }
-  55%      { transform: translateY(-20px) rotate(-2deg); }
-  75%      { transform: translateY(-40px) rotate(5deg); }
-}
-.pet-play .head-layer { animation: playJump 1.4s ease-in-out; }
-.pet-play .tail-layer { animation: tailWag 0.4s ease-in-out infinite; }
-.pet-play .m-default { display: none !important; }
-.pet-play .m-happy   { display: block !important; }
-
-/* 球从右边飞来，到中间 */
-@keyframes ballFly {
-  0%   { right: -40px; top: 30%; opacity: 0; }
-  20%  { opacity: 1; }
-  60%  { right: 50%; top: 20%; opacity: 1; transform: translateX(50%); }
-  100% { right: 40%; top: 70%; opacity: 0; transform: translateX(50%); }
-}
-.play-ball {
-  position: absolute;
-  z-index: 20;
-  font-size: 36px;
-  animation: ballFly 1.4s ease-in forwards;
-  pointer-events: none;
-}
-
-/* ============================================================
-   互动动画 —— 清洁 pet-clean
-   ============================================================ */
-
-/* 清洁时：泡泡覆盖 + 抖掉 + 闪闪亮 */
-@keyframes cleanShake {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  20%      { transform: translateX(-4px) rotate(-2deg); }
-  40%      { transform: translateX(4px) rotate(2deg); }
-  60%      { transform: translateX(-4px) rotate(-2deg); }
-  80%      { transform: translateX(4px) rotate(2deg); }
-}
-.pet-clean .head-layer { animation: cleanShake 1.2s ease-in-out; }
-
-@keyframes cleanGlow {
-  0%   { box-shadow: 0 0 0 rgba(173, 216, 230, 0); }
-  50%  { box-shadow: 0 0 40px rgba(173, 216, 230, 0.8); }
-  100% { box-shadow: 0 0 0 rgba(173, 216, 230, 0); }
-}
-.pet-clean { animation: cleanGlow 1.5s ease-in-out; border-radius: 50%; }
-
-/* 肥皂泡泡 */
-@keyframes bubblePop {
-  0%   { transform: scale(0.3) translateY(0); opacity: 0; }
-  20%  { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { transform: scale(1.5) translateY(-20px); opacity: 0; }
-}
-.clean-bubble {
-  position: absolute;
-  z-index: 19;
-  font-size: 28px;
-  animation: bubblePop 1.6s ease-out forwards;
-  pointer-events: none;
-}
-
-/* ============================================================
-   情绪表情
-   ============================================================ */
-
-/* 难过 */
-.pet-sad .m-default { display: none !important; }
-.pet-sad .m-sad     { display: block !important; }
-.pet-sad .eye-shape { transform: scaleY(0.3) translateY(3px); }
-
-/* 开心 */
-.pet-happy .m-default { display: none !important; }
-.pet-happy .m-happy   { display: block !important; }
-.pet-happy .head-layer { animation: happyJump 0.8s ease-out; }
-.pet-happy .tail-layer { animation: tailWag 0.5s ease-in-out infinite; }
-
-@keyframes happyJump {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  25%      { transform: translateY(-18px) rotate(-3deg); }
-  50%      { transform: translateY(0) rotate(0deg); }
-  75%      { transform: translateY(-12px) rotate(3deg); }
-}
-
-/* ============================================================
-   自发行为 —— 打哈欠 / 歪头 / 舔爪子 / 蹦跶
-   JS 每隔 5-15s 随机触发一个 class
-   ============================================================ */
-
-/* 打哈欠：嘴张大 */
-@keyframes yawn {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.15); }
-}
-.pet-idle-yawn .m-default { display: none !important; }
-.pet-idle-yawn .m-happy   { display: block !important; animation: yawn 0.6s ease-in-out; }
-
-/* 歪头：头向左歪 */
-@keyframes headTilt {
-  0%, 100% { transform: rotate(0deg); }
-  50%      { transform: rotate(-15deg); }
-}
-.pet-idle-tilt .head-layer { animation: headTilt 1.2s ease-in-out; }
-
-/* 舔爪子：头下降 */
-@keyframes pawLick {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(12px) scaleY(0.95); }
-}
-.pet-idle-lick .head-layer { animation: pawLick 1.0s ease-in-out 2; }
-
-/* 蹦跶 */
 @keyframes hop {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-10px); }
+  0%   { transform: translateY(0) rotate(0); }
+  18%  { transform: translateY(2px) scale(1.05,.92); }
+  55%  { transform: translateY(-26px) rotate(-4deg); }
+  80%  { transform: translateY(0) scale(.96,1.05); }
+  100% { transform: translateY(0); }
 }
-.pet-idle-hop .head-layer { animation: hop 0.5s ease-in-out 3; }
-
-/* ============================================================
-   走路循环
-   ============================================================ */
-
-@keyframes walkBob {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-4px); }
-}
-.pet-walking .body-layer { animation: walkBob 0.5s ease-in-out infinite; }
-.pet-walking .head-layer { animation: walkBob 0.5s ease-in-out infinite; animation-delay: 0.1s; }
-.pet-walking .tail-layer { animation: tailWag 0.7s ease-in-out infinite; }
-
-/* 舞台容器：走路时 pet-wrap 的 transform 由 JS 控制 */
-.pet-wrap {
-  transition: left 2s ease-in-out, transform 2s ease-in-out;
-}
-.pet-wrap.walk-right { transform: translateX(200px) scaleX(1); }
-.pet-wrap.walk-left  { transform: translateX(-200px) scaleX(-1); }
-
-/* ============================================================
-   工作台小卡片（保持简洁）
-   ============================================================ */
-.pet-card { padding: 14px 16px; }
-.pet-card h3 { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
-.pet-card h3 .pet-name { font-size: 16px; }
-.pet-card h3 .pet-lv { font-size: 12px; color: var(--ink2); background: var(--bg-soft); padding: 2px 8px; border-radius: 10px; }
-
-.pet-stage {
-  height: 120px;
-  background: linear-gradient(180deg, #D6EAF8 0%, #A8E6CF 100%);
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  transition: transform .15s;
-}
-.pet-stage:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.1); }
-
-.pet-bars { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
-.pet-bars .bar-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-.pet-bars .bar-row .lbl { width: 38px; color: var(--ink2); }
-.pet-bars .bar-row .bar { flex: 1; height: 10px; background: #E8E8E8; border-radius: 5px; overflow: hidden; }
-.pet-bars .bar-row .fill { height: 100%; border-radius: 5px; transition: width .35s; }
-.pet-bars .bar-row.hunger .fill { background: linear-gradient(90deg, #FF6B6B, #FFD93D); }
-.pet-bars .bar-row.mood   .fill { background: linear-gradient(90deg, #6BCB77, #4DA6FF); }
-.pet-bars .bar-row.exp    .fill { background: linear-gradient(90deg, #9B59B6, #FF6B8A); }
-.pet-bars .bar-row .val { width: 26px; text-align: right; color: var(--ink2); }
-
-.pet-actions { margin-top: 10px; display: flex; gap: 6px; }
-.pet-actions .btn { flex: 1; padding: 6px 0; font-size: 13px; }
-
-/* ============================================================
-   宠物大舞台（pet.html）
-   ============================================================ */
-.pet-page { min-height: 100vh; background: #FAFAFA; display: flex; flex-direction: column; }
-
-.pet-arena {
-  position: relative;
-  flex: 1;
-  min-height: 420px;
-  overflow: hidden;
-  transition: background .5s;
-}
-.pet-arena .scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
-
-/* 宠物大舞台上的 pet-wrap —— JS 动态设置 left / transition */
-.pet-wrap {
-  position: absolute;
-  bottom: 12%;
-  width: 220px;
-  height: 220px;
-  z-index: 5;
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  will-change: transform, left;
+@keyframes shake {
+  0%,100% { transform: rotate(0); }
+  20%     { transform: rotate(-7deg); }
+  45%     { transform: rotate(6deg); }
+  70%     { transform: rotate(-3deg); }
 }
 
-/* 大舞台装饰定位 */
-.pet-wrap [data-deco="red-bow"],
-.pet-wrap [data-deco="crown"],
-.pet-wrap [data-deco="xmas-hat"] { transform: translateY(-40px); }
-.pet-wrap [data-deco="scarf"],
-.pet-wrap [data-deco="collar"],
-.pet-wrap [data-deco="tie"] { transform: translateY(-15px); }
-.pet-wrap [data-deco="sunglass"] { transform: translateY(-4px); }
-.pet-wrap [data-deco="wings"] { transform: translateY(-10px); }
+/* ---------- 表情（通过切换 mouth-layer 里子元素的 display）---------- */
+.mouth-layer .m-default { display: block; }
+.mouth-layer .m-happy   { display: none; }
+.mouth-layer .m-sad     { display: none; }
+.mouth-layer .m-sleep   { display: none; }
 
-/* 粒子效果（爱心/星星） */
-.particle {
-  position: absolute;
-  pointer-events: none;
-  font-size: 28px;
-  z-index: 25;
-  animation: particleFloat 1.2s ease-out forwards;
-}
-@keyframes particleFloat {
-  0%   { opacity: 1; transform: translate(-50%, 0) scale(0.5); }
-  30%  { transform: translate(-50%, -30px) scale(1.2); }
-  100% { opacity: 0; transform: translate(-50%, -100px) scale(0.8); }
-}
+.pet.pet-happy .mouth-layer .m-default { display: none; }
+.pet.pet-happy .mouth-layer .m-happy   { display: block; }
+.pet.pet-sad   .mouth-layer .m-default { display: none; }
+.pet.pet-sad   .mouth-layer .m-sad     { display: block; }
+.pet.pet-sleep .mouth-layer .m-default { display: none; }
+.pet.pet-sleep .mouth-layer .m-sleep   { display: block; }
 
-/* ============ 底部 Tab 栏 ============ */
-.pet-tabs { display: flex; background: white; border-top: 1px solid #E8E8E8; box-shadow: 0 -2px 12px rgba(0,0,0,.05); }
-.pet-tabs .tab { flex: 1; padding: 14px 0; text-align: center; font-size: 14px; color: var(--ink2); cursor: pointer; border: none; background: none; transition: color .2s, background .2s; }
-.pet-tabs .tab:hover { background: #F5F5F5; }
-.pet-tabs .tab.active { color: #4DA6FF; font-weight: 600; border-top: 3px solid #4DA6FF; }
-
-/* ============ Tab 面板 ============ */
-.pet-panel { padding: 18px; background: white; max-height: 45vh; overflow-y: auto; }
-.pet-panel h3 { font-size: 15px; margin-bottom: 10px; color: var(--ink1); }
-
-.panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; }
-
-.panel-item { display: flex; flex-direction: column; align-items: center; padding: 10px 6px; border: 2px solid transparent; border-radius: 10px; cursor: pointer; transition: transform .15s, border-color .15s; background: #FAFAFA; }
-.panel-item:hover { transform: translateY(-2px); }
-.panel-item.can-buy { border-color: #4DA6FF; background: #EBF5FF; }
-.panel-item.owned { border-color: #4CAF50; background: #F0FFF0; }
-.panel-item.equipped { border-color: #FFD700; background: #FFFEF0; }
-.panel-item.disabled { opacity: 0.5; cursor: not-allowed; }
-
-.panel-item .emoji { font-size: 30px; margin-bottom: 4px; }
-.panel-item .name { font-size: 12px; color: var(--ink1); text-align: center; }
-.panel-item .price { font-size: 11px; color: var(--ink2); margin-top: 2px; }
-.panel-item .count { font-size: 11px; color: #4CAF50; margin-top: 2px; }
-
-/* ============ 首次领养弹窗 ============ */
-.adopt-modal .sheet { max-width: 600px; }
-.adopt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
-.adopt-card { border: 3px solid transparent; border-radius: 14px; padding: 10px; cursor: pointer; background: #FAFAFA; transition: border-color .2s, transform .15s; text-align: center; }
-.adopt-card:hover { transform: translateY(-3px); }
-.adopt-card.selected { border-color: #4DA6FF; background: #EBF5FF; }
-.adopt-card .pet-svg { width: 100px; height: 100px; margin: 0 auto; }
-.adopt-card .species-name { font-size: 14px; margin-top: 4px; color: var(--ink1); }
-
-.adopt-name-input { width: 100%; padding: 10px 12px; font-size: 15px; border: 2px solid #E0E0E0; border-radius: 8px; margin-bottom: 8px; box-sizing: border-box; }
-.adopt-name-input:focus { outline: none; border-color: #4DA6FF; }
-
-/* ============ 乐园场景动效 ============ */
-
-/* 花园花 */
-@keyframes sway {
-  0%, 100% { transform: rotate(-4deg); }
-  50%      { transform: rotate(4deg); }
-}
-.flower { animation: sway 3s ease-in-out infinite; transform-origin: bottom center; }
-.flower:nth-child(2) { animation-delay: -1s; }
-.flower:nth-child(3) { animation-delay: -2s; }
-
-/* 花园蝴蝶 */
-@keyframes flutter {
-  0%   { transform: translate(0, 0); }
-  25%  { transform: translate(30px, -20px); }
-  50%  { transform: translate(60px, 10px); }
-  75%  { transform: translate(30px, 30px); }
-  100% { transform: translate(0, 0); }
-}
-.butterfly { animation: flutter 8s ease-in-out infinite; font-size: 16px; }
-
-/* 花园云朵 */
-@keyframes cloudDrift {
-  0%   { transform: translateX(-30px); }
-  100% { transform: translateX(30px); }
-}
-.cloud { animation: cloudDrift 20s linear infinite; opacity: 0.8; }
-
-/* 海浪 */
-@keyframes waveMove {
-  0%, 100% { transform: translateX(0); }
-  50%      { transform: translateX(-15px); }
+/* ---------- 场景/阴影/粒子（场景相关，保留）---------- */
+.pet-stage { position: relative; height: 260px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 20px; }
+.pet-bg    { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
+.pet-bg svg.scene-svg { width: 100%; height: 100%; display: block; }
+.pet-shadow { position: absolute; bottom: 28px; left: 50%; width: 140px; height: 18px; margin-left: -70px;
+              border-radius: 50%; background: rgba(28,40,54,.14);
+              animation: shadowPulse var(--t-breathe, 2.4s) var(--delay, 0s) infinite ease-in-out; }
+@keyframes shadowPulse {
+  0%,100% { transform: scale(1); opacity:.9; }
+  50%     { transform: scale(.94); opacity:.75; }
 }
 
-/* 雪花 */
-.snow-particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
-.snow-particles span { position: absolute; top: -10px; font-size: 14px; color: white; opacity: 0.9; animation: snowfall linear infinite; }
-.snow-particles span:nth-child(1) { left: 10%;  animation-duration: 8s;  animation-delay: 0s; }
-.snow-particles span:nth-child(2) { left: 25%;  animation-duration: 10s; animation-delay: -2s; }
-.snow-particles span:nth-child(3) { left: 40%;  animation-duration: 7s;  animation-delay: -4s; }
-.snow-particles span:nth-child(4) { left: 55%;  animation-duration: 11s; animation-delay: -1s; }
-.snow-particles span:nth-child(5) { left: 70%;  animation-duration: 9s;  animation-delay: -3s; }
-.snow-particles span:nth-child(6) { left: 85%;  animation-duration: 8s;  animation-delay: -5s; }
-.snow-particles span:nth-child(7) { left: 15%;  animation-duration: 12s; animation-delay: -6s; }
-.snow-particles span:nth-child(8) { left: 48%;  animation-duration: 6s;  animation-delay: -2s; }
-.snow-particles span:nth-child(9) { left: 78%;  animation-duration: 10s; animation-delay: -7s; }
-.snow-particles span:nth-child(10){ left: 92%;  animation-duration: 9s;  animation-delay: -4s; }
-@keyframes snowfall {
-  0%   { transform: translateY(0) translateX(0); opacity: 0; }
-  10%  { opacity: 0.9; }
-  100% { transform: translateY(440px) translateX(20px); opacity: 0; }
+svg.pet { width: 230px; height: 230px; overflow: visible; display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,.06)); }
+
+/* 粒子/表情浮动 */
+.fx { position: absolute; font-size: 18px; pointer-events: none; animation: floatUp 1s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes floatUp {
+  0%   { transform: translate(-50%,0) scale(.6); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(-50%,-52px) scale(1.1); opacity: 0; }
 }
 
-/* 星星闪烁 */
-@keyframes starTwinkle {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.3; }
+/* ---------- 兼容性：老的 class 名别让 pet.js 崩 ---------- */
+.body-layer, .head-layer, .tail-layer { display: contents; }
+
+/* ---------- debug：禁用动画（自检用：关掉动画后静态造型必须完整）---------- */
+.no-anim, .no-anim * { animation: none !important; transition: none !important; }
+/* 兜底：pet-stage / pet-card 也可能加 no-anim，svg.pet 单独命中也够 */
+svg.pet.no-anim * { animation: none !important; transition: none !important; }
+
+/* ---------- 调试：关节点红点（运行时动态注入，默认隐藏）---------- */
+.joint-layer circle { pointer-events: none; }
+.joint-layer text   { pointer-events: none; font-family: monospace; }
+
+/* ---------- 6 只动物各自的 CSS 变量覆盖 ---------- */
+.pet-card.cat    {
+  --fur:#F9A94E; --fur-dark:#E4862C; --belly:#FFF3DF; --pink:#FF9AA8; --ink:#3B2A20; --line:#2D1F1A;
+  --hip-x:100px; --hip-y:172px; --neck-x:100px; --neck-y:104px;
+  --tail-x:136px; --tail-y:152px; --ear-l-x:85px; --ear-l-y:46px; --ear-r-x:115px; --ear-r-y:46px;
+  --t-breathe:2.4s; --t-nod:3.2s; --t-sway:1.9s; --t-twitch:2.6s; --delay:0s;
 }
-.star-field .st { animation: starTwinkle 2.5s ease-in-out infinite; }
-.star-field .st:nth-child(odd)  { animation-delay: -0.8s; }
-.star-field .st:nth-child(3n)   { animation-delay: -1.5s; }
-
-/* 彩虹色带轻微浮动 */
-@keyframes rainbowGlow {
-  0%, 100% { filter: brightness(1); }
-  50%      { filter: brightness(1.15); }
+.pet-card.dog    {
+  --fur:#E8C27A; --fur-dark:#C89554; --belly:#FFF5E6; --pink:#FFB6C1; --ink:#2D1F1A; --line:#2D1F1A; --muzzle:#F5D89F;
+  --hip-x:100px; --hip-y:172px; --neck-x:100px; --neck-y:102px;
+  --tail-x:138px; --tail-y:142px; --ear-l-x:72px; --ear-l-y:72px; --ear-r-x:128px; --ear-r-y:72px;
+  --t-breathe:2.5s; --t-nod:3.4s; --t-sway:2.1s; --t-twitch:2.8s; --delay:.15s;
 }
-.rainbow { animation: rainbowGlow 4s ease-in-out infinite; }
-
-/* ============ 等级进度 ============ */
-.pet-level-bar { background: #E8E8E8; height: 12px; border-radius: 6px; overflow: hidden; margin: 6px 0; }
-.pet-level-bar .fill { height: 100%; background: linear-gradient(90deg, #9B59B6, #FF6B8A); border-radius: 6px; transition: width .5s; }
-
-/* ============ 我的 Tab ============ */
-.pet-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.pet-stat-box { background: #FAFAFA; border-radius: 10px; padding: 12px; text-align: center; }
-.pet-stat-box .num { font-size: 22px; font-weight: 700; color: #4DA6FF; }
-.pet-stat-box .lbl { font-size: 12px; color: var(--ink2); margin-top: 2px; }
-
-/* ============ 响应式 ============ */
-@media (max-width: 480px) {
-  .pet-arena { min-height: 360px; }
-  .pet-wrap { width: 160px; height: 160px; }
-  .adopt-grid { grid-template-columns: repeat(2, 1fr); }
-  .panel-grid { grid-template-columns: repeat(3, 1fr); }
+.pet-card.rabbit {
+  --fur:#FBF7F0; --fur-dark:#E7DED1; --belly:#FFFFFF; --pink:#FFA6B5; --ink:#3B2A20; --line:#E2D9CB;
+  --hip-x:100px; --hip-y:172px; --neck-x:100px; --neck-y:110px;
+  --tail-x:140px; --tail-y:150px; --ear-l-x:90px; --ear-l-y:62px; --ear-r-x:110px; --ear-r-y:62px;
+  --t-breathe:2.1s; --t-nod:3.0s; --t-sway:2.3s; --t-twitch:2.4s; --delay:.35s;
+}
+.pet-card.panda  {
+  --fur:#FFFFFF; --fur-dark:#2D1F1A; --belly:#FFFFFF; --pink:#FFB6C1; --ink:#2D1F1A; --line:#2D1F1A;
+  --hip-x:100px; --hip-y:172px; --neck-x:100px; --neck-y:92px;
+  --tail-x:150px; --tail-y:140px; --ear-l-x:70px; --ear-l-y:50px; --ear-r-x:130px; --ear-r-y:50px;
+  --t-breathe:2.6s; --t-nod:3.6s; --t-sway:2.0s; --t-twitch:3.0s; --delay:.5s;
+}
+.pet-card.chick  {
+  --fur:#FFE44D; --fur-dark:#E8C900; --belly:#FFF27A; --pink:#FFB6C1; --ink:#2D1F1A; --line:#2D1F1A;
+  --hip-x:100px; --hip-y:170px; --neck-x:100px; --neck-y:94px;
+  --tail-x:148px; --tail-y:140px; --ear-l-x:100px; --ear-l-y:36px; --ear-r-x:100px; --ear-r-y:36px;
+  --t-breathe:1.8s; --t-nod:2.8s; --t-sway:1.6s; --t-twitch:2.2s; --delay:.7s;
+}
+.pet-card.koala  {
+  --fur:#A8A29E; --fur-dark:#6B6663; --belly:#CFCBC6; --pink:#FFB6C1; --ink:#2D1F1A; --line:#2D1F1A;
+  --hip-x:100px; --hip-y:172px; --neck-x:100px; --neck-y:106px;
+  --tail-x:146px; --tail-y:142px; --ear-l-x:65px; --ear-l-y:46px; --ear-r-x:135px; --ear-r-y:46px;
+  --t-breathe:2.8s; --t-nod:3.8s; --t-sway:2.4s; --t-twitch:3.2s; --delay:.9s;
 }

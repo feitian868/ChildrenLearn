@@ -1,4 +1,4 @@
-/**
+﻿/**
  * speaking-content.js —— 英语口语跟读内容库
  *   WORD_BANK     单词（含中文释义与最低年级）
  *   DIALOGUE_BANK 情景对话（2~3 轮，A/B 角色）

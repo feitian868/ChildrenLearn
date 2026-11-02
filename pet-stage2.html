@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>阶段 2 · 猫 · 骨骼关节（有 transform-origin，仍无动画）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#EEF3F8;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#2C3542}
+  .wrap{max-width:560px;margin:0 auto;padding:24px 20px 48px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12.5px;line-height:1.8;color:#6B7684;margin:0 0 14px}
+  .card{background:#fff;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(30,45,61,.12)}
+  .stage{position:relative;height:320px;border-radius:14px;overflow:hidden}
+  svg.pet{width:100%;height:100%;display:block}
+  /* ---------- 阶段 2：骨骼关节 ---------- */
+  svg.pet .torso      { transform-box: view-box; transform-origin: var(--hip-x) var(--hip-y); }
+  svg.pet .head       { transform-box: view-box; transform-origin: var(--neck-x) var(--neck-y); }
+  svg.pet .tail       { transform-box: view-box; transform-origin: var(--tail-x) var(--tail-y); }
+  svg.pet .ear-l      { transform-box: view-box; transform-origin: var(--ear-l-x) var(--ear-l-y); }
+  svg.pet .ear-r      { transform-box: view-box; transform-origin: var(--ear-r-x) var(--ear-r-y); }
+  svg.pet .foreleg-l  { transform-box: view-box; transform-origin: var(--arm-x) var(--arm-y); }
+  svg.pet .foreleg-r  { transform-box: view-box; transform-origin: var(--arm-r-x) var(--arm-r-y); }
+  svg.pet .hindleg-l  { transform-box: view-box; transform-origin: var(--hindleg-l-x) var(--hindleg-l-y); }
+  svg.pet .hindleg-r  { transform-box: view-box; transform-origin: var(--hindleg-r-x) var(--hindleg-r-y); }
+  /* 红点层（叠加在 svg 根上，不受 rig 变换影响，位置永远读真实关节坐标） */
+  .joint-dot { pointer-events:none; }
+  .dot-r { fill:#E74C3C; } .dot-o { fill:#F39C12; } .dot-b { fill:#2C7BE5; }
+  .dot-g { fill:#27AE60; } .dot-p { fill:#8E44AD; } .dot-k { fill:#1B2A38; }
+  .joint-label { font-size:6.5px; fill:#1B2A38; opacity:.75; }
+  #report{background:#fff;border-radius:14px;padding:14px 16px;margin-top:14px;
+          font-size:12.5px;line-height:1.85;color:#33404F;box-shadow:0 4px 14px rgba(30,45,61,.06);
+          white-space:pre-wrap;font-family:Consolas,monospace}
+  .ok{color:#1E8E4E;font-weight:700}
+  .bad{color:#C0392B;font-weight:700}
+  .warn{color:#B26A00;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>阶段 2 · 猫 · 骨骼关节</h1>
+  <p class="sub">
+    本页只有一只猫，已给所有关节设 transform-box:view-box + transform-origin 变量。<br>
+    仍<b>零动画</b>。关节表在下方，红点直接落在解剖标志点上。<br>
+    对照 stage1.html 可逐处 diff。其余五只继续零改动。
+  </p>
+  <div class="card pet-card cat">
+    <div class="stage"><div id="mount"></div></div>
+  </div>
+  <pre id="report">测量中…</pre>
+</div>
+
+<script>
+/* ============================================================================
+   阶段 2：猫 · 骨骼关节（相对阶段 1 的三处修正）
+     ① hindleg-l/r 父级从 rig 改为 torso（跟随后者呼吸）
+     ② hindleg 依据修正：大腿椭圆 rx=11.5 ry=21 的圆心 (66,146)，不是后脚掌
+     ③ 颈关节"向下 26px"（y 轴向下增大），数值 100 无误
+     镜像嵌套顺序：动画类在外层，<g transform="translate(200,0) scale(-1,1)"> 只包内层内容
+   ============================================================================ */
+
+const mirror = s => `<g transform="translate(200,0) scale(-1,1)">${s}</g>`;
+const armPath = (sx,sy, ex,ey, wx,wy, w1,w2) =>
+  `M${sx-w1/2},${sy} Q${ex-w1*0.62},${ey} ${wx-w2/2},${wy} `+
+  `Q${wx},${wy+w2*0.80} ${wx+w2/2},${wy} Q${ex+w1*0.46},${ey} ${sx+w1/2},${sy} `+
+  `Q${sx},${sy-w1*0.52} ${sx-w1/2},${sy} Z`;
+const armAt = (sx,sy,ex,ey,wx,wy,w1,w2) =>
+  `<path data-w1="${w1}" data-w2="${w2}" data-sx="${sx}" data-sy="${sy}" data-part="forearm" `+
+  `d="${armPath(sx,sy,ex,ey,wx,wy,w1,w2)}" fill="var(--limb)" stroke="var(--outline)" stroke-width="2" stroke-linejoin="round"/>`+
+  `<path d="M${sx-w1/2+2.6},${sy+9} Q${ex-w1*0.48},${ey} ${wx-w2/2+2},${wy-5}" fill="none" `+
+  `stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".2"/>`;
+const hindFoot = (cx, cy, halfW, halfH) =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${halfW}" ry="${halfH}" fill="var(--foot)" stroke="var(--outline)" stroke-width="2"/>`+
+  `<circle cx="${cx-5}" cy="${cy-3}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx}" cy="${cy-4}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx+5}" cy="${cy-3}" r="2.1" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<ellipse cx="${cx}" cy="${cy+1.5}" rx="6" ry="3.6" fill="var(--pink)" opacity=".6"/>`;
+
+const CAT = {
+  key:'cat', name:'猫', emoji:'🐱',
+  vars:{
+    /* 条纹保持 #8E97A3 不动 —— 你实测 1.61:1 已 ≥1.5 ✓
+       --fur-dark 被条纹/后腿/尾巴三处引用，单独改条纹需 --stripe 变量，阶段 5 再说 */
+    '--fur':'#B9C0C9','--fur-dark':'#8E97A3','--fur-light':'#DCE1E7','--belly':'#F7F9FB',
+    '--pink':'#FF9AA8','--ink':'#3B2A20','--foot':'#E8ECF1','--limb':'#CFD5DC',
+    '--outline':'#55606E',                              /* 方案 C 描边 */
+    /* —— 阶段 2 新增：关节变量（全部是 transform-origin 声明值）—— */
+    '--hip-x':'100px','--hip-y':'176px',                /* torso 呼吸原点 = 地面线中心 */
+    '--neck-x':'100px','--neck-y':'100px',              /* 颈关节 = 头底 − 8px（头圆心 cy=74 向下 26px，y 向下增大） */
+    '--tail-x':'138px','--tail-y':'150px',              /* 尾巴 path 起点直接读 */
+    '--ear-l-x':'74px','--ear-l-y':'54px',              /* 左耳 path 顶点直接读 */
+    '--ear-r-x':'126px','--ear-r-y':'54px',             /* mirror(200−74=126) */
+    '--arm-x':'82px','--arm-y':'96px',                  /* armPath 首点 = 肩顶 */
+    '--arm-r-x':'118px','--arm-r-y':'96px',             /* mirror(200−82=118) */
+    '--hindleg-l-x':'66px','--hindleg-l-y':'146px',     /* 大腿椭圆 (rx=11.5 ry=21) 圆心，不是后脚掌 */
+    '--hindleg-r-x':'134px','--hindleg-r-y':'146px'     /* mirror(200−66=134) */
+  },
+  tail:
+    '<path d="M138,150 C158,157 176,143 172,123 C169,109 155,107 150,117" fill="none" '+
+    'stroke="var(--fur-dark)" stroke-width="15" stroke-linecap="round"/>'+
+    '<path d="M139,150 C155,155 168,144 166,130" fill="none" stroke="var(--fur-light)" stroke-width="4" stroke-linecap="round" opacity=".55"/>',
+  arm: armAt(82,96, 70,128, 80,165, 14,10),
+  paw:
+    '<ellipse cx="80" cy="170" rx="8.5" ry="6.8" fill="var(--limb)" stroke="var(--outline)" stroke-width="2"/>'+
+    '<circle cx="72" cy="167" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="80" cy="166" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="88" cy="167" r="2.6" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<ellipse cx="80" cy="172.5" rx="5" ry="3.4" fill="var(--pink)" opacity=".65"/>',
+  body:
+    '<path data-part="body" d="M100,88 C123,88 136,113 137,141 C137,164 121,175 100,175 C79,175 63,164 63,141 C64,113 77,88 100,88 Z" fill="var(--fur)"/>'+
+    '<path d="M71,118 l7,-4 M69,130 l8,-3 M72,142 l7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>'+
+    '<path d="M129,118 l-7,-4 M131,130 l-8,-3 M128,142 l-7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>',
+  belly:'<ellipse data-part="belly" cx="100" cy="146" rx="19" ry="19" fill="var(--belly)"/>',
+  /* 后腿：父级在 torso 内，跟随后者呼吸（阶段 2 修正 ①）
+     hindleg-l/r 的 transform-origin 见 CSS 规则，这里不再内联 style */
+  hindL:
+    '<ellipse data-part="hindleg-l" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>',
+  hindR: mirror(
+    '<ellipse data-part="hindleg-r" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>'),
+  hindFeet: hindFoot(66,169, 10.5,6.5) + hindFoot(134,169, 10.5,6.5),
+  earL:
+    '<path d="M74,54 C66,40 62,26 63,18 C73,27 84,34 92,41 Z" fill="var(--fur)"/>'+
+    '<path d="M76,50 C70,38 67,29 68,24 C74,30 81,35 87,40 Z" fill="var(--pink)" opacity=".9"/>',
+  head:
+    '<circle cx="100" cy="74" r="34" fill="var(--fur)"/>'+
+    '<ellipse cx="86" cy="60" rx="12" ry="7" fill="#fff" opacity=".16" transform="rotate(-18 86 60)"/>'+
+    '<path d="M94,45l2,11M100,43v12M106,45l-2,11" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>'+
+    '<ellipse cx="72" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<ellipse cx="128" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<path d="M96,87 Q100,84 104,87 Q100,93 96,87 Z" fill="#E8737A"/>'+
+    '<path d="M100,93 Q95,99 90,95 M100,93 Q105,99 110,95" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>'+
+    '<path d="M68,84 L46,78 M68,90 L48,91 M132,84 L154,78 M132,90 L152,91" stroke="var(--fur-light)" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>',
+  eyes:
+    '<ellipse cx="86" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="84" cy="71" r="2.2" fill="#fff"/>'+
+    '<ellipse cx="114" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="112" cy="71" r="2.2" fill="#fff"/>'
+};
+
+/* ---- 组装 ----
+   关键：镜像嵌套顺序（规范 v4 第 1 条）——
+   动画类（ear-r / foreleg-r / hindleg-r 含 transform-origin）在【外层】，
+   <g transform="translate(200,0) scale(-1,1)"> 只包【内层内容】。
+   反过来写会在 transform-box:view-box 下让关节落到错误一侧（静态正常、一加旋转就炸）。 */
+function buildCat(p){
+  const style = Object.entries(p.vars).map(([k,v])=>`${k}:${v}`).join(';');
+  /* foreleg-l/r 结构：
+     <g class="foreleg foreleg-l" data-part="foreleg-l">  ← 动画类在外层，CSS 给它 transform-origin
+       ${arm + paw}                                         ← 内层内容，无镜像
+     </g>
+     <g class="foreleg foreleg-r" data-part="foreleg-r">  ← 动画类在外层
+       <g transform="translate(200,0) scale(-1,1)">         ← 镜像只包内容
+         ${arm + paw}
+       </g>
+     </g> */
+  const forelegL = `<g class="foreleg foreleg-l" data-part="foreleg-l">${p.arm}${p.paw}</g>`;
+  const forelegR = `<g class="foreleg foreleg-r" data-part="foreleg-r">${mirror(p.arm + p.paw)}</g>`;
+
+  /* ear-l/r 同理 */
+  const earL = `<g class="ear ear-l" data-part="ear-l">${p.earL}</g>`;
+  const earR = `<g class="ear ear-r" data-part="ear-r">${mirror(p.earL)}</g>`;
+
+  /* hindleg-l/r 在 torso 内（阶段 2 修正 ①） */
+  const hindlegL = `<g class="hindleg hindleg-l" data-part="hindleg-l">${p.hindL}</g>`;
+  const hindlegR = `<g class="hindleg hindleg-r" data-part="hindleg-r">${p.hindR}</g>`;
+
+  return `<svg class="pet" viewBox="0 0 200 200" style="${style}" aria-label="猫">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#87CEEB"/><stop offset=".55" stop-color="#B0E0A8"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8EDC92"/><stop offset="1" stop-color="#7ED957"/></linearGradient>
+    <radialGradient id="vig">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".26"/>
+      <stop offset=".62" stop-color="#FFFFFF" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g class="scene">
+    <rect width="200" height="200" fill="url(#sky)"/>
+    <ellipse cx="46" cy="38" rx="17" ry="10" fill="#fff" opacity=".92"/>
+    <ellipse cx="58" cy="34" rx="13" ry="12" fill="#fff" opacity=".92"/>
+    <ellipse cx="36" cy="41" rx="11" ry="7" fill="#fff" opacity=".92"/>
+    <path d="M0,140 Q50,110 100,130 Q150,145 200,125 L200,160 L0,160 Z" fill="#7BC87B" opacity=".5"/>
+    <path d="M0,144 Q50,132 100,138 T200,134 L200,200 L0,200 Z" fill="url(#grass)"/>
+    <path d="M4,176 H196" stroke="#4E9C5E" stroke-width="1" stroke-dasharray="4 4" opacity=".35"/>
+    <ellipse cx="100" cy="116" rx="74" ry="82" fill="url(#vig)"/>
+  </g>
+  <ellipse class="shadow" cx="100" cy="176" rx="42" ry="9" fill="#1B2A38" opacity=".18"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">${p.tail}</g>
+    <g class="torso" data-part="torso">
+      <g class="body-g">${p.body}</g>
+      ${p.belly}
+      ${hindlegL}
+      ${hindlegR}
+      ${p.hindFeet}
+      ${forelegL}
+      ${forelegR}
+      <g class="head" data-part="head">
+        ${earL}
+        ${earR}
+        ${p.head}
+        <g class="eyes" data-part="eyes">${p.eyes}</g>
+      </g>
+    </g>
+  </g>
+</svg>`;
+}
+document.getElementById('mount').innerHTML = buildCat(CAT);
+const _svg = document.querySelector('svg.pet');
+_svg.style.width = '100%'; _svg.style.height = '100%'; _svg.style.display = 'block';
+
+/* ============================================================================
+   红点验证：读 getComputedStyle().transformOrigin（真实生效值，不是声明值）
+   → 转换为 SVG 坐标，画在解剖标志点上。红点飘在空中 = transform-origin 错了。
+   ============================================================================ */
+const NS = 'http://www.w3.org/2000/svg';
+const JOINT_TABLE = [
+  { selector:'.torso',     label:'torso 呼吸',  color:'k', expect:[100,176], reason:'地面线中心，scaleY 不飘脚' },
+  { selector:'.head',      label:'head 颈关节', color:'b', expect:[100,100], reason:'头底−8px（头底y=108向下26px）' },
+  { selector:'.tail',      label:'tail 尾根',   color:'g', expect:[138,150], reason:'path M起点' },
+  { selector:'.ear-l',     label:'ear-l 耳根',  color:'p', expect:[74,54],    reason:'path M起点' },
+  { selector:'.ear-r',     label:'ear-r 耳根',  color:'p', expect:[126,54],   reason:'mirror(200−74)' },
+  { selector:'.foreleg-l', label:'foreleg-l 肩',color:'o', expect:[82,96],    reason:'armPath 首点' },
+  { selector:'.foreleg-r', label:'foreleg-r 肩',color:'o', expect:[118,96],   reason:'mirror(200−82)' },
+  { selector:'.hindleg-l', label:'hindleg-l 髋',color:'r', expect:[66,146],   reason:'大腿椭圆圆心' },
+  { selector:'.hindleg-r', label:'hindleg-r 髋',color:'r', expect:[134,146],  reason:'mirror(200−66)' }
+];
+/* 从声明值计算：parse "100px 176px" → [100, 176]。
+   注意：transform-box:view-box 下 transform-origin 的坐标系 = SVG viewBox 坐标系，
+   所以声明值 px 直接就是 SVG 坐标，不需要反推。 */
+function parseOrigin(decl){
+  if (!decl || decl === 'none' || decl.includes('center')) return [null,null];
+  const m = decl.match(/(-?\d*\.?\d+)(?:px)?\s+(-?\d*\.?\d+)(?:px)?/);
+  if (!m) return [null,null];
+  return [+m[1], +m[2]];
+}
+
+function drawJointDots(){
+  const svg = document.querySelector('svg.pet');
+  /* 清理旧红点层（只清我们自己画的） */
+  [...svg.querySelectorAll('[data-joint="dot"], [data-joint="label"]')].forEach(n=>n.remove());
+  JOINT_TABLE.forEach(j=>{
+    const el = svg.querySelector(j.selector);
+    if (!el) return;
+    const csOrigin = getComputedStyle(el).transformOrigin;   /* 真实生效值 */
+    const [ox, oy] = parseOrigin(csOrigin);
+
+    /* 红点 */
+    const dot = document.createElementNS(NS,'circle');
+    dot.setAttribute('cx', ox); dot.setAttribute('cy', oy);
+    dot.setAttribute('r', 2.4);
+    dot.setAttribute('class', 'joint-dot dot-'+j.color);
+    dot.setAttribute('data-joint', 'dot');
+    svg.appendChild(dot);
+
+    /* 标签：显示真实生效值 vs 期望 */
+    const lbl = document.createElementNS(NS,'text');
+    lbl.setAttribute('x', ox+4); lbl.setAttribute('y', oy-4);
+    lbl.setAttribute('class', 'joint-label');
+    const expectOk = (Math.abs(ox - j.expect[0]) < 0.5 && Math.abs(oy - j.expect[1]) < 0.5) ? '✓' :
+                     `✗(${ox},${oy})期望(${j.expect.join(',')})`;
+    lbl.textContent = `${j.label}: ${expectOk}`;
+    lbl.setAttribute('data-joint', 'label');
+    svg.appendChild(lbl);
+  });
+}
+drawJointDots();
+
+/* ============================================================================
+   安全上限（阶段 2 附加：每个关节 ±MAX 截图）
+   把报告面板的下半部分变成截图按钮，点按钮 → 把该关节临时设为 ±MAX，
+   页面会立即显示变形后的效果，然后用户可以自己看有没有穿出。
+   ============================================================================ */
+const SAFE_MAX = {
+  torso:  { rotate:0,  scaleYUp:1.05, scaleYDn:0.95 },  /* torso 不旋转，呼吸用 scaleY */
+  head:   { rotateMax:6 },
+  tail:   { rotateMax:18 },
+  'ear-l':{ rotateMax:10 },
+  'ear-r':{ rotateMax:10 },
+  'foreleg-l':{ rotateMax:12 },
+  'foreleg-r':{ rotateMax:12 },
+  'hindleg-l':{ rotateMax:8 },
+  'hindleg-r':{ rotateMax:8 }
+};
+function resetAllSafe(){
+  Object.keys(SAFE_MAX).forEach(k=>{
+    const el = document.querySelector('svg.pet .'+k);
+    if (el) el.style.transform = '';
+  });
+}
+function applySafe(k, sign){
+  resetAllSafe();
+  const cfg = SAFE_MAX[k];
+  const el = document.querySelector('svg.pet .'+k);
+  if (!el || !cfg) return;
+  if (cfg.rotateMax !== undefined){
+    const deg = sign * cfg.rotateMax;
+    el.style.transform = `rotate(${deg}deg)`;
+  } else if (cfg.scaleYUp !== undefined){
+    el.style.transform = sign > 0 ? `scaleY(${cfg.scaleYUp})` : `scaleY(${cfg.scaleYDn})`;
+  }
+}
+
+/* ============================================================================
+   报告：真实 transformOrigin 值 + 声明值对比 + 安全上限按钮
+   ============================================================================ */
+(function report(){
+  const lines = [];
+  lines.push('── 阶段 2 · 关节真实 transformOrigin 验证（读 getComputedStyle）──');
+  JOINT_TABLE.forEach(j=>{
+    const el = document.querySelector('svg.pet '+j.selector);
+    const csOrigin = getComputedStyle(el).transformOrigin;
+    const [ox, oy] = parseOrigin(csOrigin);
+    const okX = Math.abs(ox - j.expect[0]) < 0.5;
+    const okY = Math.abs(oy - j.expect[1]) < 0.5;
+    const cls = (okX && okY) ? 'ok' : 'bad';
+    lines.push(`<span class="${cls}">${j.label}: getComputed=(${ox},${oy})  声明期望=(${j.expect.join(',')})  ${(okX&&okY)?'✓':'✗ 偏差 '+Math.abs(ox-j.expect[0]).toFixed(1)+','+Math.abs(oy-j.expect[1]).toFixed(1)}</span>`);
+  });
+  lines.push('');
+  lines.push('── 安全上限（每个关节 ±MAX，点按钮后自己看有没有穿出躯干）──');
+  lines.push('<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">');
+  Object.keys(SAFE_MAX).forEach(k=>{
+    const cfg = SAFE_MAX[k];
+    if (cfg.rotateMax !== undefined){
+      lines.push(`<button onclick="applySafe('${k}',+1)">${k} +${cfg.rotateMax}°</button>`);
+      lines.push(`<button onclick="applySafe('${k}',-1)">${k} -${cfg.rotateMax}°</button>`);
+    } else {
+      lines.push(`<button onclick="applySafe('${k}',+1)">${k} scaleY↑</button>`);
+      lines.push(`<button onclick="applySafe('${k}',-1)">${k} scaleY↓</button>`);
+    }
+  });
+  lines.push(`<button onclick="resetAllSafe()" style="background:#E0E4EA">重置</button>`);
+  lines.push('</div>');
+  lines.push('');
+  lines.push('── 镜像嵌套自检 ──');
+  ['ear-r','foreleg-r','hindleg-r'].forEach(cls=>{
+    const el = document.querySelector('svg.pet .'+cls);
+    /* 正确：外层元素是带动画类的 <g class="...">，它的直接子元素才是 <g transform="translate(200..."> */
+    const mirrorChild = el && [...el.children].find(c => /translate\(200/.test(c.getAttribute('transform')||''));
+    const ok = el && mirrorChild && el !== mirrorChild;
+    lines.push(`<span class="${ok?'ok':'bad'}">${cls}: 动画类在外层 + 镜像只包内层 = ${ok?'✓':'✗'}</span>`);
+  });
+  document.getElementById('report').innerHTML = lines.join('\n');
+})();
+window.applySafe = applySafe;
+window.resetAllSafe = resetAllSafe;
+</script>
+</body>
+</html>

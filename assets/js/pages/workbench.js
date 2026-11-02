@@ -12,7 +12,7 @@ import {
   dayProgress,
   allSubjectsDone
 } from '../core/tasks.js';
-import { chestState, openChest } from '../core/chest.js?v=20261030a';
+import { chestState, openChest } from '../core/chest.js';
 import { shopState, redeemItem } from '../core/shop.js';
 import {
   stateOf as petStateOf,
@@ -20,11 +20,11 @@ import {
   feed as petFeed,
   addFood as petAddFood,
   LEVEL_THRESHOLDS,
-} from '../core/pet.js?v=20261031b';
+} from '../core/pet.js';
 import { markCelebrated } from '../core/score.js';
 import { celebrate, playerName } from '../core/fx.js';
-import { openMinigame } from '../core/minigames.js?v=20261030a';
-import { SONGS, SONG_MAP, playSong } from '../core/songs.js?v=20261030a';
+import { openMinigame } from '../core/minigames.js';
+import { SONGS, SONG_MAP, playSong } from '../core/songs.js';
 import {
   setSoundEnabled,
   isSoundEnabled,
@@ -1181,7 +1181,7 @@ function renderParent() {
 function maybeCelebrateDaily() {
   const data = store.load();
   const today = data.days[store.todayKey()];
-  if (!today || !today.allDoneBonus || today.celebrated) return;
+  if (!today || today.celebrated || !allSubjectsDone(today)) return;
   markCelebrated();
   celebrate({
     emoji: '🏆',

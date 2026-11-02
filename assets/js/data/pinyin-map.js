@@ -1,4 +1,4 @@
-/**
+﻿/**
  * pinyin-map.js —— 全量汉字拼音映射（pypinyin 生成）
  * 多音字修正：逐字查 PINYIN 前，先用 WORD_PINYIN_OVERRIDES 替换常见多音字词。
  */

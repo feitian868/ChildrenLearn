@@ -1,4 +1,4 @@
-/**
+﻿/**
  * pet.js —— 宠物乐园独立页（升级 v2）
  *
  * 动画体系：
@@ -14,20 +14,22 @@
 
 import * as store from '../core/store.js';
 import { el, clear, toast } from '../core/ui.js';
-import { sfxClick, sfxWin, unlockAudio,
+import { sfxClick, sfxWin, unlockAudio, speakCongrats,
   sfxPetPet, sfxPetEat, sfxPetPlay, sfxPetClean,
-  sfxPetLevelUp, sfxPetYawn, sfxPetWalk, sfxPetHappy, sfxPetSad, sfxPetUnlock
+  sfxPetLevelUp, sfxPetYawn, sfxPetWalk, sfxPetHappy, sfxPetSad, sfxPetUnlock,
+  sfxPetWhine, sfxPetNo, sfxPetPop, sfxPetSparkle, sfxPetChirp, sfxPetBite
 } from '../core/audio.js';
 import {
   stateOf, createPet, feed, touch, play, clean,
   equipDeco, unequipDeco, changeScene, changeNickname,
   LEVEL_THRESHOLDS,
-} from '../core/pet.js?v=20261031c';
+} from '../core/pet.js';
 import { SPECIES, SCENES } from '../data/pet-assets.js';
-import { PET_FOODS, PET_DECOS, PET_SCENES } from '../data/pet-shop.js';
+import { PET_FOODS, PET_DECOS, PET_SCENES, SPECIES_TRAITS, foodModifierFor } from '../data/pet-shop.js';
 
 const app = document.getElementById('pet-app');
 let currentTab = 'feed';
+let _greeted = false;
 
 // 全局定时器（render 时先清再重建，避免重影）
 let _behaviorTimers = [];
@@ -51,6 +53,12 @@ function render() {
   } else {
     app.append(renderArena(pet));
     scheduleIdleBehaviors(); // 大舞台渲染完后开启自发行为定时器
+    // 首次进入时让宠物用自己的声音打招呼
+    if (!_greeted) {
+      _greeted = true;
+      const trait = SPECIES_TRAITS[pet.species];
+      if (trait) speakCongrats(`${pet.nickname}说：${trait.voices.hi}`, 600);
+    }
   }
 }
 
@@ -111,8 +119,12 @@ function renderArena(pet) {
   const sceneWrap = el('div', { class: 'pet-arena', style: { background: pet.sceneData.bg } });
   sceneWrap.innerHTML = pet.sceneData.extra || '';
 
-  // 宠物：绝对定位 left 50%，JS 会改它让它"走"
-  const petWrap = el('div', { class: `pet-wrap ${pet.moodClass}`, style: { left: '50%', transform: 'translateX(-50%)' } });
+  // 宠物：绝对定位 left 50%，带成长缩放，从底部往上涨
+  const scale = pet.growthScale;
+  const petWrap = el('div', { class: `pet-wrap ${pet.moodClass}`, 'data-scale': scale, style: {
+    left: '50%', transform: `translateX(-50%) scale(${scale})`,
+    transformOrigin: '50% 100%', transition: 'transform .5s ease',
+  } });
   petWrap.innerHTML = pet.speciesSvg;
   // 点宠物 = 抚摸
   petWrap.addEventListener('click', () => triggerTouch(sceneWrap, petWrap));
@@ -159,17 +171,34 @@ function renderArena(pet) {
 // 一次性动画定时器（独立于 _behaviorTimers，因为互动后我们不想清）
 const _fxTimers = [];
 
-function resetPetAnim(petWrap) {
-  // 先清掉所有交互 class
-  petWrap.classList.remove('pet-feed', 'pet-touching', 'pet-play', 'pet-clean', 'pet-idle-yawn', 'pet-idle-tilt', 'pet-idle-lick', 'pet-idle-hop', 'pet-walking');
-  void petWrap.offsetWidth; // 强制 reflow 让 CSS 重放
+/** 找到 petWrap 里的 svg.pet，切 act-* class 触发骨骼动画 */
+function getPetSvg(petWrap) { return petWrap.querySelector('svg.pet'); }
+function actOn(petWrap, actClass) {
+  const svg = getPetSvg(petWrap);
+  if (!svg) return;
+  svg.classList.remove('act-pat','act-feed','act-play','act-clean');
+  void svg.offsetWidth;
+  svg.classList.add(actClass);
+  setTimeout(() => svg.classList.remove(actClass), 1600);
 }
 
-/** 喂养：手从上落 + 食物飞入 + 宠物张嘴吃 + 舔嘴 */
-function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪') {
+function resetPetAnim(petWrap) {
+  petWrap.classList.remove('pet-feed', 'pet-touching', 'pet-play', 'pet-clean', 'pet-idle-yawn', 'pet-idle-tilt', 'pet-idle-lick', 'pet-idle-hop', 'pet-walking');
+  actOn(petWrap, ''); // 清 svg.pet 的 act-*
+  const svg = getPetSvg(petWrap); if (svg) { svg.classList.remove('act-pat','act-feed','act-play','act-clean'); void svg.offsetWidth; }
+}
+
+/** 喂养：手从上落 + 食物飞入 + 宠物张嘴吃 + 舔嘴
+ *  preference: 'like' | 'normal' | 'hate' —— 影响粒子和音效反馈 */
+function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪', preference = 'normal') {
   resetPetAnim(petWrap);
+  actOn(petWrap, 'act-feed');
   sfxPetEat();
   petWrap.classList.add('pet-feed');
+
+  // 啃食声叠加（略晚一点，食物入口时）
+  setTimeout(() => sfxPetBite(), 400);
+  setTimeout(() => sfxPetBite(), 750);
 
   // 手从上方落下
   const hand = el('div', { class: 'feed-hand', text: '🤲' });
@@ -181,28 +210,53 @@ function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪') {
   sceneWrap.append(food);
   setTimeout(() => food.remove(), 1000);
 
-  // 冒爱心
-  spawnParticles(sceneWrap, '💖', 3);
+  // 根据偏好的差异化粒子和音效
+  if (preference === 'like') {
+    spawnParticles(sceneWrap, '💖', 5);              // 最爱：5颗爱心
+    setTimeout(() => sfxPetChirp(), 1200);           // 开心吱啾
+  } else if (preference === 'hate') {
+    spawnParticles(sceneWrap, '💔', 3);              // 讨厌：3颗碎心
+    setTimeout(() => sfxPetSad(), 1200);             // 低鸣不开心
+  } else {
+    spawnParticles(sceneWrap, '💖', 3);              // 一般：3颗爱心
+    if (Math.random() < 0.35) setTimeout(() => sfxPetChirp(), 1200);
+  }
 }
 
 /** 抚摸：手左右扫 + 宠物耳朵贴平 + 眯眼享受 */
 function triggerTouch(sceneWrap, petWrap) {
   resetPetAnim(petWrap);
+  actOn(petWrap, 'act-pat');
   sfxPetPet();
   petWrap.classList.add('pet-touching');
-  touch();
+  const r = touch();
 
   const hand = el('div', { class: 'pet-hand', text: '🤚' });
   sceneWrap.append(hand);
   setTimeout(() => hand.remove(), 1500);
 
   spawnParticles(sceneWrap, '💖', 2);
+
+  // 30% 概率享受得吱啾一声
+  if (Math.random() < 0.3) setTimeout(() => sfxPetChirp(), 900);
+
+  if (r.leveledUp) {
+    setTimeout(() => {
+      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
+      toast('🎉 升级啦！', 'ok');
+    }, 600);
+  }
 }
 
 /** 玩耍：球飞来 + 宠物跳起来接 + 星星爆炸 */
 function triggerPlay(sceneWrap, petWrap) {
   const r = play();
-  if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天玩过啦，明天再来' : r.reason, 'bad'); return; }
+  if (!r.ok) {
+    sfxPetNo();
+    toast(r.reason === 'daily-limit' ? '今天玩过啦，明天再来' : r.reason, 'bad');
+    return;
+  }
+  actOn(petWrap, 'act-play');
   sfxPetPlay();
   resetPetAnim(petWrap);
   petWrap.classList.add('pet-play');
@@ -212,12 +266,27 @@ function triggerPlay(sceneWrap, petWrap) {
   setTimeout(() => ball.remove(), 1400);
 
   spawnParticles(sceneWrap, '⭐', 6);
+
+  // 接到球后吱啾
+  setTimeout(() => sfxPetChirp(), 600);
+
+  if (r.leveledUp) {
+    setTimeout(() => {
+      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
+      toast('🎉 升级啦！', 'ok');
+    }, 900);
+  }
 }
 
 /** 清洁：泡泡覆盖 + 宠物抖动 + 闪闪发亮 */
 function triggerClean(sceneWrap, petWrap) {
   const r = clean();
-  if (!r.ok) { toast(r.reason === 'daily-limit' ? '今天清洁过啦' : r.reason, 'bad'); return; }
+  if (!r.ok) {
+    sfxPetNo();
+    toast(r.reason === 'daily-limit' ? '今天清洁过啦' : r.reason, 'bad');
+    return;
+  }
+  actOn(petWrap, 'act-clean');
   sfxPetClean();
   resetPetAnim(petWrap);
   petWrap.classList.add('pet-clean');
@@ -232,6 +301,17 @@ function triggerClean(sceneWrap, petWrap) {
     sceneWrap.append(b);
     setTimeout(() => b.remove(), 1800);
   }
+
+  // 清洁完亮一下 + 吱啾
+  setTimeout(() => sfxPetSparkle(), 1200);
+  setTimeout(() => sfxPetChirp(), 1600);
+
+  if (r.leveledUp) {
+    setTimeout(() => {
+      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
+      toast('🎉 升级啦！', 'ok');
+    }, 1400);
+  }
 }
 
 /* ============================================================
@@ -241,6 +321,20 @@ function scheduleIdleBehaviors() {
   const arena = document.querySelector('.pet-arena');
   const petWrap = document.querySelector('.pet-wrap');
   if (!arena || !petWrap) return;
+
+  // 心情差/饥饿时，偶尔发出撒娇/低鸣声（25-45s 一次）
+  if (petWrap.classList.contains('pet-sad')) {
+    const delay = 25000 + Math.random() * 20000;
+    const t = setTimeout(() => {
+      if (petWrap.classList.contains('pet-sad') &&
+          ![...petWrap.classList].some((c) => c.startsWith('pet-feed') || c.startsWith('pet-play') || c.startsWith('pet-clean') || c.startsWith('pet-touching'))) {
+        sfxPetSad();
+        setTimeout(() => sfxPetWhine(), 300);
+      }
+      // 一次性，render 时会重建
+    }, delay);
+    _behaviorTimers.push(t);
+  }
 
   // 1. 自发行为：每 6-14 秒随机做一个小动作
   const idleActions = ['yawn', 'tilt', 'lick', 'hop'];
@@ -296,8 +390,9 @@ function walkStep(arena, petWrap) {
   petWrap.classList.add('pet-walking');
   function next() {
     const pos = positions[idx % positions.length];
+    const s = petWrap.dataset.scale || 1;
     petWrap.style.left = pos.left;
-    petWrap.style.transform = `translateX(-50%) scaleX(${pos.scaleX})`;
+    petWrap.style.transform = `translateX(-50%) scale(${s}) scaleX(${pos.scaleX})`;
     idx++;
     if (idx <= 3) {
       setTimeout(next, 2500);
@@ -332,7 +427,7 @@ function renderBars(pet) {
 
 function barRow(icon, label, pct) {
   return el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' } }, [
-    el('span', { style: { width: '40px', fontSize: '13px' }, text: icon + ' ' + label }),
+    el('span', { style: { fontSize: '13px', whiteSpace: 'nowrap', minWidth: '52px' }, text: icon + ' ' + label }),
     el('div', { style: { flex: 1, height: '8px', background: '#eee', borderRadius: '4px', overflow: 'hidden' } }, [
       el('div', { style: { width: pct + '%', height: '100%', background: icon === '💚' ? 'linear-gradient(90deg,#6BCB77,#4DA6FF)' : 'linear-gradient(90deg,#FF6B6B,#FFD93D)', borderRadius: '4px', transition: 'width .35s' } }),
     ]),
@@ -350,29 +445,47 @@ function renderPanel(pet) {
   if (currentTab === 'feed') {
     panel.append(
       el('h3', { text: '🍪 宠物背包' }),
-      el('p', { style: { fontSize: '12px', color: 'var(--ink2)', marginBottom: '10px' }, text: '食物不够了？去商店积分兑换，或者开宝箱有概率送食物包！' }),
+      el('p', { style: { fontSize: '12px', color: 'var(--ink2)', marginBottom: '10px' }, text: '每种动物喜欢/讨厌的食物不一样哦！喂对了 +50% 效果，喂错了它会不开心～' }),
       el('div', { class: 'panel-grid' },
         PET_FOODS.map((f) => {
           const count = invFoods[f.id] || 0;
-          const box = el('div', { class: 'panel-item' + (count > 0 ? ' can-buy' : ' disabled'), title: `饥饿+${f.hunger} 心情+${f.mood}` }, [
+          const mod = foodModifierFor(f.id, pet.species);
+          // 预览修饰后的真实效果值
+          const hungerPreview = Math.round(f.hunger * mod.modifier);
+          const moodBonus = mod.tag === 'like' ? 15 : mod.tag === 'hate' ? -10 : 0;
+          const moodPreview = Math.round((f.mood + moodBonus) * mod.modifier);
+          // 偏好徽章
+          let prefBadge, prefStyle;
+          if (mod.tag === 'like') { prefBadge = '❤️最爱'; prefStyle = 'color:#ff4757;background:#ffe6e6;'; }
+          else if (mod.tag === 'hate') { prefBadge = '😣讨厌'; prefStyle = 'color:#888;background:#eee;'; }
+          else { prefBadge = '😐一般'; prefStyle = 'color:#aaa;background:#f5f5f5;'; }
+          const box = el('div', { class: 'panel-item' + (count > 0 ? ' can-buy' : ' disabled'), title: `${pet.nickname}吃了：饥饿+${hungerPreview} 心情${moodPreview >= 0 ? '+' : ''}${moodPreview}` }, [
             el('div', { class: 'emoji', text: f.emoji }),
             el('div', { class: 'name', text: f.name }),
+            el('div', { style: 'font-size:10px; padding:1px 6px; border-radius:8px; margin-top:2px; display:inline-block;' + prefStyle, text: prefBadge }),
+            el('div', { style: 'font-size:10px; color:var(--ink2); margin-top:2px;', text: `饥+${hungerPreview} 心${moodPreview >= 0 ? '+' : ''}${moodPreview}` }),
             count > 0 ? el('div', { class: 'count', text: `× ${count}` }) : el('div', { class: 'price', text: '背包里没有' }),
           ]);
           box.addEventListener('click', () => {
-            if (count <= 0) { toast('去商店兑换点食物吧～', 'bad'); return; }
+            if (count <= 0) { sfxPetNo(); toast('去商店兑换点食物吧～', 'bad'); return; }
             const res = feed(f.id);
             if (res.ok) {
-              toast(`吃饱啦！饥饿 +${f.hunger}`, 'ok');
-              // 触发喂养动画 + 音效（找当前舞台）
+              // toast 显示修饰后的真实数值 + 偏好提示
+              let extraMsg = '';
+              if (res.preference === 'like') extraMsg = ' 它超爱！';
+              else if (res.preference === 'hate') extraMsg = '（不太喜欢…）';
+              toast(`吃饱啦！饥饿 +${res.fed} 心情 ${res.moodUp >= 0 ? '+' : ''}${res.moodUp}${extraMsg}`, res.preference === 'hate' ? 'bad' : 'ok');
+              // 触发喂养动画 + 音效（带上偏好做差异化反馈）
               const arena = document.querySelector('.pet-arena');
               const pw = document.querySelector('.pet-wrap');
-              if (arena && pw) triggerFeed(arena, pw, f.emoji);
+              if (arena && pw) triggerFeed(arena, pw, f.emoji, res.preference);
               if (res.leveledUp) {
                 sfxPetLevelUp();
-                toast('🎉 升级啦！', 'ok');
+                sfxPetSparkle();
+                setTimeout(() => sfxPetHappy(), 400);
+                toast(`🎉 ${pet.nickname}升到 Lv.${stateOf()?.level ?? pet.level + 1} 啦！`, 'ok');
               }
-              setTimeout(() => render(), 1200); // 动画播完再刷新
+              setTimeout(() => render(), 1400); // 动画播完再刷新
             }
           });
           return box;
@@ -399,9 +512,9 @@ function renderPanel(pet) {
               : el('div', { class: 'price', text: `未解锁 (${d.cost}分)` }),
           ]);
           box.addEventListener('click', () => {
-            if (!owned) { toast('去商店解锁吧', 'bad'); return; }
+            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); return; }
             sfxClick();
-            if (wornHere) { unequipDeco(d.slot); toast('脱下了', 'ok'); }
+            if (wornHere) { unequipDeco(d.slot); sfxPetPop(); toast('脱下了', 'ok'); }
             else { equipDeco(d.id); sfxPetUnlock(); toast('穿上啦！', 'ok'); }
             render();
           });
@@ -428,9 +541,11 @@ function renderPanel(pet) {
               : (s.cost === 0 ? el('div', { class: 'price', text: '初始' }) : el('div', { class: 'price', text: `${s.cost} 积分` })),
           ]);
           box.addEventListener('click', () => {
-            if (!owned) { toast('去商店解锁吧', 'bad'); return; }
+            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); return; }
             if (cur) return;
-            sfxPetUnlock(); changeScene(s.id); render();
+            sfxPetUnlock(); changeScene(s.id);
+            setTimeout(() => sfxPetChirp(), 300);
+            render();
           });
           return box;
         })

@@ -4,15 +4,15 @@
  * 得分写入 days[今天].olympicEarned，成长记录会统计。
  */
 
-import * as store from '../core/store.js?v=20261028h';
-import { ensureToday } from '../core/tasks.js?v=20261028h';
-import { olympicSet } from '../data/knowledge-olympic.js?v=20261028h';
-import { GRADE_LABEL } from '../data/curriculum.js?v=20261028h';
-import { el, clear, toast } from '../core/ui.js?v=20261028h';
-import { celebrate } from '../core/fx.js?v=20261028h';
-import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js?v=20261028h';
-import { mulberry32, hashString } from '../core/rng.js?v=20261028h';
-import { pinyinize, needsPinyin } from '../data/pinyin-map.js?v=20261030a';
+import * as store from '../core/store.js';
+import { ensureToday } from '../core/tasks.js';
+import { olympicSet } from '../data/knowledge-olympic.js';
+import { GRADE_LABEL } from '../data/curriculum.js';
+import { el, clear, toast } from '../core/ui.js';
+import { celebrate } from '../core/fx.js';
+import { sfxClick, sfxCorrect, sfxWrong, unlockAudio } from '../core/audio.js';
+import { mulberry32, hashString } from '../core/rng.js';
+import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
 
 const BASE_CAP = 5;
 const OVER_CAP = 8;   // 四科全完成后的上限

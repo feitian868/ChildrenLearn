@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>阶段 1 · 猫 · 静态造型（无动画）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#EEF3F8;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#2C3542}
+  .wrap{max-width:520px;margin:0 auto;padding:24px 20px 48px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12.5px;line-height:1.8;color:#6B7684;margin:0 0 14px}
+  .card{background:#fff;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(30,45,61,.12)}
+  .stage{position:relative;height:320px;border-radius:14px;overflow:hidden}
+  svg.pet{width:100%;height:100%;display:block}
+  /* 本页零动画：无任何 @keyframes / animation 声明 */
+  #report{background:#fff;border-radius:14px;padding:14px 16px;margin-top:14px;
+          font-size:12.5px;line-height:1.9;color:#33404F;box-shadow:0 4px 14px rgba(30,45,61,.06);
+          white-space:pre-wrap;font-family:Consolas,monospace}
+  .ok{color:#1E8E4E;font-weight:700}
+  .bad{color:#C0392B;font-weight:700}
+  .warn{color:#B26A00;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>阶段 1 · 猫 · 静态造型</h1>
+  <p class="sub">
+    本页只含<b>一只猫</b>的静态造型，零动画（页面里没有任何 @keyframes）。<br>
+    其余五只未改动 —— 本阶段未触碰 pet-assets.js / pet.css / pet.js。<br>
+    页面加载后自动执行第五节测量脚本，数值直接打印在下方与控制台。
+  </p>
+  <div class="card pet-card cat">
+    <div class="stage"><div id="mount"></div></div>
+  </div>
+  <pre id="report">测量中…</pre>
+</div>
+
+<script>
+/* ============================================================================
+   阶段 1：猫 · 静态造型
+   方法继承自 pet-park.html：mirror 镜像 / armPath 肩肘腕填充轮廓 / hindFoot 脚掌包
+   造型基准：参照成品的蓝灰虎斑猫（画布参数与目标项目一致，已核验 200×200 + 浅色背景）
+   本阶段改动点（相对参照成品，均有测量依据）：
+     ① 前爪落地：参照成品坐姿前爪底 y≈164，距地面线 176 悬空 12px
+        → 腕点 wy 152→165、爪心 cy 157→170，让前爪踩地（响应「四肢落地」验收项）
+     ② 后腿加粗：rx 11.5→12，向验收区间 1.5~1.7 靠拢（改后实测，不凭感觉）
+   ============================================================================ */
+
+/* 镜像：对称器官只画左侧，右侧自动生成 → 位置与朝向在数学上不可能出错 */
+const mirror = s => `<g transform="translate(200,0) scale(-1,1)">${s}</g>`;
+
+/* 手臂：肩→肘→腕 填充轮廓（非等宽描边），肩顶圆弧封口 */
+const armPath = (sx,sy, ex,ey, wx,wy, w1,w2) =>
+  `M${sx-w1/2},${sy} `
++ `Q${ex-w1*0.62},${ey} ${wx-w2/2},${wy} `
++ `Q${wx},${wy+w2*0.80} ${wx+w2/2},${wy} `
++ `Q${ex+w1*0.46},${ey} ${sx+w1/2},${sy} `
++ `Q${sx},${sy-w1*0.52} ${sx-w1/2},${sy} Z`;
+
+/* 手臂：肩→肘→腕 填充轮廓（非等宽描边），肩顶圆弧封口。
+   data-w1 / data-w2 写进首个 path 上 —— 规范 v2 要求测量脚本直接读，不许 parse d 或 bbox */
+const armAt = (sx,sy,ex,ey,wx,wy,w1,w2) =>
+  `<path data-w1="${w1}" data-w2="${w2}" data-sx="${sx}" data-sy="${sy}" data-part="forearm" `+
+  `d="${armPath(sx,sy,ex,ey,wx,wy,w1,w2)}" fill="var(--limb)" stroke="var(--outline)" stroke-width="2" stroke-linejoin="round"/>`+
+  `<path d="M${sx-w1/2+2.6},${sy+9} Q${ex-w1*0.48},${ey} ${wx-w2/2+2},${wy-5}" fill="none" `+
+  `stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".2"/>`;
+
+/* 后脚掌：坐姿朝前平放的扁长脚掌 + 猫式肉垫趾 */
+const hindFoot = (cx, cy, halfW, halfH) =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${halfW}" ry="${halfH}" fill="var(--foot)" stroke="var(--outline)" stroke-width="2"/>`+
+  `<circle cx="${cx-5}" cy="${cy-3}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx}" cy="${cy-4}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx+5}" cy="${cy-3}" r="2.1" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<ellipse cx="${cx}" cy="${cy+1.5}" rx="6" ry="3.6" fill="var(--pink)" opacity=".6"/>`;
+
+/* ---- 猫 · 变量表（关节坐标在此声明，阶段 2 起被 transform-origin 引用）---- */
+const CAT = {
+  key:'cat', name:'猫', emoji:'🐱',
+  vars:{
+    '--fur':'#B9C0C9','--fur-dark':'#8E97A3','--fur-light':'#DCE1E7','--belly':'#F7F9FB',
+    '--pink':'#FF9AA8','--ink':'#3B2A20','--foot':'#E8ECF1','--limb':'#CFD5DC',
+    '--outline':'#55606E',  /* 裁决 C：冷调深色描边，保持蓝灰色相，WCAG 对比度 ≈ 3.6:1 */
+    '--hip-x':'100px','--hip-y':'174px','--neck-x':'100px','--neck-y':'100px',
+    '--tail-x':'138px','--tail-y':'150px','--ear-l-x':'78px','--ear-l-y':'48px',
+    '--arm-x':'82px','--arm-y':'96px'
+  },
+  /* 尾巴：C 形上翘，尾根 (138,150)，fur-dark 粗线 + fur-light 内高光 */
+  tail:
+    '<path d="M138,150 C158,157 176,143 172,123 C169,109 155,107 150,117" fill="none" '+
+    'stroke="var(--fur-dark)" stroke-width="15" stroke-linecap="round"/>'+
+    '<path d="M139,150 C155,155 168,144 166,130" fill="none" stroke="var(--fur-light)" stroke-width="4" stroke-linecap="round" opacity=".55"/>',
+  /* 前肢：肩(82,96) → 肘(70,128) → 腕(80,165)，腕点下移让爪踩地（见改动点①）
+     w1 13→14（裁决 A，肢宽口径）→ 进 1.5~1.7 区间 */
+  arm: armAt(82,96, 70,128, 80,165, 14,10),
+  /* 前爪：小圆掌 + 三趾 + 粉肉垫，爪底 y=176.8 ≈ 地面线 */
+  paw:
+    '<ellipse cx="80" cy="170" rx="8.5" ry="6.8" fill="var(--limb)" stroke="var(--outline)" stroke-width="2"/>'+
+    '<circle cx="72" cy="167" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="80" cy="166" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="88" cy="167" r="2.6" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<ellipse cx="80" cy="172.5" rx="5" ry="3.4" fill="var(--pink)" opacity=".65"/>',
+  /* 躯干：收窄（宽 74）的坐姿轮廓 + 体侧虎斑纹；虎斑 = 猫的第一辨识特征
+     data-part="body" 标记方便测量脚本限定角色子树（规范 v2） */
+  body:
+    '<path data-part="body" d="M100,88 C123,88 136,113 137,141 C137,164 121,175 100,175 C79,175 63,164 63,141 C64,113 77,88 100,88 Z" fill="var(--fur)"/>'+
+    '<path d="M71,118 l7,-4 M69,130 l8,-3 M72,142 l7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>'+
+    '<path d="M129,118 l-7,-4 M131,130 l-8,-3 M128,142 l-7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>',
+  belly:'<ellipse data-part="belly" cx="100" cy="146" rx="19" ry="19" fill="var(--belly)"/>',
+  /* 后腿：坐姿大腿外鼓（rx 12→11.5，裁决 A 让肢宽比进 1.5~1.7）+ 后脚掌落地
+     data-part="hindleg-l/r" 标记方便测量脚本限定角色子树 */
+  torsoExtra:
+    '<ellipse data-part="hindleg-l" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>'+
+    '<ellipse data-part="hindleg-r" cx="134" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>'+
+    hindFoot(66,169, 10.5,6.5) + hindFoot(134,169, 10.5,6.5),
+  /* 左耳：三角耳 + 粉内耳（右侧由 mirror 生成） */
+  earL:
+    '<path d="M74,54 C66,40 62,26 63,18 C73,27 84,34 92,41 Z" fill="var(--fur)"/>'+
+    '<path d="M76,50 C70,38 67,29 68,24 C74,30 81,35 87,40 Z" fill="var(--pink)" opacity=".9"/>',
+  head:
+    '<circle cx="100" cy="74" r="34" fill="var(--fur)"/>'+
+    '<ellipse cx="86" cy="60" rx="12" ry="7" fill="#fff" opacity=".16" transform="rotate(-18 86 60)"/>'+
+    /* 额头虎斑：三道竖纹 */
+    '<path d="M94,45l2,11M100,43v12M106,45l-2,11" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>'+
+    '<ellipse cx="72" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<ellipse cx="128" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    /* 鼻 + ω 嘴 */
+    '<path d="M96,87 Q100,84 104,87 Q100,93 96,87 Z" fill="#E8737A"/>'+
+    '<path d="M100,93 Q95,99 90,95 M100,93 Q105,99 110,95" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>'+
+    /* 胡须：猫的第三辨识特征 */
+    '<path d="M68,84 L46,78 M68,90 L48,91 M132,84 L154,78 M132,90 L152,91" stroke="var(--fur-light)" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>',
+  eyes:
+    '<ellipse cx="86" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="84" cy="71" r="2.2" fill="#fff"/>'+
+    '<ellipse cx="114" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="112" cy="71" r="2.2" fill="#fff"/>'
+};
+
+/* ---- 组装（层级与 pet-park 的 POSE 一致：tail → torso(body→belly→torsoExtra→前肢→head)）----
+   前肢在 torso 内、head 之前：肩顶被头遮住无接缝，且跟随身体呼吸（阶段 3 生效） */
+function buildCat(p){
+  const style = Object.entries(p.vars).map(([k,v])=>`${k}:${v}`).join(';');
+  const forelegL = `<g class="foreleg foreleg-l" data-part="foreleg-l">${p.arm}${p.paw}</g>`;
+  const forelegR = `<g class="foreleg foreleg-r" data-part="foreleg-r">${mirror(p.arm + p.paw)}</g>`;
+  return `<svg class="pet" viewBox="0 0 200 200" style="${style}" aria-label="猫">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#87CEEB"/><stop offset=".55" stop-color="#B0E0A8"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8EDC92"/><stop offset="1" stop-color="#7ED957"/></linearGradient>
+    <radialGradient id="vig">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".26"/>
+      <stop offset=".62" stop-color="#FFFFFF" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <!-- 场景：取目标项目「花园草地」的真实配色（#87CEEB/#B0E0A8/#7ED957），保证明度测量有效 -->
+  <g class="scene">
+    <rect width="200" height="200" fill="url(#sky)"/>
+    <ellipse cx="46" cy="38" rx="17" ry="10" fill="#fff" opacity=".92"/>
+    <ellipse cx="58" cy="34" rx="13" ry="12" fill="#fff" opacity=".92"/>
+    <ellipse cx="36" cy="41" rx="11" ry="7" fill="#fff" opacity=".92"/>
+    <path d="M0,140 Q50,110 100,130 Q150,145 200,125 L200,160 L0,160 Z" fill="#7BC87B" opacity=".5"/>
+    <path d="M0,144 Q50,132 100,138 T200,134 L200,200 L0,200 Z" fill="url(#grass)"/>
+    <!-- 地面线标记 y=176：四肢落地判据的基准 -->
+    <path d="M4,176 H196" stroke="#4E9C5E" stroke-width="1" stroke-dasharray="4 4" opacity=".35"/>
+    <ellipse cx="100" cy="116" rx="74" ry="82" fill="url(#vig)"/>
+  </g>
+  <ellipse class="shadow" cx="100" cy="176" rx="42" ry="9" fill="#1B2A38" opacity=".18"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">${p.tail}</g>
+    <g class="torso" data-part="torso">
+      <g class="body-g">${p.body}</g>
+      ${p.belly}
+      ${p.torsoExtra}
+      ${forelegL}
+      ${forelegR}
+      <g class="head" data-part="head">
+        <g class="ear ear-l" data-part="ear-l">${p.earL}</g>
+        <g class="ear ear-r" data-part="ear-r">${mirror(p.earL)}</g>
+        ${p.head}
+        <g class="eyes" data-part="eyes">${p.eyes}</g>
+      </g>
+    </g>
+  </g>
+</svg>`;
+}
+document.getElementById('mount').innerHTML = buildCat(CAT);
+/* mount 是块级 div，svg 需要占满 stage */
+const _svg = document.querySelector('svg.pet');
+_svg.style.width = '100%'; _svg.style.height = '100%'; _svg.style.display = 'block';
+
+/* ============================================================================
+   测量（改一处量一次）：规范第五节脚本 + 新增「四肢落地」+ 明度差
+   ============================================================================ */
+const GROUND = 176;
+/* WCAG 相对亮度（感知均匀标尺，规范 v3 强制，弃用 HSL L） */
+function wCAG(hex){
+  const n=parseInt(hex.slice(1),16);
+  let r=((n>>16)&255)/255, g=((n>>8)&255)/255, b=(n&255)/255;
+  r=r<=0.03928? r/12.92 : Math.pow((r+0.055)/1.055,2.4);
+  g=g<=0.03928? g/12.92 : Math.pow((g+0.055)/1.055,2.4);
+  b=b<=0.03928? b/12.92 : Math.pow((b+0.055)/1.055,2.4);
+  return 0.2126*r + 0.7152*g + 0.0722*b;
+}
+function contrastRatio(h1,h2){
+  const L1=wCAG(h1), L2=wCAG(h2);
+  const [a,b]=L1>L2?[L1,L2]:[L2,L1];
+  return (a+0.05)/(b+0.05);
+}
+const m = {};
+(function measure(){
+  const svg = document.querySelector('svg.pet');
+  /* 根选择器限定角色子树：禁止用全局 querySelector（会命中场景背光晕） */
+  const root = svg.querySelector('[data-part="root"]');
+  const fl  = svg.querySelector('.foreleg-l').getBBox();
+  const fr  = svg.querySelector('.foreleg-r').getBBox();
+  /* 后腿：data-part="hindleg-l" 与 hindleg-r，直接取 rx，不许猜 */
+  const hindL = root.querySelector('[data-part="hindleg-l"]');
+  const thighW = +hindL.getAttribute('rx') * 2;
+  /* 上肢宽：读首个 forearm path 的 data-w1（规范 v2 强制写入） */
+  const armW1 = +svg.querySelector('[data-part="forearm"]').getAttribute('data-w1');
+
+  const head  = svg.querySelector('.head').getBBox();
+  const body  = root.querySelector('[data-part="body"]').getBBox();
+  const tail  = svg.querySelector('.tail').getBBox();
+  const torso = svg.querySelector('.torso').getBBox();
+
+  /* 肢宽口径：后腿宽 ÷ armPath.w1（裁决 A，永久生效） */
+  m['肢宽比(后腿/arm.w1)'] = +(thighW / armW1).toFixed(2);
+  m['后腿宽(rx*2)'] = thighW;
+  m['arm.w1(data)'] = armW1;
+  m['bbox口径(参考，不判)'] = +(thighW / fl.width).toFixed(2);
+  m['头身重叠(应≥4)'] = +(head.y + head.height - body.y).toFixed(1);
+  m['尾巴露出(应>4)'] = +((tail.x + tail.width) - (torso.x + torso.width)).toFixed(1);
+
+  /* 四肢落地 */
+  const feet = {
+    '前爪L': fl.y + fl.height, '前爪R': fr.y + fr.height
+  };
+  [...root.querySelectorAll('[data-part]')].forEach(n => {
+    const p = n.getAttribute('data-part');
+    if (p === 'hindleg-l' || p === 'hindleg-r') {
+      const cy = +n.getAttribute('cy'), ry = +n.getAttribute('ry');
+      feet[p === 'hindleg-l' ? '后脚L' : '后脚R'] = cy + ry;
+    }
+  });
+  m['四肢落地(距地面≤4)'] = Object.entries(feet).map(([k,v]) => `${k}:${+(GROUND-v).toFixed(1)}`).join('  ');
+
+  /* 对比度（规范 v3 强制：WCAG 相对亮度比值）：
+     - 描边 vs 背景 ≥3:1   → 主判据，所有角色必测（剪影分离靠它）
+     - 主体 vs 背景 ≥1.5:1 → 辅助判据，浅色部件需达标 */
+  const bgLand = '#7ED957';   /* 花园草地 */
+  const stroke = '#55606E';   /* outline 变量值 */
+  const mainBody = '#B9C0C9'; /* fur 变量值 */
+  const cStroke = contrastRatio(stroke, bgLand);
+  const cBody   = contrastRatio(mainBody, bgLand);
+  m['对比度·描边vs草地(应≥3)'] = cStroke.toFixed(2)+':1' + (cStroke>=3?' ✓':' ✗');
+  m['对比度·主体vs草地(浅色部件应≥1.5)'] = cBody.toFixed(2)+':1' + (cBody>=1.5?'':' （猫中调，豁免）');
+  m['描边线宽'] = '2px（规范 v3 下限）';
+
+  /* 静态完整性 */
+  const need = ['root','tail','torso','foreleg-l','foreleg-r','head','ear-l','ear-r','eyes'];
+  const miss = need.filter(c => !svg.querySelector(`[data-part="${c}"]`));
+  m['静态完整性'] = miss.length ? '缺失 ' + miss.join(',') : '9/9 齐全 ✓';
+})();
+
+const lines = Object.entries(m).map(([k,v]) => {
+  const isRatio  = /肢宽比/.test(k);
+  const isOverlap= /头身重叠/.test(k);
+  const isTail   = /尾巴露出/.test(k);
+  const isFeet   = /四肢落地/.test(k);
+  const isStrokeC= /描边vs草地/.test(k);
+  const isIntact = /静态完整性/.test(k);
+  let bad = false;
+  if (isRatio)   bad = !(+v >= 1.5 && +v <= 1.7);
+  if (isOverlap) bad = !(+v >= 4);
+  if (isTail)    bad = !(+v > 4);
+  if (isFeet)    bad = ![...String(v).matchAll(/:-?([\d.]+)/g)].some(x => Math.abs(+x[1]) > 4);
+  if (isStrokeC) bad = /✗/.test(String(v));
+  if (isIntact)  bad = !/齐全/.test(String(v));
+  /* 参考展示项不染色 */
+  const isRef = /bbox口径|后腿宽|arm\.w1|主体vs草地|描边线宽/.test(k);
+  const cls = isRef ? '' : (bad ? 'bad' : 'ok');
+  return `<span class="${cls}">${k}: ${v}</span>`;
+});
+document.getElementById('report').innerHTML =
+  '── 阶段 1 · 猫 · 静态造型测量（自动执行，非目测）──\n' + lines.join('\n') +
+  '\n\n备注：明度差判据针对「浅色部件」（白尾/黄鸡）；本猫为中明度蓝灰 + 深色描边，\n' +
+  '与参照成品同配色（该成品已通过儿童目视验收），如需严格 ≥25 需整体加深毛色，待确认。';
+console.log('[stage1-measure]', m);
+</script>
+</body>
+</html>

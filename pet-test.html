@@ -1,0 +1,237 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐾 宠物形象测试页</title>
+<link rel="stylesheet" href="assets/css/theme.css?v=20261102a">
+<link rel="stylesheet" href="assets/css/pet.css?v=20261102a">
+<style>
+  body { background: var(--bg); font-family: var(--font); margin: 0; padding: 16px; }
+  h1 { margin: 8px 0 14px; font-size: 20px; display: flex; gap: 10px; align-items: center; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .scene-btn {
+    padding: 8px 14px; border-radius: 12px; border: 2px solid var(--line);
+    background: white; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all .18s;
+  }
+  .scene-btn.active { background: var(--brand); color: white; border-color: var(--brand); }
+  .grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .card {
+    background: white; border-radius: var(--radius); box-shadow: var(--shadow-sm);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card-head {
+    padding: 10px 14px; display: flex; justify-content: space-between;
+    align-items: center; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px;
+  }
+  .card-head .species { font-size: 22px; }
+  .stage {
+    position: relative; height: 260px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;
+    cursor: pointer;
+  }
+  .stage svg.scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .mini-pet {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    width: 160px; height: 160px; z-index: 5;
+  }
+  .mini-pet svg { width: 100%; height: 100%; }
+  .hint { position: absolute; top: 8px; right: 10px; font-size: 10px; color: white; opacity: .8; background: rgba(0,0,0,.3); padding: 3px 6px; border-radius: 8px; }
+  .actions {
+    display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line);
+  }
+  .actions button {
+    flex: 1; padding: 8px 4px; border-radius: 10px; border: 2px solid var(--line);
+    background: var(--bg-2); cursor: pointer; font-size: 12px; font-weight: 600;
+    transition: all .15s;
+  }
+  .actions button:hover { background: var(--brand); color: white; border-color: var(--brand); }
+  .mood-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--brand); }
+
+  /* 让 pet-assets 里的 SVG 层在 mini size 也能跑动画 */
+  .mini-pet .body-layer { animation: breathe 3s ease-in-out infinite; transform-origin: 50% 92%; }
+  .mini-pet .head-layer { animation: breathe-head 3s ease-in-out infinite; transform-origin: 50% 42%; }
+  .mini-pet .tail-layer { animation: wag 1.4s ease-in-out infinite; transform-origin: 75% 70%; }
+  .mini-pet .ear-left, .mini-pet .ear-right { animation: ear-twitch 2.2s ease-in-out infinite; }
+  .mini-pet .eye-left, .mini-pet .eye-right { animation: blink 4s infinite; }
+
+  @keyframes breathe { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.04)} }
+  @keyframes breathe-head { 0%,100%{transform:scaleY(1) rotate(-1deg)} 50%{transform:scaleY(1.03) rotate(1deg)} }
+  @keyframes wag { 0%,100%{transform:rotate(-8deg)} 50%{transform:rotate(12deg)} }
+  @keyframes ear-twitch { 0%,90%,100%{transform:rotate(0)} 95%{transform:rotate(6deg)} }
+  @keyframes blink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
+  /* pet.css 里的互动动画也套一下 */
+  .mini-pet.pet-feed .head-layer { animation: feed-wobble .5s ease-in-out 2; }
+  .mini-pet.pet-play { animation: jump .7s ease-out 1; }
+  .mini-pet.pet-clean { animation: shake .4s ease-in-out 3; }
+  @keyframes feed-wobble { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-6deg)} 75%{transform:rotate(6deg)} }
+  @keyframes jump { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-40px)} }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  .mini-pet.pet-touching .eye-left, .mini-pet.pet-touching .eye-right { animation: squint 1s ease-out 2; }
+  @keyframes squint { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(0.3)} }
+
+  .controls { position: sticky; top: 0; background: var(--bg); padding: 12px 0; z-index: 10; }
+  .stats { font-size: 12px; color: var(--ink2); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>🐾 宠物形象测试页 <span class="mood-badge">共 6 种动物 × 6 种场景 = 36 组合</span></h1>
+
+  <div class="toolbar" id="sceneBar"></div>
+  <div class="toolbar" style="margin-top:4px">
+    <button class="scene-btn" onclick="autoAnim()">▶ 自动循环所有行为</button>
+    <button class="scene-btn" onclick="stopAuto()">⏹ 停止自动</button>
+    <button class="scene-btn" onclick="refreshAll()">🔄 刷新所有</button>
+    <button class="scene-btn" onclick="toggleSize()">🔍 放大/缩小</button>
+  </div>
+  <div class="stats">点击宠物或下方按钮触发互动动画 + WebAudio 音效（无文件依赖）。每个卡片独立。</div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script type="module">
+import { SPECIES, SCENES } from './assets/js/data/pet-assets.js?v=20261102a';
+import { unlockAudio, sfxPetPet, sfxPetEat, sfxPetPlay, sfxPetClean, sfxPetChirp } from './assets/js/core/audio.js?v=20261102a';
+
+unlockAudio();
+
+let currentScene = SCENES[0].id;
+let autoTimer = null;
+let bigMode = false;
+
+/* ---- 构建场景切换按钮 ---- */
+const sceneBar = document.getElementById('sceneBar');
+SCENES.forEach((s) => {
+  const b = document.createElement('button');
+  b.className = 'scene-btn' + (s.id === currentScene ? ' active' : '');
+  b.textContent = s.emoji + ' ' + s.name;
+  b.onclick = () => {
+    currentScene = s.id;
+    sceneBar.querySelectorAll('.scene-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    applySceneToAll();
+  };
+  sceneBar.appendChild(b);
+});
+
+/* ---- 构建 6 只动物卡片 ---- */
+const grid = document.getElementById('grid');
+const cards = [];
+
+SPECIES.forEach((sp) => {
+  const sceneDef = SCENES[0];
+  const card = document.createElement('div');
+  card.className = 'card';
+  const safeId = sp.id.replace(/'/g, "\\'");
+  card.innerHTML = `
+    <div class="card-head">
+      <span><span class="species">${sp.emoji}</span> ${sp.name}</span>
+      <span style="font-size:11px;color:var(--muted)">id: ${sp.id}</span>
+    </div>
+    <div class="stage" data-species="${sp.id}">
+      ${sceneDef.extra || ''}
+      <div class="mini-pet">${sp.svg}</div>
+      <div class="hint">点击动物互动</div>
+    </div>
+    <div class="actions">
+      <button onclick="trigger(this,'pet','${safeId}')">🤲 抚摸</button>
+      <button onclick="trigger(this,'feed','${safeId}')">🍪 喂养</button>
+      <button onclick="trigger(this,'play','${safeId}')">🎾 玩耍</button>
+      <button onclick="trigger(this,'clean','${safeId}')">🛁 清洁</button>
+    </div>
+  `;
+  grid.appendChild(card);
+  cards.push(card);
+});
+applySceneToAll();
+
+function applySceneToAll() {
+  const scene = SCENES.find((s) => s.id === currentScene) || SCENES[0];
+  cards.forEach((c) => {
+    const stage = c.querySelector('.stage');
+    stage.style.background = scene.bg;
+    // 清理旧场景 SVG
+    const oldSvg = stage.querySelector('.scene-svg');
+    if (oldSvg) oldSvg.remove();
+    if (scene.extra) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = scene.extra;
+      tmp.querySelectorAll('.scene-svg').forEach((svg) => stage.insertBefore(svg, stage.firstChild));
+    }
+  });
+}
+
+/* ---- 互动触发 ---- */
+window.trigger = function(btn, kind, speciesId) {
+  const card = btn.closest('.card');
+  const petEl = card.querySelector('.mini-pet');
+  resetAnim(petEl);
+  if (kind === 'pet') { sfxPetPet(); petEl.classList.add('pet-touching'); sfxPetChirp(); }
+  if (kind === 'feed') { sfxPetEat(); petEl.classList.add('pet-feed'); }
+  if (kind === 'play') { sfxPetPlay(); petEl.classList.add('pet-play'); setTimeout(sfxPetChirp, 600); }
+  if (kind === 'clean') { sfxPetClean(); petEl.classList.add('pet-clean'); }
+  setTimeout(() => resetAnim(petEl), 1500);
+};
+
+// 点击舞台 = 抚摸
+document.querySelectorAll('.stage').forEach((stage) => {
+  stage.addEventListener('click', (e) => {
+    if (e.target.closest('.actions')) return;
+    const petEl = stage.querySelector('.mini-pet');
+    resetAnim(petEl);
+    sfxPetPet();
+    petEl.classList.add('pet-touching');
+    if (Math.random() < 0.4) setTimeout(sfxPetChirp, 800);
+    setTimeout(() => resetAnim(petEl), 1500);
+  });
+});
+
+function resetAnim(el) {
+  el.classList.remove('pet-feed','pet-play','pet-clean','pet-touching');
+  void el.offsetWidth;
+}
+
+/* ---- 自动循环 ---- */
+window.autoAnim = function() {
+  if (autoTimer) return;
+  const kinds = ['pet','feed','play','clean'];
+  const next = () => {
+    // 随机选一张卡片 + 随机一种互动
+    const card = cards[Math.floor(Math.random() * cards.length)];
+    const petEl = card.querySelector('.mini-pet');
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    resetAnim(petEl);
+    if (kind === 'pet') { sfxPetPet(); petEl.classList.add('pet-touching'); }
+    if (kind === 'feed') { sfxPetEat(); petEl.classList.add('pet-feed'); }
+    if (kind === 'play') { sfxPetPlay(); petEl.classList.add('pet-play'); }
+    if (kind === 'clean') { sfxPetClean(); petEl.classList.add('pet-clean'); }
+    setTimeout(() => resetAnim(petEl), 1500);
+    autoTimer = setTimeout(next, 2200 + Math.random() * 1500);
+  };
+  next();
+};
+
+window.stopAuto = function() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+};
+
+window.refreshAll = function() {
+  location.reload();
+};
+
+window.toggleSize = function() {
+  bigMode = !bigMode;
+  cards.forEach((c) => {
+    const stage = c.querySelector('.stage');
+    if (bigMode) stage.style.height = '340px';
+    else stage.style.height = '260px';
+  });
+};
+</script>
+</body>
+</html>

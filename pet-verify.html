@@ -1,0 +1,429 @@
+﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🐾 宠物形象测试页</title>
+<link rel="stylesheet" href="assets/css/theme.css?v=20261102a">
+<link rel="stylesheet" href="assets/css/pet.css?v=20261102a">
+<style>
+  body { background: var(--bg); font-family: var(--font); margin: 0; padding: 16px; }
+  h1 { margin: 8px 0 14px; font-size: 20px; display: flex; gap: 10px; align-items: center; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .scene-btn {
+    padding: 8px 14px; border-radius: 12px; border: 2px solid var(--line);
+    background: white; cursor: pointer; font-size: 13px; font-weight: 600;
+    transition: all .18s;
+  }
+  .scene-btn.active { background: var(--brand); color: white; border-color: var(--brand); }
+  .grid {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  .card {
+    background: white; border-radius: var(--radius); box-shadow: var(--shadow-sm);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .card-head {
+    padding: 10px 14px; display: flex; justify-content: space-between;
+    align-items: center; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px;
+  }
+  .card-head .species { font-size: 22px; }
+  .stage {
+    position: relative; height: 260px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;
+    cursor: pointer;
+  }
+  .stage svg.scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .mini-pet {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    width: 160px; height: 160px; z-index: 5;
+  }
+  .mini-pet svg { width: 100%; height: 100%; }
+  .hint { position: absolute; top: 8px; right: 10px; font-size: 10px; color: white; opacity: .8; background: rgba(0,0,0,.3); padding: 3px 6px; border-radius: 8px; }
+  .actions {
+    display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--line);
+  }
+  .actions button {
+    flex: 1; padding: 8px 4px; border-radius: 10px; border: 2px solid var(--line);
+    background: var(--bg-2); cursor: pointer; font-size: 12px; font-weight: 600;
+    transition: all .15s;
+  }
+  .actions button:hover { background: var(--brand); color: white; border-color: var(--brand); }
+  .mood-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--brand); }
+
+  /* 让 pet-assets 里的 SVG 层在 mini size 也能跑动画 */
+  .mini-pet .body-layer { animation: breathe 3s ease-in-out infinite; transform-origin: 50% 92%; }
+  .mini-pet .head-layer { animation: breathe-head 3s ease-in-out infinite; transform-origin: 50% 42%; }
+  .mini-pet .tail-layer { animation: wag 1.4s ease-in-out infinite; transform-origin: 75% 70%; }
+  .mini-pet .ear-left, .mini-pet .ear-right { animation: ear-twitch 2.2s ease-in-out infinite; }
+  .mini-pet .eye-left, .mini-pet .eye-right { animation: blink 4s infinite; }
+
+  @keyframes breathe { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.04)} }
+  @keyframes breathe-head { 0%,100%{transform:scaleY(1) rotate(-1deg)} 50%{transform:scaleY(1.03) rotate(1deg)} }
+  @keyframes wag { 0%,100%{transform:rotate(-8deg)} 50%{transform:rotate(12deg)} }
+  @keyframes ear-twitch { 0%,90%,100%{transform:rotate(0)} 95%{transform:rotate(6deg)} }
+  @keyframes blink { 0%,92%,100%{transform:scaleY(1)} 95%{transform:scaleY(0.1)} }
+  /* pet.css 里的互动动画也套一下 */
+  .mini-pet.pet-feed .head-layer { animation: feed-wobble .5s ease-in-out 2; }
+  .mini-pet.pet-play { animation: jump .7s ease-out 1; }
+  .mini-pet.pet-clean { animation: shake .4s ease-in-out 3; }
+  @keyframes feed-wobble { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-6deg)} 75%{transform:rotate(6deg)} }
+  @keyframes jump { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-40px)} }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  .mini-pet.pet-touching .eye-left, .mini-pet.pet-touching .eye-right { animation: squint 1s ease-out 2; }
+  @keyframes squint { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(0.3)} }
+
+  .controls { position: sticky; top: 0; background: var(--bg); padding: 12px 0; z-index: 10; }
+  .stats { font-size: 12px; color: var(--ink2); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>🐾 宠物形象测试页 <span class="mood-badge">共 6 种动物 × 6 种场景 = 36 组合</span></h1>
+
+  <div class="toolbar" id="sceneBar"></div>
+  <div class="toolbar" style="margin-top:4px">
+    <button class="scene-btn" onclick="autoAnim()">▶ 自动循环所有行为</button>
+    <button class="scene-btn" onclick="stopAuto()">⏹ 停止自动</button>
+    <button class="scene-btn" onclick="refreshAll()">🔄 刷新所有</button>
+    <button class="scene-btn" onclick="toggleSize()">🔍 放大/缩小</button>
+    <button class="scene-btn" id="btnJoints" onclick="toggleJoints()" title="关节点红点：颈根 / 尾根 / 耳根 / 脚底">🔴 显示关节点</button>
+    <button class="scene-btn" id="btnAnim" onclick="toggleAnim()" title="禁用动画后静态造型必须完整">⏸ 启用动画</button>
+    <button class="scene-btn" onclick="goFullTest()" style="background:#FFE44D;color:#8B5A00;border-color:#D4A500;font-weight:800">🚀 进入完整乐园（喂养/装饰/乐园）</button>
+    <button class="scene-btn" onclick="clearTestData()" style="background:#FFE0E0;color:#C0392B;border-color:#E74C3C">🧹 清空测试数据</button>
+  </div>
+  <div class="stats">点击宠物或下方按钮触发互动动画 + WebAudio 音效（无文件依赖）。每个卡片独立。</div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script type="module">
+import { SPECIES, SCENES, SPECIES_VARS } from './assets/js/data/pet-assets.js?v=20261102a';
+import { unlockAudio, sfxPetPet, sfxPetEat, sfxPetPlay, sfxPetClean, sfxPetChirp } from './assets/js/core/audio.js?v=20261102a';
+
+unlockAudio();
+
+let currentScene = SCENES[0].id;
+let autoTimer = null;
+let bigMode = false;
+let showJoints = false;
+let animEnabled = true;
+
+/** 从 SPECIES_VARS 提取关节坐标（去掉 px 后缀），生成红点 overlay */
+function buildJointsLayer(vars) {
+  const px = (v) => (v || '0px').toString().replace('px','');
+  const hipX = px(vars['--hip-x']), hipY = px(vars['--hip-y']);
+  const neckX = px(vars['--neck-x']), neckY = px(vars['--neck-y']);
+  const tailX = px(vars['--tail-x']), tailY = px(vars['--tail-y']);
+  const earLX = px(vars['--ear-l-x']), earLY = px(vars['--ear-l-y']);
+  const earRX = px(vars['--ear-r-x']), earRY = px(vars['--ear-r-y']);
+  // 前腿关节（脚底 = hip 水平 -25/+25，y 同 hip）
+  const flX = parseFloat(hipX) - 22, frX = parseFloat(hipX) + 22, flY = parseFloat(hipY), frY = parseFloat(hipY);
+  return `<g class="joint-layer" style="display:none">
+    <!-- 脚底（后腿） -->
+    <circle cx="${parseFloat(hipX)-46}" cy="${hipY}" r="4.5" fill="#FF3333" stroke="white" stroke-width="1.2"/>
+    <text x="${parseFloat(hipX)-46}" y="${parseFloat(hipY)+14}" text-anchor="middle" font-size="9" fill="#FF3333">BL</text>
+    <circle cx="${parseFloat(hipX)+46}" cy="${hipY}" r="4.5" fill="#FF3333" stroke="white" stroke-width="1.2"/>
+    <text x="${parseFloat(hipX)+46}" y="${parseFloat(hipY)+14}" text-anchor="middle" font-size="9" fill="#FF3333">BR</text>
+    <!-- 脚底（前腿） -->
+    <circle cx="${flX}" cy="${flY}" r="4.5" fill="#FF6600" stroke="white" stroke-width="1.2"/>
+    <text x="${flX}" y="${parseFloat(flY)+14}" text-anchor="middle" font-size="9" fill="#FF6600">FL</text>
+    <circle cx="${frX}" cy="${frY}" r="4.5" fill="#FF6600" stroke="white" stroke-width="1.2"/>
+    <text x="${frX}" y="${parseFloat(frY)+14}" text-anchor="middle" font-size="9" fill="#FF6600">FR</text>
+    <!-- 颈根 -->
+    <circle cx="${neckX}" cy="${neckY}" r="5" fill="#0066FF" stroke="white" stroke-width="1.2"/>
+    <text x="${neckX+10}" y="${parseFloat(neckY)+4}" font-size="9" fill="#0066FF">neck</text>
+    <!-- 尾根 -->
+    <circle cx="${tailX}" cy="${tailY}" r="5" fill="#00CC66" stroke="white" stroke-width="1.2"/>
+    <text x="${parseFloat(tailX)+10}" y="${parseFloat(tailY)+4}" font-size="9" fill="#00CC66">tail</text>
+    <!-- 耳根 -->
+    <circle cx="${earLX}" cy="${earLY}" r="4.5" fill="#9933FF" stroke="white" stroke-width="1.2"/>
+    <circle cx="${earRX}" cy="${earRY}" r="4.5" fill="#9933FF" stroke="white" stroke-width="1.2"/>
+  </g>`;
+}
+
+/* ---------- debug：包围盒（仅调试用，getBBox 只读，不参与动画）---------- */
+const BBOX_PARTS = ['tail', 'backleg-l', 'backleg-r', 'foreleg-l', 'foreleg-r',
+                    'leg-l', 'leg-r', 'torso', 'head', 'ear-l', 'ear-r'];
+
+function refreshBBoxes(svg, layer) {
+  layer.innerHTML = '';
+  const NS = 'http://www.w3.org/2000/svg';
+  BBOX_PARTS.forEach((p) => {
+    const node = svg.querySelector(`[data-part="${p}"]`);
+    if (!node || typeof node.getBBox !== 'function') return;
+    const b = node.getBBox();
+    if (!b || b.width === 0) return;
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('x', b.x); rect.setAttribute('y', b.y);
+    rect.setAttribute('width', b.width); rect.setAttribute('height', b.height);
+    rect.setAttribute('fill', 'none');
+    rect.setAttribute('stroke', '#FF00AA');
+    rect.setAttribute('stroke-width', '1');
+    rect.setAttribute('stroke-dasharray', '3 2');
+    rect.setAttribute('opacity', '0.9');
+    layer.appendChild(rect);
+    const txt = document.createElementNS(NS, 'text');
+    txt.setAttribute('x', b.x + 1);
+    txt.setAttribute('y', b.y - 2);
+    txt.setAttribute('font-size', '7');
+    txt.setAttribute('fill', '#FF00AA');
+    txt.textContent = p;
+    layer.appendChild(txt);
+  });
+}
+
+window.toggleJoints = function toggleJoints() {
+  showJoints = !showJoints;
+  document.querySelectorAll('svg.pet').forEach((svg) => {
+    const jointLayer = svg.querySelector('.joint-layer');
+    if (jointLayer) jointLayer.style.display = showJoints ? 'block' : 'none';
+
+    let bboxLayer = svg.querySelector('.bbox-layer');
+    if (showJoints) {
+      if (!bboxLayer) {
+        bboxLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        bboxLayer.setAttribute('class', 'bbox-layer');
+        svg.appendChild(bboxLayer);   // 挂在 svg 根上 → 不受 rig 动画影响
+      }
+      bboxLayer.style.display = 'block';
+      refreshBBoxes(svg, bboxLayer);
+    } else if (bboxLayer) {
+      bboxLayer.style.display = 'none';
+    }
+  });
+  const btn = document.getElementById('btnJoints');
+  btn.style.background = showJoints ? '#FFE4E4' : '';
+  btn.style.color = showJoints ? '#C0392B' : '';
+};
+
+window.toggleAnim = function toggleAnim() {
+  animEnabled = !animEnabled;
+  // 给 stage 容器加 no-anim → 覆盖里面所有子元素（svg + shadow + bg）
+  document.querySelectorAll('.stage').forEach((st) => {
+    st.classList.toggle('no-anim', !animEnabled);
+  });
+  const btn = document.getElementById('btnAnim');
+  btn.textContent = animEnabled ? '⏸ 启用动画' : '▶ 动画已禁用';
+  btn.style.background = animEnabled ? '' : '#E8F5E9';
+  btn.style.color = animEnabled ? '' : '#2E7D32';
+};
+
+/* ---- 构建场景切换按钮 ---- */
+const sceneBar = document.getElementById('sceneBar');
+SCENES.forEach((s) => {
+  const b = document.createElement('button');
+  b.className = 'scene-btn' + (s.id === currentScene ? ' active' : '');
+  b.textContent = s.emoji + ' ' + s.name;
+  b.onclick = () => {
+    currentScene = s.id;
+    sceneBar.querySelectorAll('.scene-btn').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    applySceneToAll();
+  };
+  sceneBar.appendChild(b);
+});
+
+/* ---- 构建 6 只动物卡片 ---- */
+const grid = document.getElementById('grid');
+const cards = [];
+
+SPECIES.forEach((sp) => {
+  const sceneDef = SCENES[0];
+  const card = document.createElement('div');
+  card.className = 'card';
+  const safeId = sp.id.replace(/'/g, "\\'");
+  // 注入 CSS 变量 + class="pet" + 关节点层（从 SPECIES_VARS 取坐标）
+  const vars = SPECIES_VARS[sp.id] || {};
+  const styleStr = Object.entries(vars).map(([k,v])=>`${k}:${v}`).join(';');
+  const jointsLayer = buildJointsLayer(vars);
+  let svgWithVars = sp.svg.replace(
+    '<svg viewBox=',
+    `<svg class="pet" style="${styleStr}" viewBox=`
+  );
+  // 关节点层插在 </g></svg> 前（rig 关闭标签前）
+  svgWithVars = svgWithVars.replace('</g>\n</svg>', `${jointsLayer}  </g>\n</svg>`);
+  card.innerHTML = `
+    <div class="card-head">
+      <span><span class="species">${sp.emoji}</span> ${sp.name}</span>
+      <span style="font-size:11px;color:var(--muted)">id: ${sp.id}</span>
+    </div>
+    <div class="stage pet-card ${sp.id}" data-species="${sp.id}">
+      ${sceneDef.extra || ''}
+      <div class="pet-shadow"></div>
+      ${svgWithVars}
+      <div class="hint">点击动物互动</div>
+    </div>
+    <div class="actions">
+      <button onclick="trigger(this,'pet','${safeId}')">🤲 抚摸</button>
+      <button onclick="trigger(this,'feed','${safeId}')">🍪 喂养</button>
+      <button onclick="trigger(this,'play','${safeId}')">🎾 玩耍</button>
+      <button onclick="trigger(this,'clean','${safeId}')">🛁 清洁</button>
+    </div>
+  `;
+  grid.appendChild(card);
+  cards.push(card);
+});
+applySceneToAll();
+
+/* ---- ?debug=1 模式：自动开启关节点红点 + 包围盒 ---- */
+if (/[?&]debug=1/.test(location.search)) {
+  window.toggleJoints();
+}
+/* ---- ?noanim=1 模式：自动禁用动画，便于检查静态造型 ---- */
+if (/[?&]noanim=1/.test(location.search)) {
+  window.toggleAnim();
+}
+
+function applySceneToAll() {
+  const scene = SCENES.find((s) => s.id === currentScene) || SCENES[0];
+  cards.forEach((c) => {
+    const stage = c.querySelector('.stage');
+    stage.style.background = scene.bg;
+    // 清理旧场景 SVG
+    const oldSvg = stage.querySelector('.scene-svg');
+    if (oldSvg) oldSvg.remove();
+    if (scene.extra) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = scene.extra;
+      tmp.querySelectorAll('.scene-svg').forEach((svg) => stage.insertBefore(svg, stage.firstChild));
+    }
+  });
+}
+
+/* ---- 互动触发：切 svg.pet 的 act-* class，pet.css 里的 keyframes 自动生效 ---- */
+window.trigger = function(btn, kind, speciesId) {
+  const card = btn.closest('.card');
+  const petEl = card.querySelector('svg.pet');
+  if (!petEl) return;
+  const actMap = { pet: 'act-pat', feed: 'act-feed', play: 'act-play', clean: 'act-clean' };
+  const cls = actMap[kind];
+  petEl.classList.remove('act-pat','act-feed','act-play','act-clean');
+  void petEl.offsetWidth;
+  petEl.classList.add(cls);
+  if (kind === 'pet') { sfxPetPet(); sfxPetChirp(); }
+  if (kind === 'feed') { sfxPetEat(); }
+  if (kind === 'play') { sfxPetPlay(); setTimeout(sfxPetChirp, 600); }
+  if (kind === 'clean') { sfxPetClean(); }
+  setTimeout(() => { petEl.classList.remove(cls); }, 1500);
+};
+
+// 点击舞台 = 抚摸
+document.querySelectorAll('.stage').forEach((stage) => {
+  stage.addEventListener('click', (e) => {
+    if (e.target.closest('.actions')) return;
+    const petEl = stage.querySelector('svg.pet');
+    if (!petEl) return;
+    petEl.classList.remove('act-pat');
+    void petEl.offsetWidth;
+    petEl.classList.add('act-pat');
+    sfxPetPet();
+    if (Math.random() < 0.4) setTimeout(sfxPetChirp, 800);
+    setTimeout(() => petEl.classList.remove('act-pat'), 1500);
+  });
+});
+
+/* ---- 自动循环 ---- */
+window.autoAnim = function() {
+  if (autoTimer) return;
+  const kinds = ['pet','feed','play','clean'];
+  const next = () => {
+    // 随机选一张卡片 + 随机一种互动
+    const card = cards[Math.floor(Math.random() * cards.length)];
+    const petEl = card.querySelector('.mini-pet');
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    resetAnim(petEl);
+    if (kind === 'pet') { sfxPetPet(); petEl.classList.add('pet-touching'); }
+    if (kind === 'feed') { sfxPetEat(); petEl.classList.add('pet-feed'); }
+    if (kind === 'play') { sfxPetPlay(); petEl.classList.add('pet-play'); }
+    if (kind === 'clean') { sfxPetClean(); petEl.classList.add('pet-clean'); }
+    setTimeout(() => resetAnim(petEl), 1500);
+    autoTimer = setTimeout(next, 2200 + Math.random() * 1500);
+  };
+  next();
+};
+
+window.stopAuto = function() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+};
+
+window.refreshAll = function() {
+  location.reload();
+};
+
+window.toggleSize = function() {
+  bigMode = !bigMode;
+  cards.forEach((c) => {
+    const stage = c.querySelector('.stage');
+    if (bigMode) stage.style.height = '340px';
+    else stage.style.height = '260px';
+  });
+};
+
+/** 🚀 进入完整乐园测试模式：写入测试用户+宠物数据，跳转 pet.html */
+async function goFullTest() {
+  const username = 'test-user';
+  // 1. 写入用户列表和当前用户
+  localStorage.setItem('app_users', JSON.stringify([username]));
+  localStorage.setItem('app_currentUser', username);
+  const key = `user_${username}_dailyTaskData`;
+  // 2. 检查是否已有宠物
+  const existing = localStorage.getItem(key);
+  if (existing) {
+    if (!confirm('已有测试数据，是否重置一只新宠物？\n（点"取消"则直接进入）')) {
+      window.location.href = 'pet.html';
+      return;
+    }
+  }
+  // 3. 写入完整的默认数据（含 6 级背包、各种装饰、多个场景）
+  const today = new Date().toISOString().slice(0, 10);
+  const testData = {
+    username,
+    grade: 3,
+    pet: {
+      species: 'cat',
+      nickname: '测试喵',
+      level: 3,
+      exp: 65,
+      hunger: 72,
+      mood: 85,
+      scene: 'candy',
+      wear: { head: 'crown', neck: 'collar', face: null, back: 'wings' },
+      inventory: {
+        food: { cookie: 8, carrot: 5, fish: 6, drumstick: 4, fruit: 7 },
+      },
+      ownedDeco: ['red-bow', 'crown', 'xmas-hat', 'scarf', 'collar', 'tie', 'sunglass', 'wings'],
+      ownedScene: ['garden', 'home', 'beach', 'snow', 'candy', 'space'],
+      daily: { played: false, cleaned: false },
+      lastCareDate: today,
+    },
+    dailyTaskData: {},
+    dailyHistory: {},
+    score: { total: 1280, subjects: { chinese: 320, math: 480, english: 280, science: 200 } },
+  };
+  localStorage.setItem(key, JSON.stringify(testData));
+  alert('✅ 测试数据已准备好！\n宠物：🐱 测试喵 Lv.3\n场景：🍭 糖果王国\n背包：饼干×8 胡萝卜×5 小鱼×6 鸡腿×4 水果×7\n装饰：8 种全解锁');
+  window.location.href = 'pet.html';
+}
+
+/** 🧹 清空所有测试数据 */
+function clearTestData() {
+  if (!confirm('确定要清空所有测试数据吗？\n这会删除 localStorage 中所有 app_users / app_currentUser / user_* 键')) return;
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k === 'app_users' || k === 'app_currentUser' || k.startsWith('user_')) {
+      keys.push(k);
+    }
+  }
+  keys.forEach((k) => localStorage.removeItem(k));
+  alert(`🧹 已清空 ${keys.length} 个数据键\n下次进入 pet.html 会重新走领养流程`);
+}
+
+// module 内函数必须显式挂到 window 才能被 onclick 调用
+window.goFullTest = goFullTest;
+window.clearTestData = clearTestData;
+</script>
+</body>
+</html>

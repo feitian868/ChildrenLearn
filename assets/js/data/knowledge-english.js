@@ -1,4 +1,4 @@
-/**
+﻿/**
  * knowledge-english.js —— 英语知识点池
  * 每级 24 条静态题 + 每日参数化生成题；
  * type: choice（answer 为下标）| judge（answer 为布尔）| match（pairs 配对）| order（tiles 排序）

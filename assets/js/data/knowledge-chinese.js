@@ -1,4 +1,4 @@
-/**
+﻿/**
  * knowledge-chinese.js —— 语文知识点池
  * 每个条目：id / grade / level / topic / type / prompt / answer / explain / source
  * type: choice（选项，answer 为下标）| match（pairs 配对）

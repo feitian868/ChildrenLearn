@@ -1,4 +1,4 @@
-/**
+﻿/**
  * knowledge-science.js —— 科学知识点池
  * 每级 24 条；type: judge（answer 为 true/false）| choice（answer 为下标）| match（pairs 配对）
  * 出处按人教/鄂教版小学科学册次与单元标注，便于家长核对事实。

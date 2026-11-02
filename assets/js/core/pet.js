@@ -1,4 +1,4 @@
-/**
+﻿﻿﻿﻿/**
  * core/pet.js —— 宠物模块核心逻辑
  *
  * 宠物状态写入 data.pet（整块追加，不改旧字段）：
@@ -16,8 +16,9 @@
  */
 
 import * as store from './store.js';
-import { PET_FOODS, PET_DECOS, PET_SCENES } from '../data/pet-shop.js';
-import { SPECIES, DECO_SVG, SCENES, speciesOf } from '../data/pet-assets.js';
+import { PET_FOODS, PET_DECOS, PET_SCENES, foodModifierFor, SPECIES_TRAITS } from '../data/pet-shop.js';
+import { SPECIES, DECO_SVG, SCENES, speciesOf, SPECIES_VARS } from '../data/pet-assets.js';
+import { speakCongrats } from './audio.js';
 
 /* ============================================================
    常量
@@ -105,26 +106,40 @@ function buildView(pet) {
   const lv = computeLevel(pet.exp);
   const moodClass = computeMoodFace(pet.hunger, pet.mood);
   const species = speciesOf(pet.species);
+
   // 合成当前佩戴的装饰 SVG fragments
   const wearFragments = [];
   for (const slot of ['head', 'neck', 'face', 'back']) {
     const decoId = pet.wear[slot];
     if (decoId && DECO_SVG[decoId]) wearFragments.push(DECO_SVG[decoId]);
   }
-  const speciesSvg = species.svg.replace(
-    '<g class="decorations"></g>',
-    `<g class="decorations">${wearFragments.join('')}</g>`
+  let speciesSvg = species.svg.replace(
+    '<g class="decorations" data-part="decorations"></g>',
+    `<g class="decorations" data-part="decorations">${wearFragments.join('')}</g>`
   );
 
+  // 注入该物种的 CSS 变量 + class="pet"（让 pet.css 里的 .pet.act-pat 等选择器命中）
+  const vars = SPECIES_VARS[pet.species] || {};
+  const styleStr = Object.entries(vars)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';');
+  speciesSvg = speciesSvg.replace(
+    '<svg viewBox=',
+    `<svg class="pet" style="${styleStr}" viewBox=`
+  );
+
+  // 成长缩放：Lv.1=85% → Lv.5=100% → Lv.10=115%，线性插值
+  const growthScale = Math.round((0.85 + ((lv.level - 1) / 9) * 0.3) * 100) / 100;
   return {
     ...pet,
     level: lv.level,
     levelProgress: lv.progress,
     levelNextAt: lv.nextAt,
+    growthScale,      // 宠物长大的缩放倍率 0.85~1.15
     moodClass,        // pet-sad / pet-happy / pet-sleep / ''
     speciesName: species.name,
     speciesEmoji: species.emoji,
-    speciesSvg,       // 已合成装饰的完整 SVG 字符串
+    speciesSvg,       // 已合成装饰 + CSS 变量的完整 SVG 字符串
     sceneData: SCENES.find((s) => s.id === pet.scene) || SCENES[0],
   };
 }
@@ -141,7 +156,7 @@ export function computeMoodFace(hunger, mood) {
    宠物行为
    ============================================================ */
 
-/** 喂食：消耗背包里 1 个食物 */
+/** 喂食：消耗背包里 1 个食物，按物种喜好加修饰 + 语音反馈 */
 export function feed(foodId) {
   const food = foodOf(foodId);
   if (!food) return { ok: false, reason: 'unknown-food' };
@@ -153,8 +168,14 @@ export function feed(foodId) {
   inv[foodId] -= 1;
   if (inv[foodId] <= 0) delete inv[foodId];
 
-  data.pet.hunger = clamp(data.pet.hunger + food.hunger, 0, 100);
-  data.pet.mood   = clamp(data.pet.mood + food.mood,   0, 100);
+  // 根据物种偏好修饰：喜欢 +50% 效果 +15 心情，讨厌 -30% -10 心情
+  const mod = foodModifierFor(foodId, data.pet.species);
+  const hunger = Math.round(food.hunger * mod.modifier);
+  const moodBonus = mod.tag === 'like' ? 15 : mod.tag === 'hate' ? -10 : 0;
+  const mood   = Math.round((food.mood + moodBonus) * mod.modifier);
+
+  data.pet.hunger = clamp(data.pet.hunger + hunger, 0, 100);
+  data.pet.mood   = clamp(data.pet.mood   + mood,   0, 100);
   data.pet.exp += EXP_FEED;
 
   const lvBefore = data.pet.level;
@@ -162,7 +183,17 @@ export function feed(foodId) {
   if (lvNow.level !== lvBefore) data.pet.level = lvNow.level;
 
   store.save(data);
-  return { ok: true, fed: food.hunger, moodUp: food.mood, leveledUp: lvNow.level !== lvBefore };
+
+  // 语音反馈（物种专属台词）
+  const trait = SPECIES_TRAITS[data.pet.species];
+  const nickname = data.pet.nickname;
+  if (trait) {
+    if (mod.tag === 'like') speakCongrats(`${nickname}说：${trait.voices.like}`);
+    else if (mod.tag === 'hate') speakCongrats(`${nickname}说：${trait.voices.hate}`, 200);
+    if (lvNow.level !== lvBefore) speakCongrats(`🎉 ${nickname}升到 Lv.${lvNow.level} 啦！${trait.voices.levelup}`, 800);
+  }
+
+  return { ok: true, fed: hunger, moodUp: mood, leveledUp: lvNow.level !== lvBefore, preference: mod.tag };
 }
 
 /** 抚摸（免费，无次数限制） */

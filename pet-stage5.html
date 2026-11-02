@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>阶段 5 · 猫 · 呼吸 + 头部轻摆 + 尾巴摆动（其余部件静止）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#EEF3F8;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#2C3542}
+  .wrap{max-width:600px;margin:0 auto;padding:24px 20px 48px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{font-size:12.5px;line-height:1.8;color:#6B7684;margin:0 0 14px}
+  .card{background:#fff;border-radius:18px;padding:8px;box-shadow:0 10px 26px rgba(30,45,61,.12)}
+  .stage{position:relative;height:320px;border-radius:14px;overflow:hidden}
+  svg.pet{width:100%;height:100%;display:block}
+  /* ---------- 骨骼关节（完整保留 stage2） ---------- */
+  svg.pet .torso      { transform-box: view-box; transform-origin: var(--hip-x) var(--hip-y); }
+  svg.pet .head       { transform-box: view-box; transform-origin: var(--neck-x) var(--neck-y); }
+  svg.pet .tail       { transform-box: view-box; transform-origin: var(--tail-x) var(--tail-y); }
+  svg.pet .ear-l      { transform-box: view-box; transform-origin: var(--ear-l-x) var(--ear-l-y); }
+  svg.pet .ear-r      { transform-box: view-box; transform-origin: var(--ear-r-x) var(--ear-r-y); }
+  svg.pet .foreleg-l  { transform-box: view-box; transform-origin: var(--arm-x) var(--arm-y); }
+  svg.pet .foreleg-r  { transform-box: view-box; transform-origin: var(--arm-r-x) var(--arm-r-y); }
+  svg.pet .hindleg-l  { transform-box: view-box; transform-origin: var(--hindleg-l-x) var(--hindleg-l-y); }
+  svg.pet .hindleg-r  { transform-box: view-box; transform-origin: var(--hindleg-r-x) var(--hindleg-r-y); }
+  /* ---------- 阶段 3+4：呼吸 + 头部轻摆 ---------- */
+  /* 铁律：transform-only，全程不动 d/cx/cy/x/y/width/height */
+  /* 呼吸缓动 cubic-bezier(0.4,0,0.2,1) 在 0/50/100 三段每段都是 ease 开头+结尾，
+     端点速度=0 → 一鼓一鼓的感觉。参照成品 breathe 用 ease-in-out，
+     两端平滑衔接，周期折返无顿感。 */
+  svg.pet .torso {
+    animation: breathe-torso 2.4s ease-in-out infinite;
+  }
+  svg.pet .head {
+    /* 阶段 4：头部轻摆 ±6°，颈关节 (100,100) 为原点
+       缓动 ease-in-out —— 循环待机动画统一用它，回弹留给交互一次性
+       峰值角度声明 ±6°（不是缓动偷偷加出来的） */
+    animation: nod-head 3.2s ease-in-out infinite;
+    animation-delay: -1.6s;   /* 相位错开，不与呼吸同步 */
+  }
+  svg.pet .tail {
+    /* 阶段 3·第3项：尾巴摆动 —— 在 rig 层（不跟随呼吸），关节 (138,150)
+       幅度 -3.5°/+4.5°（参照成品待机 sway 8°，占开心幅度 38%）
+       不对称偏右（猫尾自然上翘），周期 2.0s，delay -1.0s 错开 head/torso */
+    animation: tail-sway 2.0s ease-in-out infinite;
+    animation-delay: -1.0s;
+  }
+  /* 阶段 5 明确不动：ear / foreleg / hindleg —— 全部静止 */
+  @keyframes breathe-torso {
+    0%   { transform: scaleY(0.97); }
+    50%  { transform: scaleY(1.03); }
+    100% { transform: scaleY(0.97); }
+  }
+  @keyframes nod-head {
+    /* 对称摆头：0→-6°→+6°→-6°→0，每段 ease-in-out 平滑过渡 */
+    0%     { transform: rotate(-6deg); }
+    25%    { transform: rotate(0deg); }
+    50%    { transform: rotate(6deg); }
+    75%    { transform: rotate(0deg); }
+    100%   { transform: rotate(-6deg); }
+  }
+  @keyframes tail-sway {
+    /* 尾巴摆动：不对称 -3.5°→4.5°→-3.5°（待机幅度 8°，开心时放大到 21°）
+       保持不对称偏右 +0.5°（猫尾自然上翘） */
+    0%     { transform: rotate(-3.5deg); }
+    50%    { transform: rotate(4.5deg); }
+    100%   { transform: rotate(-3.5deg); }
+  }
+  .joint-dot{pointer-events:none}
+  .dot-r{fill:#E74C3C}.dot-o{fill:#F39C12}.dot-b{fill:#2C7BE5}
+  .dot-g{fill:#27AE60}.dot-p{fill:#8E44AD}.dot-k{fill:#1B2A38}
+  .joint-label{font-size:6.5px;fill:#1B2A38;opacity:.75}
+  #report{background:#fff;border-radius:14px;padding:14px 16px;margin-top:14px;
+          font-size:12.5px;line-height:1.85;color:#33404F;box-shadow:0 4px 14px rgba(30,45,61,.06);
+          white-space:pre-wrap;font-family:Consolas,monospace}
+  .ok{color:#1E8E4E;font-weight:700}
+  .bad{color:#C0392B;font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>阶段 5 · 猫 · 呼吸 + 头部轻摆 + 尾巴摆动</h1>
+  <p class="sub">
+    <b>新增 tail-sway 尾巴摆动</b>：2.0s ease-in-out delay -1.0s，不对称 -3.5°→4.5°（总幅 8°，占开心 21° 的 38%，把"摇尾=开心"的信号让给交互）。<br>
+    <b>三条 keyframes</b>：torso 呼吸 + head 轻摆 + tail 摆动，其余部件静止（ear/foreleg/hindleg 无 animation）。<br>
+    尾巴在 rig 层（不跟随呼吸），关节 (138,150)，head/torso/tail 三者相位错开。<br>
+    stage1/2/3/4 完整保留。
+  </p>
+  <div class="card pet-card cat">
+    <div class="stage"><div id="mount"></div></div>
+  </div>
+  <pre id="report">测量中…</pre>
+</div>
+
+<script>
+/* 阶段 4 代码 = stage3 完整 SVG + CSS 只换了两处：
+   ① breathe-torso 的缓动从 cubic-bezier(0.4,0,0.2,1) → ease-in-out
+   ② 新增 .head 的 animation: nod-head 3.2s ease-in-out infinite */
+const mirror = s => `<g transform="translate(200,0) scale(-1,1)">${s}</g>`;
+const armPath = (sx,sy, ex,ey, wx,wy, w1,w2) =>
+  `M${sx-w1/2},${sy} Q${ex-w1*0.62},${ey} ${wx-w2/2},${wy} `+
+  `Q${wx},${wy+w2*0.80} ${wx+w2/2},${wy} Q${ex+w1*0.46},${ey} ${sx+w1/2},${sy} `+
+  `Q${sx},${sy-w1*0.52} ${sx-w1/2},${sy} Z`;
+const armAt = (sx,sy,ex,ey,wx,wy,w1,w2) =>
+  `<path data-w1="${w1}" data-w2="${w2}" data-sx="${sx}" data-sy="${sy}" data-part="forearm" `+
+  `d="${armPath(sx,sy,ex,ey,wx,wy,w1,w2)}" fill="var(--limb)" stroke="var(--outline)" stroke-width="2" stroke-linejoin="round"/>`+
+  `<path d="M${sx-w1/2+2.6},${sy+9} Q${ex-w1*0.48},${ey} ${wx-w2/2+2},${wy-5}" fill="none" `+
+  `stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".2"/>`;
+const hindFoot = (cx, cy, halfW, halfH) =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${halfW}" ry="${halfH}" fill="var(--foot)" stroke="var(--outline)" stroke-width="2"/>`+
+  `<circle cx="${cx-5}" cy="${cy-3}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx}" cy="${cy-4}" r="2.2" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<circle cx="${cx+5}" cy="${cy-3}" r="2.1" fill="var(--foot)" stroke="var(--outline)" stroke-width="1.1"/>`+
+  `<ellipse cx="${cx}" cy="${cy+1.5}" rx="6" ry="3.6" fill="var(--pink)" opacity=".6"/>`;
+
+const CAT = {
+  key:'cat', name:'猫', emoji:'🐱',
+  vars:{
+    '--fur':'#B9C0C9','--fur-dark':'#8E97A3','--fur-light':'#DCE1E7','--belly':'#F7F9FB',
+    '--pink':'#FF9AA8','--ink':'#3B2A20','--foot':'#E8ECF1','--limb':'#CFD5DC',
+    '--outline':'#55606E',
+    '--hip-x':'100px','--hip-y':'176px',
+    '--neck-x':'100px','--neck-y':'100px',
+    '--tail-x':'138px','--tail-y':'150px',
+    '--ear-l-x':'74px','--ear-l-y':'54px',
+    '--ear-r-x':'126px','--ear-r-y':'54px',
+    '--arm-x':'82px','--arm-y':'96px',
+    '--arm-r-x':'118px','--arm-r-y':'96px',
+    '--hindleg-l-x':'66px','--hindleg-l-y':'146px',
+    '--hindleg-r-x':'134px','--hindleg-r-y':'146px'
+  },
+  tail:
+    '<path d="M138,150 C158,157 176,143 172,123 C169,109 155,107 150,117" fill="none" '+
+    'stroke="var(--fur-dark)" stroke-width="15" stroke-linecap="round"/>'+
+    '<path d="M139,150 C155,155 168,144 166,130" fill="none" stroke="var(--fur-light)" stroke-width="4" stroke-linecap="round" opacity=".55"/>',
+  arm: armAt(82,96, 70,128, 80,165, 14,10),
+  paw:
+    '<ellipse cx="80" cy="170" rx="8.5" ry="6.8" fill="var(--limb)" stroke="var(--outline)" stroke-width="2"/>'+
+    '<circle cx="72" cy="167" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="80" cy="166" r="2.7" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<circle cx="88" cy="167" r="2.6" fill="var(--limb)" stroke="var(--outline)" stroke-width="1.3"/>'+
+    '<ellipse cx="80" cy="172.5" rx="5" ry="3.4" fill="var(--pink)" opacity=".65"/>',
+  body:
+    '<path data-part="body" d="M100,88 C123,88 136,113 137,141 C137,164 121,175 100,175 C79,175 63,164 63,141 C64,113 77,88 100,88 Z" fill="var(--fur)"/>'+
+    '<path d="M71,118 l7,-4 M69,130 l8,-3 M72,142 l7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>'+
+    '<path d="M129,118 l-7,-4 M131,130 l-8,-3 M128,142 l-7,-3" stroke="var(--fur-dark)" stroke-width="4.5" stroke-linecap="round" opacity=".5"/>',
+  belly:'<ellipse data-part="belly" cx="100" cy="146" rx="19" ry="19" fill="var(--belly)"/>',
+  hindL:'<ellipse data-part="hindleg-l" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>',
+  hindR: mirror('<ellipse data-part="hindleg-r" cx="66" cy="146" rx="11.5" ry="21" fill="var(--fur-dark)" stroke="var(--outline)" stroke-width="2"/>'),
+  hindFeet: hindFoot(66,169, 10.5,6.5) + hindFoot(134,169, 10.5,6.5),
+  earL:
+    '<path d="M74,54 C66,40 62,26 63,18 C73,27 84,34 92,41 Z" fill="var(--fur)"/>'+
+    '<path d="M76,50 C70,38 67,29 68,24 C74,30 81,35 87,40 Z" fill="var(--pink)" opacity=".9"/>',
+  head:
+    '<circle cx="100" cy="74" r="34" fill="var(--fur)"/>'+
+    '<ellipse cx="86" cy="60" rx="12" ry="7" fill="#fff" opacity=".16" transform="rotate(-18 86 60)"/>'+
+    '<path d="M94,45l2,11M100,43v12M106,45l-2,11" stroke="var(--fur-dark)" stroke-width="3" stroke-linecap="round"/>'+
+    '<ellipse cx="72" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<ellipse cx="128" cy="88" rx="8" ry="5" fill="var(--pink)" opacity=".5"/>'+
+    '<path d="M96,87 Q100,84 104,87 Q100,93 96,87 Z" fill="#E8737A"/>'+
+    '<path d="M100,93 Q95,99 90,95 M100,93 Q105,99 110,95" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round"/>'+
+    '<path d="M68,84 L46,78 M68,90 L48,91 M132,84 L154,78 M132,90 L152,91" stroke="var(--fur-light)" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>',
+  eyes:
+    '<ellipse cx="86" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="84" cy="71" r="2.2" fill="#fff"/>'+
+    '<ellipse cx="114" cy="74" rx="6" ry="7.5" fill="var(--ink)"/><circle cx="112" cy="71" r="2.2" fill="#fff"/>'
+};
+
+function buildCat(p){
+  const style = Object.entries(p.vars).map(([k,v])=>`${k}:${v}`).join(';');
+  const forelegL = `<g class="foreleg foreleg-l" data-part="foreleg-l">${p.arm}${p.paw}</g>`;
+  const forelegR = `<g class="foreleg foreleg-r" data-part="foreleg-r">${mirror(p.arm + p.paw)}</g>`;
+  const earL = `<g class="ear ear-l" data-part="ear-l">${p.earL}</g>`;
+  const earR = `<g class="ear ear-r" data-part="ear-r">${mirror(p.earL)}</g>`;
+  const hindlegL = `<g class="hindleg hindleg-l" data-part="hindleg-l">${p.hindL}</g>`;
+  const hindlegR = `<g class="hindleg hindleg-r" data-part="hindleg-r">${p.hindR}</g>`;
+  return `<svg class="pet" viewBox="0 0 200 200" style="${style}" aria-label="猫">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#87CEEB"/><stop offset=".55" stop-color="#B0E0A8"/></linearGradient>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8EDC92"/><stop offset="1" stop-color="#7ED957"/></linearGradient>
+    <radialGradient id="vig">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity=".26"/>
+      <stop offset=".62" stop-color="#FFFFFF" stop-opacity=".10"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g class="scene">
+    <rect width="200" height="200" fill="url(#sky)"/>
+    <ellipse cx="46" cy="38" rx="17" ry="10" fill="#fff" opacity=".92"/>
+    <ellipse cx="58" cy="34" rx="13" ry="12" fill="#fff" opacity=".92"/>
+    <ellipse cx="36" cy="41" rx="11" ry="7" fill="#fff" opacity=".92"/>
+    <path d="M0,140 Q50,110 100,130 Q150,145 200,125 L200,160 L0,160 Z" fill="#7BC87B" opacity=".5"/>
+    <path d="M0,144 Q50,132 100,138 T200,134 L200,200 L0,200 Z" fill="url(#grass)"/>
+    <path d="M4,176 H196" stroke="#4E9C5E" stroke-width="1" stroke-dasharray="4 4" opacity=".35"/>
+    <ellipse cx="100" cy="116" rx="74" ry="82" fill="url(#vig)"/>
+  </g>
+  <ellipse class="shadow" cx="100" cy="176" rx="42" ry="9" fill="#1B2A38" opacity=".18"/>
+  <g class="rig" data-part="root">
+    <g class="tail" data-part="tail">${p.tail}</g>
+    <g class="torso" data-part="torso">
+      <g class="body-g">${p.body}</g>
+      ${p.belly}
+      ${hindlegL} ${hindlegR}
+      ${p.hindFeet}
+      ${forelegL} ${forelegR}
+      <g class="head" data-part="head">
+        ${earL} ${earR}
+        ${p.head}
+        <g class="eyes" data-part="eyes">${p.eyes}</g>
+      </g>
+    </g>
+  </g>
+</svg>`;
+}
+document.getElementById('mount').innerHTML = buildCat(CAT);
+const _svg = document.querySelector('svg.pet');
+_svg.style.width = '100%'; _svg.style.height = '100%'; _svg.style.display = 'block';
+
+/* 红点层（复用 stage2） */
+const NS = 'http://www.w3.org/2000/svg';
+function parseOrigin(decl){
+  if (!decl || decl === 'none' || decl.includes('center')) return [null,null];
+  const m = decl.match(/(-?\d*\.?\d+)(?:px)?\s+(-?\d*\.?\d+)(?:px)?/);
+  if (!m) return [null,null];
+  return [+m[1], +m[2]];
+}
+const JOINT_TABLE = [
+  { selector:'.torso',     label:'torso 呼吸',  color:'k', expect:[100,176] },
+  { selector:'.head',      label:'head 颈关节', color:'b', expect:[100,100] },
+  { selector:'.tail',      label:'tail 尾根',   color:'g', expect:[138,150] },
+  { selector:'.ear-l',     label:'ear-l 耳根',  color:'p', expect:[74,54] },
+  { selector:'.ear-r',     label:'ear-r 耳根',  color:'p', expect:[126,54] },
+  { selector:'.foreleg-l', label:'foreleg-l 肩',color:'o', expect:[82,96] },
+  { selector:'.foreleg-r', label:'foreleg-r 肩',color:'o', expect:[118,96] },
+  { selector:'.hindleg-l', label:'hindleg-l 髋',color:'r', expect:[66,146] },
+  { selector:'.hindleg-r', label:'hindleg-r 髋',color:'r', expect:[134,146] }
+];
+(function drawDots(){
+  const svg = document.querySelector('svg.pet');
+  [...svg.querySelectorAll('[data-joint]')].forEach(n=>n.remove());
+  JOINT_TABLE.forEach(j=>{
+    const el = svg.querySelector(j.selector);
+    if (!el) return;
+    const cs = getComputedStyle(el).transformOrigin;
+    const [ox, oy] = parseOrigin(cs);
+    const dot = document.createElementNS(NS,'circle');
+    dot.setAttribute('cx', ox); dot.setAttribute('cy', oy);
+    dot.setAttribute('r', 2.4); dot.setAttribute('class','joint-dot dot-'+j.color);
+    dot.setAttribute('data-joint','dot');
+    svg.appendChild(dot);
+  });
+})();
+
+/* ============================================================================
+   阶段 4 专用测量：
+   ① torso 呼吸：timing-function 是否 ease-in-out（不是 cubic-bezier）
+   ② head 轻摆：timing-function 是否 ease-in-out；峰值角度实测（不是声明 ±6°）
+   ③ 肩顶遮挡：head 摆到两端时，左前肩顶 (82,96) 距 head bbox 底部距离
+   ④ 静止部件：tail/ear/foreleg/hindleg 仍然 animationName=none
+   ⑤ getAnimations() 数量应恰好 2
+   ============================================================================ */
+function parseRotateDeg(tx){
+  /* getComputedStyle.transform 返回 "matrix(0.9945, -0.1045, 0.1045, 0.9945, 0, 0)" 这种 */
+  const m = (tx||'').match(/matrix\(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)/);
+  if (!m) return null;
+  const a = +m[1], b = +m[2];
+  return Math.round(Math.atan2(b,a)*180/Math.PI*100)/100;  /* 角度，两位小数 */
+}
+function parseScaleY(tx){
+  const m = (tx||'').match(/matrix\(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)/);
+  if (!m) return null;
+  return +m[4].toFixed(3);
+}
+
+/* 用基底时间确保 currentTime 始终在 delay 之后，动画效果始终应用中。
+   否则 fill=none 时 delay 范围内 transform 返回 'none' 导致 matrix 解析失败。
+   基底 = delay + N*duration（N=1000） + ratio*duration
+   → 周期位置 = (base - delay) % duration = ratio * duration % duration = ratio ✓ */
+function pauseAndJump(el, ratio){
+  const anim = el.getAnimations()[0];
+  if (!anim) return null;
+  anim.pause();
+  const t = anim.effect.getComputedTiming();
+  const N = 1000;
+  anim.currentTime = t.delay + (N + ratio) * t.duration;
+  return anim;
+}
+function readTransform(el){
+  const cs = getComputedStyle(el);
+  const tx = cs.transform;
+  const m = (tx||'none').match(/matrix\(([-\d.]+),\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)/);
+  if (!m) return { deg: null, scaleY: null, raw: tx };
+  const a = +m[1], b = +m[2], d = +m[4];
+  return {
+    deg: Math.atan2(b,a)*180/Math.PI,
+    scaleY: d,
+    raw: tx
+  };
+}
+function readBBox(el){
+  /* getBBox 读的是 transform 作用后的 bbox（SVG 坐标系内） */
+  const b = el.getBBox();
+  return { x:b.x, y:b.y, w:b.width, h:b.height, bottomY: b.y+b.height, cx: b.x+b.width/2 };
+}
+
+async function measureAndReport(){
+  const svg = document.querySelector('svg.pet');
+  const torso = svg.querySelector('.torso');
+  const head = svg.querySelector('.head');
+  const csT = getComputedStyle(torso);
+  const csH = getComputedStyle(head);
+
+  try {
+  const lines = [];
+  lines.push('── 阶段 4 · 两条动画参数（读 getComputedStyle）──');
+  lines.push(`torso: anim=${csT.animationName} dur=${csT.animationDuration} ease=${csT.animationTimingFunction}  iter=${csT.animationIterationCount}`);
+  lines.push(`head:  anim=${csH.animationName} dur=${csH.animationDuration} ease=${csH.animationTimingFunction}  iter=${csH.animationIterationCount} delay=${csH.animationDelay}`);
+  lines.push('');
+
+  /* WAAPI 原始 timing — 只取基本字段 */
+  const headAnim = head.getAnimations()[0];
+  const torsoAnim = torso.getAnimations()[0];
+  const hT = headAnim.effect.getComputedTiming();
+  const tT = torsoAnim.effect.getComputedTiming();
+  lines.push('── WAAPI timing 原始值 ──');
+  lines.push(`head:  delay=${hT.delay}ms duration=${hT.duration}ms iterCount=${hT.iterationCount}`);
+  lines.push(`torso: delay=${tT.delay}ms duration=${tT.duration}ms iterCount=${tT.iterationCount}`);
+  lines.push('');
+
+  /* ① 峰值角度：跳到关键帧端点读 transform（用 pauseAndJump 确保 currentTime 为正） */
+  const ratios = [0, 0.25, 0.5, 0.75, 1.0];
+  const angleSamples = [];
+  const bboxSamples = [];  /* 每个比率下的 bbox，用于肩顶遮挡 */
+
+  for (const r of ratios){
+    pauseAndJump(head, r);
+    /* 强制下一帧再读 */
+    await new Promise(res => requestAnimationFrame(()=>res()));
+    const t = readTransform(head);
+    const b = readBBox(head);
+    angleSamples.push({ ratio:r, deg:t.deg });
+    bboxSamples.push({ ratio:r, ...b });
+  }
+
+  /* 恢复播放 */
+  head.getAnimations()[0]?.play();
+
+  lines.push('── head 轻摆：跳到 5 个关键帧端点读 transform ──');
+  let prev = null, smooth = true;
+  angleSamples.forEach(s=>{
+    const tag = {0:'0%(-6°)',0.25:'25%(0°)',0.5:'50%(+6°)',0.75:'75%(0°)',1:'100%(-6°)'}[s.ratio];
+    lines.push(`  ${tag}: 实测 rotate=${s.deg.toFixed(2)}°`);
+    if (prev !== null){
+      const step = Math.abs(s.deg - prev);
+      /* ease-in-out 段内变化应该连续，正常步进 < 10° */
+      if (step > 12){ smooth = false; lines.push(`    ⚠ 段间跳变 ${step.toFixed(1)}°`); }
+    }
+    prev = s.deg;
+  });
+  const peakNeg = Math.min(...angleSamples.map(s=>s.deg));
+  const peakPos = Math.max(...angleSamples.map(s=>s.deg));
+  lines.push(`  实测峰值: ${peakNeg.toFixed(2)}° ↔ ${peakPos.toFixed(2)}°（声明 ±6°）`);
+  const peakOK = peakPos <= 6.3 && peakNeg >= -6.3;
+  lines.push(peakOK ? `<span class="ok">✓ 峰值在 ±6°±5% 内，缓动未偷偷加量</span>` : `<span class="bad">⚠ 峰值超 ±6.3°（${peakNeg.toFixed(2)}° ~ ${peakPos.toFixed(2)}°）</span>`);
+  lines.push('');
+
+  /* ② 呼吸 smoothness：跳到 0%(scaleY=0.97)、50%(scaleY=1.03)、100%(scaleY=0.97) 读 scaleY */
+  const torsoRatios = [0, 0.25, 0.5, 0.75, 1.0];
+  const torsoScaleSamples = [];
+  for (const r of torsoRatios){
+    pauseAndJump(torso, r);
+    await new Promise(res => requestAnimationFrame(()=>res()));
+    const t = readTransform(torso);
+    torsoScaleSamples.push({ ratio:r, scaleY:t.scaleY });
+  }
+  torso.getAnimations()[0]?.play();
+
+  lines.push('── torso 呼吸：5 个点读 scaleY ──');
+  torsoScaleSamples.forEach(s=>{
+    lines.push(`  ${s.ratio.toFixed(2)}: scaleY=${s.scaleY?.toFixed(4)||'null'}`);
+  });
+  /* ease-in-out 在 0% 和 100% 处 scaleY 应该接近 0.97，50% 接近 1.03
+     端点处 ease-in-out 的速度=0（切线水平），所以不应该有突变 */
+  const t0 = torsoScaleSamples[0].scaleY;
+  const t50 = torsoScaleSamples[2].scaleY;
+  lines.push(`  端点 0% scaleY=${t0.toFixed(4)}（声明 0.97），中点 50% scaleY=${t50.toFixed(4)}（声明 1.03）`);
+  lines.push(Math.abs(t0-0.97)<0.01 && Math.abs(t50-1.03)<0.01 ? `<span class="ok">✓ scaleY 端点/中点正确</span>` : `<span class="bad">⚠ scaleY 偏离声明值</span>`);
+  lines.push('');
+
+  /* ③ 肩顶遮挡：head 摆到极端时头底 y vs 肩顶 y=96
+     手动几何计算（getBBox 不包含 transform！）：
+     - 头圆: 圆心 (100,74), r=34
+     - 旋转原点: (100,100)
+     - 头心相对 origin 向量: (0, -26)
+     - 旋转 θ 后: (26*sin(θ), -26*cos(θ))
+     - 头底 y = 100 + (-26*cos(θ)) + 34 = 134 - 26*cos(θ)
+     - θ=±6° → cos(6°)=0.9945 → 头底 y = 134 - 25.86 = 108.14
+     
+     SVG y 轴向下增大: 头底 y=108 > 肩顶 y=96 → 头底在肩顶下方 → 遮住！
+     gap = headBottomY - shoulderTopY，gap>0 表示遮住 */
+  const shoulderTopY = 96;
+  lines.push('── 肩顶遮挡（手动几何计算，不依赖 getBBox） ──');
+  lines.push(`肩顶 y=${shoulderTopY}，头半径 34，颈关节 (100,100)，头心 (100,74)`);
+  lines.push(`头底公式: bottomY = 134 - 26*cos(θ)`);
+  const headR = [0, 0.25, 0.5, 0.75, 1.0];
+  let worstGap = Infinity;
+  const headAnimForShoulder = head.getAnimations()[0];
+  for (const r of [0, 0.5]){  /* 只算 ±6° 两个极端 */
+    pauseAndJump(head, r);
+    await new Promise(res=>requestAnimationFrame(res));
+    const θ = (r === 0 ? -6 : 6) * Math.PI / 180;
+    const bottomY = 134 - 26 * Math.cos(θ);
+    const cxAfter = 100 + 26 * Math.sin(θ);
+    const gap = bottomY - shoulderTopY;
+    worstGap = Math.min(worstGap, gap);
+    const degLabel = r === 0 ? '-6° 左端' : '+6° 右端';
+    lines.push(`  ${degLabel}: 头心 (${cxAfter.toFixed(1)},${(100-26*Math.cos(θ)).toFixed(1)}) 头底 y=${bottomY.toFixed(2)} gap=${gap.toFixed(2)}px（正=遮住）`);
+  }
+  headAnimForShoulder.play();
+  lines.push(worstGap > 0
+    ? `<span class="ok">✓ 两端头底均在肩顶下方 (gap=${worstGap.toFixed(2)}px)，肩顶被头遮住无接缝</span>`
+    : `<span class="bad">⚠ 头底露出 ${(-worstGap).toFixed(2)}px</span>`);
+  lines.push('');
+
+  /* ④ 尾巴摆动：跳到 3 个关键帧端点读 transform */
+  const tail = svg.querySelector('.tail');
+  const tailAnim = tail.getAnimations()[0];
+  lines.push('── tail 尾巴摆动：3 个关键帧端点读 transform ──');
+  const tailExpected = [
+    { r:0,   exp:-3.5, label:'0%(-3.5°)' },
+    { r:0.5, exp:4.5,  label:'50%(+4.5°)' },
+    { r:1.0, exp:-3.5, label:'100%(-3.5°)' },
+  ];
+  let tailOK = true;
+  for (const pt of tailExpected){
+    pauseAndJump(tail, pt.r);
+    await new Promise(res=>requestAnimationFrame(res));
+    const t = readTransform(tail);
+    const delta = Math.abs(t.deg - pt.exp);
+    if (delta > 0.5) tailOK = false;
+    lines.push(`  ${pt.label}: 实测 ${t.deg?.toFixed(2)}°，声明 ${pt.exp}°（差 ${delta.toFixed(2)}°）`);
+  }
+  tailAnim?.play();
+  lines.push(tailOK
+    ? `<span class="ok">✓ 尾巴摆动角度精确命中 -3.5°/4.5°/-3.5°（待机动画幅度 8°，开心时放大到 21°）</span>`
+    : `<span class="bad">⚠ 尾巴角度偏离声明值</span>`);
+  lines.push(`tail 在 rig 层（不跟随呼吸），关节 (138,150)，缓动 ease-in-out 周期 2.0s`);
+  lines.push('');
+
+  /* ⑤ 实时动画对象数量 */
+  const anims = document.getAnimations();
+  lines.push(`── 实时动画对象（应恰好 3 个 = torso + head + tail） ──`);
+  anims.forEach((a,i)=>{
+    const t = a.effect && a.effect.target;
+    const tag = t && t.classList ? [...t.classList].join('.') : String(t);
+    lines.push(`anim[${i}]: target=${tag}`);
+  });
+  lines.push(anims.length === 3 ? `<span class="ok">✓ 恰好 3 个</span>` : `<span class="bad">⚠ 数量 = ${anims.length}</span>`);
+  lines.push('');
+
+  /* ⑥ 静止部件自检 */
+  lines.push('── 静止部件（tail 不再静止，ear/foreleg/hindleg 应 animationName="none"） ──');
+  ['ear-l','ear-r','foreleg-l','foreleg-r','hindleg-l','hindleg-r'].forEach(cls=>{
+    const el = svg.querySelector('svg.pet .'+cls);
+    const an = getComputedStyle(el).animationName;
+    const cls2 = (an && an!=='none' && an!=='0') ? 'bad' : 'ok';
+    lines.push(`<span class="${cls2}">.${cls}: animationName="${an}"</span>`);
+  });
+
+  document.getElementById('report').innerHTML = lines.join('\n');
+  } catch(err){
+    document.getElementById('report').innerHTML = '❌ 脚本报错: ' + err.message + '\n\n' + err.stack;
+    console.error('measureAndReport error:', err);
+  }
+}
+/* 等动画跑起来再测 */
+setTimeout(measureAndReport, 600);
+</script>
+</body>
+</html>

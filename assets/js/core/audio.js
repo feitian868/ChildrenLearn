@@ -1,4 +1,4 @@
-/**
+﻿/**
  * audio.js —— WebAudio 合成音效 + 浏览器朗读
  * 不依赖任何音频文件，避免 GitHub Pages 资源问题。
  */
@@ -147,6 +147,45 @@ export function sfxPetUnlock() {
   tone(1046, 0, 0.15, { type: 'triangle', gain: 0.08 });
   tone(1318, 0.08, 0.15, { type: 'triangle', gain: 0.07 });
   tone(1568, 0.16, 0.2, { type: 'triangle', gain: 0.06 });
+}
+
+/* ---------- 扩展互动反馈音效 ---------- */
+
+/** 🐾 撒娇/低鸣（心情差/饥饿）：柔滑下降 + 微弱颤音 */
+export function sfxPetWhine() {
+  tone(660, 0, 0.45, { type: 'sine', gain: 0.06, portamento: 392 });
+  tone(520, 0.3, 0.3, { type: 'sine', gain: 0.04, portamento: 330 });
+}
+
+/** ❌ 拒绝/不行（次数用完/没食物）：两个短促下降软音 */
+export function sfxPetNo() {
+  tone(440, 0, 0.12, { type: 'triangle', gain: 0.06, portamento: 330 });
+  tone(330, 0.14, 0.14, { type: 'triangle', gain: 0.05, portamento: 247 });
+}
+
+/** 🫧 脱下装饰：高频啵声 */
+export function sfxPetPop() {
+  tone(1760, 0, 0.08, { type: 'sine', gain: 0.07, portamento: 2200 });
+  tone(1320, 0.06, 0.1, { type: 'sine', gain: 0.05 });
+}
+
+/** ✨ 升级闪光：高频三角波短琶音（叠加在 levelUp 上） */
+export function sfxPetSparkle() {
+  [1318, 1568, 2093].forEach((f, i) =>
+    tone(f, i * 0.05, 0.14, { type: 'triangle', gain: 0.05 })
+  );
+}
+
+/** 🐤 吱啾（开心的小互动）：快速双滑音 */
+export function sfxPetChirp() {
+  tone(1320, 0, 0.08, { type: 'sine', gain: 0.05, portamento: 1760 });
+  tone(1760, 0.07, 0.08, { type: 'sine', gain: 0.045, portamento: 2200 });
+}
+
+/** 🦴 啃食（吃的过程中）：两个软短咔 */
+export function sfxPetBite() {
+  tone(880, 0, 0.06, { type: 'triangle', gain: 0.07, portamento: 660 });
+  tone(990, 0.18, 0.06, { type: 'triangle', gain: 0.06, portamento: 740 });
 }
 
 export function sfxClick() {
