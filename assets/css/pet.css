@@ -189,7 +189,8 @@ svg.pet .eye-lid  { animation: blink-lid 5.2s ease-in-out infinite; transform: s
   0%, 100% { transform: scale(1); opacity: .9; }
   50%      { transform: scale(.94); opacity: .75; }
 }
-.fx { position: absolute; font-size: 18px; pointer-events: none; animation: floatUp 1s cubic-bezier(.4,0,.2,1) forwards; }
+/* 仅作用于宠物舞台内的浮字粒子，避免覆盖全局庆祝弹层 .fx（position:fixed / 可点击） */
+.pet-stage .fx { position: absolute; font-size: 18px; pointer-events: none; animation: floatUp 1s cubic-bezier(.4,0,.2,1) forwards; }
 @keyframes floatUp {
   0%   { transform: translate(-50%, 0) scale(.6); opacity: 0; }
   20%  { opacity: 1; }
