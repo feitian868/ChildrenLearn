@@ -15,6 +15,7 @@ export const APP_USERS_KEY = 'app_users';
 export const APP_CURRENT_KEY = 'app_currentUser';
 export const VERSION = 4;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
+export const DAYS_KEEP = 90;   // days 同样只留 90 天（否则 localStorage 会被撑爆）
 
 export const SUBJECTS = ['chinese', 'english', 'math', 'science'];
 
@@ -98,11 +99,21 @@ function readRaw(key) {
   }
 }
 
+let lastWriteError = null;
+
+/** 最近一次写入是否成功：写满时必须让家长看到，否则进度会静默丢失 */
+export function storageHealthy() { return lastWriteError === null; }
+
 function writeRaw(key, value) {
   try {
     localStorage.setItem(key, value);
+    lastWriteError = null;
   } catch (err) {
-    console.warn('[store] 写入失败（可能为隐私模式或空间不足）', err);
+    lastWriteError = err;
+    console.error('[store] 写入失败：本次进度不会保存', err);
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('store:write-failed', { detail: { error: String(err) } }));
+    }
   }
 }
 
@@ -351,6 +362,14 @@ function snapshotHistory(data) {
   const keys = Object.keys(data.dailyHistory).sort();
   if (keys.length > HISTORY_KEEP) {
     keys.slice(0, keys.length - HISTORY_KEEP).forEach((k) => { delete data.dailyHistory[k]; });
+    changed = true;
+  }
+  // days 必须一起裁：每个 day 含完整的 questions 数组，
+  // 不裁的话用到半年会超过 localStorage 5MB 配额。
+  // 历史统计已全部落在 dailyHistory，成长记录不依赖旧 days。
+  const dayKeys = Object.keys(data.days).sort();
+  if (dayKeys.length > DAYS_KEEP) {
+    dayKeys.slice(0, dayKeys.length - DAYS_KEEP).forEach((k) => { delete data.days[k]; });
     changed = true;
   }
   return changed;

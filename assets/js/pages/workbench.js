@@ -34,6 +34,11 @@ import { el, clear, dialog, longPress, toast } from '../core/ui.js';
 const app = document.getElementById('app');
 let parentOpen = false;
 
+/* 存储配额告警：写满时进度会静默丢失，必须让家长看到 */
+window.addEventListener('store:write-failed', () => {
+  toast('⚠ 浏览器存储已满，今天的进度可能不会保存，请到「数据管理」导出备份', 'bad');
+});
+
 /* ============ 视频场景动画（CSS 关键帧，只注入一次） ============ */
 (function injectVideoSceneCSS() {
   if (document.getElementById('__video-scene-css')) return;
@@ -1168,4 +1173,7 @@ function maybeCelebrateDaily() {
 
 /* ------------------------- 启动 ------------------------- */
 
+if (!store.storageHealthy()) {
+  toast('⚠ 浏览器存储不可用，进度可能无法保存，请导出备份', 'bad');
+}
 refresh();

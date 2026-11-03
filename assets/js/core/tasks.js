@@ -21,6 +21,7 @@ import { CHINESE_BANK, chineseGenerated } from '../data/knowledge-chinese.js';
 import { ENGLISH_BANK, englishGenerated } from '../data/knowledge-english.js';
 import { SCIENCE_BANK, scienceGenerated } from '../data/knowledge-science.js';
 import { mathPool } from '../data/knowledge-math.js';
+import { logicPool } from '../data/knowledge-logic.js';
 
 const STATIC_BANKS = {
   chinese: CHINESE_BANK,
@@ -38,13 +39,19 @@ const GENERATORS = {
 const AVOID_DAYS = 365;       // 同一道题（题面+选项完全一致）365 天内不重复
 const COOLDOWN_DAYS = 10;     // 同一知识点至少间隔 10 天再考
 const ADAPT_DAYS = 7;         // 自适应看近 7 天首答正确率
+const MAX_TEMPLATE_PER_DAY = 2; // 同一种问法当天最多出现 2 次（不做硬禁止，避免抽空题池导致旧题兜底）
+const MAX_LOGIC_PER_TASK = 2;   // 每项任务最多 2 道逻辑/场景题，保证基础题不被挤光
 
 const poolCache = new Map();
 
-function getPool(subject, grade, rng) {
+function getPool(subject, grade, rng, dayKey = '') {
+  // 逻辑 / 生活场景题：用「日期 + 年级 + 科目 + logic」独立派生种子，
+  // 完全不消耗原 rng 的随机序列，保证原有题目逐题可复现。
+  const logic = logicPool(subject, grade,
+    mulberry32(hashString(`${dayKey}:${grade}:${subject}:logic`)));
   if (subject === 'math') {
     // 数学题每次用同一日期种子重建，保证当天各科任务题目一致
-    return mathPool(grade, rng);
+    return [...mathPool(grade, rng), ...logic];
   }
   const cacheKey = `${subject}:${grade}`;
   if (!poolCache.has(cacheKey)) {
@@ -53,7 +60,7 @@ function getPool(subject, grade, rng) {
   const staticPool = poolCache.get(cacheKey);
   const gen = GENERATORS[subject];
   // 生成题 id 由「题干+选项」内容哈希，知识点 key 用于冷却调度
-  return gen ? [...staticPool, ...gen(grade, rng)] : staticPool;
+  return gen ? [...staticPool, ...gen(grade, rng), ...logic] : [...staticPool, ...logic];
 }
 
 /** 近 7 天首答正确率 → 难度档位：{ l2: 每项挑战题数, stretch: 是否配跨级拔高题 } */
@@ -77,7 +84,7 @@ function adaptTarget(data) {
 
 
 
-function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey, quota = QUESTIONS_PER_TASK) {
+function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map()) {
   const avail = pool.filter((item) => !used.has(item.id));
   // 知识点冷却起点：key 在 COOLDOWN_DAYS 内考过，本轮先让位给别的知识点
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
@@ -105,22 +112,46 @@ function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey, quota =
   };
   const l2 = split(unseen.filter((item) => item.level === 2));
   const l1 = split(unseen.filter((item) => item.level === 1));
+  // 逻辑 / 场景题优先占位：只在同档内排到前面，不改配额、不改兜底顺序，
+  // 因此不会破坏 365 天题面不重复，也不会让基础题被完全挤掉。
+  const logicFirst = (list) => [
+    ...list.filter((x) => x.category === 'logic'),
+    ...list.filter((x) => x.category !== 'logic')
+  ];
+  l2.fresh = logicFirst(l2.fresh);
+  l2.cool = logicFirst(l2.cool);
+  l1.fresh = logicFirst(l1.fresh);
+  l1.cool = logicFirst(l1.cool);
 
   const picked = [];
+  let logicCount = 0;
   const take = (list, upTo, allowSameKey = false) => {
     for (const q of list) {
       if (picked.length >= upTo) break;
       if (picked.includes(q)) continue;
       // 同一天同一科目不重复考同一个知识点（兜底轮换时才允许复用）
       if (!allowSameKey && q.key && usedKeys.has(q.key)) continue;
+      // 逻辑/场景题每项最多 MAX_LOGIC_PER_TASK 道；兜底阶段放行，保证能凑满
+      if (!allowSameKey && q.category === 'logic' && logicCount >= MAX_LOGIC_PER_TASK) continue;
+      // 模板硬冷却：容量够时，当天不再出现同款问法；
+      // 池子见底时（allowSameKey=true 的兜底分支）才放行，保证任务能凑满
+      const tk = templateKey(q);
+      if (!allowSameKey && (usedTemplates.get(tk) || 0) >= MAX_TEMPLATE_PER_DAY) continue;
       picked.push(q);
       if (q.key) usedKeys.add(q.key);
+      if (q.category === 'logic') logicCount += 1;
+      usedTemplates.set(tk, (usedTemplates.get(tk) || 0) + 1);
     }
   };
 
   take([...l2.fresh, ...l2.cool], Math.min(l2t, quota)); // 1. L2 配到目标数
   take([...l1.fresh, ...l1.cool], quota);                // 2. 没用过的 L1 补
   take([...l2.fresh, ...l2.cool], quota);                // 3. 不够先用没用过的 L2 补
+  // 3.5 模板上限抡住了未用过的题时：放宽上限，但坚持「未做过」，
+  //     避免为凑数退到第 4 步拿旧题，破坏 365 天不重复
+  if (picked.length < quota) {
+    take([...l2.fresh, ...l2.cool, ...l1.fresh, ...l1.cool], quota, true);
+  }
   // 4. 最后才用「最久未做」的旧题兜底；不分级别——365 天不重是硬约束，
   //    池子见底时宁可挑战题配比略降，也不能拿窗口内的旧 L2 造成重复
   take(seenBefore, quota, true);
@@ -134,7 +165,7 @@ function pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, dayKey, quota =
  * 成功返回带 stretch 标记的副本，抽不到返回 null。
  * ownSigs：本年级题池的内容签名，避免跨年级共用生成器时抽到与本年级完全相同的题。
  */
-function pickStretch(rng, pool, used, usedKeys, avoidMap, dayKey, ownSigs) {
+function pickStretch(rng, pool, used, usedKeys, avoidMap, dayKey, ownSigs, usedTemplates) {
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
   const keyHot = (item) => {
     if (!item.key) return false;
@@ -143,6 +174,7 @@ function pickStretch(rng, pool, used, usedKeys, avoidMap, dayKey, ownSigs) {
   };
   const avail = pool.filter((item) => (
     !used.has(item.id) && !avoidMap[item.id] && !avoidMap[sigKey(item)] && !ownSigs.has(contentSig(item))
+    && (usedTemplates.get(templateKey(item)) || 0) < MAX_TEMPLATE_PER_DAY
   ));
   const prefer = shuffle(rng, avail.filter((item) => (
     item.level === 2 && !keyHot(item) && !(item.key && usedKeys.has(item.key))
@@ -152,6 +184,8 @@ function pickStretch(rng, pool, used, usedKeys, avoidMap, dayKey, ownSigs) {
   if (!q) return null;
   used.add(q.id);
   if (q.key) usedKeys.add(q.key);
+  const tk = templateKey(q);
+  usedTemplates.set(tk, (usedTemplates.get(tk) || 0) + 1);
   return { ...q, stretch: true };
 }
 
@@ -176,6 +210,15 @@ function sigKey(q) {
   return `s:${hashString(contentSig(q))}`;
 }
 
+/**
+ * 模板键：把掉数字后的题干 + 题型。
+ * 用于认知去重：题面去重只能挡住「换了个数字」，
+ * 模板去重才能避免「一天再出现六次同样的配对题」。
+ */
+function templateKey(q) {
+  return `t:${hashString(`${q.type}|${String(q.prompt || '').replace(/\d+(\.\d+)?/g, '#')}`)}`;
+}
+
 function titleOf(questions) {
   const topics = [];
   questions.forEach((q) => {
@@ -190,6 +233,7 @@ function buildDay(key, grade, data) {
   const tasks = [];
   const avoidMap = data?.recentQuestions || {};
   const adapt = adaptTarget(data || {});
+  const usedTemplates = new Map(); // 当日全局模板计数（跨科目）
   // 六年级没有更高年级，拔高档转为「全挑战题」
   const wantStretch = adapt.stretch && grade < 6;
 
@@ -197,23 +241,24 @@ function buildDay(key, grade, data) {
     const meta = store.SUBJECT_META[subject];
     const count = taskCountFor(subject, weekday);
     const rng = mulberry32(hashString(`${key}:${grade}:${subject}`));
-    const pool = getPool(subject, grade, rng);
+    const pool = getPool(subject, grade, rng, key);
     // 拔高题取自高一年级当天题池（用高一年级自己的种子，题目与其当天一致）
     const stretchPool = wantStretch
-      ? getPool(subject, grade + 1, mulberry32(hashString(`${key}:${grade + 1}:${subject}`)))
+      ? getPool(subject, grade + 1, mulberry32(hashString(`${key}:${grade + 1}:${subject}`)), key)
       : null;
     const used = new Set();
     const usedKeys = new Set();
+    // 跨科目全局：避免一天里四科都凑同一种问法
     // 本年级题池内容签名：跨年级共用的生成器可能产出完全相同的题，拔高题需避开
     const ownSigs = wantStretch ? new Set(pool.map(contentSig)) : null;
     for (let i = 0; i < count; i++) {
       // 先占拔高题位，再按剩余名额抽本年级题，保证拔高题优先拿到知识点
       const stretchQ = wantStretch
-        ? pickStretch(rng, stretchPool, used, usedKeys, avoidMap, key, ownSigs)
+        ? pickStretch(rng, stretchPool, used, usedKeys, avoidMap, key, ownSigs, usedTemplates)
         : null;
       const quota = stretchQ ? QUESTIONS_PER_TASK - 1 : QUESTIONS_PER_TASK;
       const l2t = stretchQ ? Math.min(adapt.l2, quota) : (adapt.stretch ? QUESTIONS_PER_TASK : adapt.l2);
-      const questions = pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, key, quota);
+      const questions = pickQuestions(rng, pool, used, usedKeys, avoidMap, l2t, key, quota, usedTemplates);
       if (!questions.length) break;
       if (stretchQ) questions.push(stretchQ);
       tasks.push({
