@@ -16,8 +16,6 @@ import { chestState, openChest } from '../core/chest.js';
 import { shopState, redeemItem } from '../core/shop.js';
 import {
   stateOf as petStateOf,
-  touch as petTouch,
-  feed as petFeed,
   addFood as petAddFood,
   LEVEL_THRESHOLDS,
 } from '../core/pet.js';
@@ -29,9 +27,6 @@ import {
   setSoundEnabled,
   isSoundEnabled,
   sfxClick,
-  sfxPetPet,
-  sfxPetEat,
-  sfxPetLevelUp,
   unlockAudio
 } from '../core/audio.js';
 import { el, clear, dialog, longPress, toast } from '../core/ui.js';
@@ -426,7 +421,7 @@ function renderTop(data) {
       el('span', { class: 'stat' }, [
         el('span', { class: 'stat-icon', text: '⭐' }),
         el('b', { id: 'pointsStat', text: points }),
-        el('small', { text: '积分' })
+        el('small', { text: '积分 · 每任务+2' })
       ]),
       el('span', { class: 'stat' }, [
         el('span', { class: 'stat-icon', text: '🔥' }),
@@ -555,7 +550,7 @@ function renderSubjects() {
       el('div', { class: 'subject-badge', text: meta.icon }),
       el('div', { class: 'subject-title' }, [
         el('h3', { text: meta.name }),
-        el('p', { text: '首答正确 3 题即达标，答错可重试' })
+        el('p', { text: '首答正确 3 题即达标，答错可重试 · 每完成 1 项 +2 分' })
       ])
     ];
 
@@ -719,12 +714,9 @@ function renderPet() {
   const expPct = expNext > 0 ? Math.round((expCur / expNext) * 100) : 100;
 
   const svgWrap = el('div', { class: `pet-stage ${pet.moodClass}` }, [
-    el('div', { class: 'pet-wrap-inline', innerHTML: pet.speciesSvg, style: { width: '100px', height: '100px', transform: 'translate(-50%, -50%)', position: 'absolute', left: '50%', bottom: '10%' } }),
+    el('div', { class: 'pet-wrap-inline', innerHTML: pet.speciesSvg }),
   ]);
   svgWrap.addEventListener('click', () => { window.location.href = 'pet.html'; });
-
-  // 宠物身上还带没带食物
-  const cookieCount = pet.inventory?.food?.cookie || 0;
 
   const barHunger = el('div', { class: 'bar-row hunger' }, [
     el('span', { class: 'lbl', text: '饿' }),
@@ -742,25 +734,6 @@ function renderPet() {
     el('span', { class: 'val', text: expPct + '%' }),
   ]);
 
-  const btnFeed = el('button', {
-    class: 'btn btn-ghost', type: 'button',
-    text: '🍪喂',
-    disabled: cookieCount <= 0,
-    title: cookieCount > 0 ? `还有 ${cookieCount} 个饼干` : '背包空了，去商店买吧',
-  });
-  btnFeed.addEventListener('click', () => {
-    const res = petFeed('cookie');
-    if (res.ok) {
-      sfxPetEat();
-      if (res.leveledUp) sfxPetLevelUp();
-      refresh();
-    }
-  });
-  const btnTouch = el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲摸' });
-  btnTouch.addEventListener('click', () => { sfxPetPet(); petTouch(); refresh(); });
-  const btnPlay = el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾玩', title: pet.daily.played ? '今天玩过啦' : '每天一次' });
-  btnPlay.addEventListener('click', () => { sfxClick(); window.location.href = 'pet.html'; });
-
   card.append(
     el('h3', {}, [
       el('span', { class: 'pet-name', text: `${pet.speciesEmoji} ${pet.nickname}` }),
@@ -768,9 +741,9 @@ function renderPet() {
     ]),
     svgWrap,
     el('div', { class: 'pet-bars' }, [barHunger, barMood, barExp]),
-    el('div', { class: 'pet-actions' }, [btnFeed, btnTouch, btnPlay,
+    el('div', { class: 'pet-actions' }, [
       el('button', {
-        class: 'btn btn-primary', type: 'button', text: '去乐园',
+        class: 'btn btn-primary btn-block', type: 'button', text: '去乐园',
         onclick: () => { sfxClick(); window.location.href = 'pet.html'; }
       }),
     ]),
@@ -973,7 +946,7 @@ function renderShop() {
   const card = el('div', { class: 'card shop' }, [
     el('div', { class: 'shop-head' }, [
       el('h3', { text: '积分商店' }),
-      el('span', { class: 'shop-points' }, ['当前 ', el('b', { text: state.points }), ' 分'])
+      el('span', { class: 'shop-points' }, ['当前 ', el('b', { text: state.points }), ' 分 · 每完成 1 项任务 +2 分'])
     ]),
     list
   ]);

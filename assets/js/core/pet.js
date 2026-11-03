@@ -16,9 +16,8 @@
  */
 
 import * as store from './store.js';
-import { PET_FOODS, PET_DECOS, PET_SCENES, foodModifierFor, SPECIES_TRAITS } from '../data/pet-shop.js';
-import { SPECIES, DECO_SVG, SCENES, speciesOf, SPECIES_VARS } from '../data/pet-assets.js';
-import { speakCongrats } from './audio.js';
+import { PET_FOODS, PET_DECOS, PET_SCENES, foodModifierFor } from '../data/pet-shop.js';
+import { SPECIES, DECO_SVG, SCENES, speciesOf } from '../data/pet-assets.js';
 
 /* ============================================================
    常量
@@ -113,19 +112,12 @@ function buildView(pet) {
     const decoId = pet.wear[slot];
     if (decoId && DECO_SVG[decoId]) wearFragments.push(DECO_SVG[decoId]);
   }
-  let speciesSvg = species.svg.replace(
+  // 三套姿态各有独立骨架，每套都有一个 .decorations 锚点 → 必须 replaceAll，
+  // 否则站姿/趴卧切换后装饰丢失（只替换第一处是旧 bug）。
+  // class="pet" 与物种 CSS 变量已由 pet-assets.js 内联在 svg 根上，这里不再注入。
+  const speciesSvg = species.svg.replaceAll(
     '<g class="decorations" data-part="decorations"></g>',
     `<g class="decorations" data-part="decorations">${wearFragments.join('')}</g>`
-  );
-
-  // 注入该物种的 CSS 变量 + class="pet"（让 pet.css 里的 .pet.act-pat 等选择器命中）
-  const vars = SPECIES_VARS[pet.species] || {};
-  const styleStr = Object.entries(vars)
-    .map(([k, v]) => `${k}:${v}`)
-    .join(';');
-  speciesSvg = speciesSvg.replace(
-    '<svg viewBox=',
-    `<svg class="pet" style="${styleStr}" viewBox=`
   );
 
   // 成长缩放：Lv.1=85% → Lv.5=100% → Lv.10=115%，线性插值
@@ -184,14 +176,7 @@ export function feed(foodId) {
 
   store.save(data);
 
-  // 语音反馈（物种专属台词）
-  const trait = SPECIES_TRAITS[data.pet.species];
-  const nickname = data.pet.nickname;
-  if (trait) {
-    if (mod.tag === 'like') speakCongrats(`${nickname}说：${trait.voices.like}`);
-    else if (mod.tag === 'hate') speakCongrats(`${nickname}说：${trait.voices.hate}`, 200);
-    if (lvNow.level !== lvBefore) speakCongrats(`🎉 ${nickname}升到 Lv.${lvNow.level} 啦！${trait.voices.levelup}`, 800);
-  }
+  // 语音由宠物乐园页统一用童声播报（这里不再重复朗读，避免覆盖童声）
 
   return { ok: true, fed: hunger, moodUp: mood, leveledUp: lvNow.level !== lvBefore, preference: mod.tag };
 }

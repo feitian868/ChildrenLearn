@@ -238,13 +238,29 @@ if (speechReady) {
  * 选语音：只用本机可用的语音。
  * 本机没有英文语音时，en-US 只剩 Google 在线语音，在受限网络下会卡住且完全没声音，
  * 因此优先本地同语言语音，退而用任意本地语音（用中文语音读英文单词，至少有声音）。
+ * prefer 用于宠物童声：按名字优先匹配小朋友/女声语音（如 Microsoft Yaoyao）。
  */
-function pickVoice(lang) {
+const FEMALE_HINTS = ['yaoyao', 'huihui', 'xiaoxiao', 'xiaoyi', 'ting-ting', 'tingting',
+  'meijia', 'mei-jia', 'sin-ji', 'hanhan', 'lili', 'female', 'girl', '女'];
+const MALE_HINTS = ['kangkang', 'david', 'yunxi', 'yunjian', 'li-mu', 'male', '男'];
+
+function pickVoice(lang, prefer = []) {
   const all = voiceCache.length ? voiceCache : (window.speechSynthesis.getVoices() || []);
   if (!all.length) return null;
   const base = String(lang).toLowerCase().split('-')[0];
   const same = all.filter((v) => v.lang && v.lang.toLowerCase().split('-')[0] === base);
-  return same.find((v) => v.localService) || all.find((v) => v.localService) || same[0] || null;
+  const localSame = same.filter((v) => v.localService);
+  const pool = localSame.length ? localSame : same;
+  const nameOf = (v) => (v.name || '').toLowerCase();
+
+  for (const hint of prefer) {
+    const hit = pool.find((v) => nameOf(v).includes(hint));
+    if (hit) return hit;
+  }
+  const female = pool.find((v) => FEMALE_HINTS.some((h) => nameOf(v).includes(h)));
+  if (female) return female;
+  const notMale = pool.find((v) => !MALE_HINTS.some((h) => nameOf(v).includes(h)));
+  return pool[0] || notMale || all.find((v) => v.localService) || null;
 }
 
 /**
@@ -252,12 +268,12 @@ function pickVoice(lang) {
  * Chrome 在 cancel() 后立刻 speak() 会吞掉语音（只触发 start、不触发 end 甚至无声），
  * 因此必须隔开一小段再播。
  */
-function speakNow(text, { lang = 'zh-CN', rate = 1, pitch = 1.1 } = {}) {
+function speakNow(text, { lang = 'zh-CN', rate = 1, pitch = 1.1, voice: preset } = {}) {
   const syn = window.speechSynthesis;
   const start = () => {
     try {
       const utter = new SpeechSynthesisUtterance(text);
-      const voice = pickVoice(lang);
+      const voice = preset || pickVoice(lang);
       if (voice) {
         utter.voice = voice;
         utter.lang = voice.lang;
@@ -302,6 +318,37 @@ export function speakCongrats(text, delay = 0) {
 /** 只停止尚未开始的祝贺语音；已开始播放的不打断，避免点“继续”时把声音掐掉 */
 export function stopSpeak() {
   clearTimeout(congratsTimer);
+}
+
+/* ------------------------- 宠物童声台词 ------------------------- */
+
+let petSpeechTimer = 0;
+
+// 优先挑本机的小朋友/女声语音（Windows 自带 Microsoft Yaoyao 即中文童声）
+const CHILD_VOICE_HINTS = ['yaoyao', 'xiaoyi', 'xiaoxiao', 'ting-ting', 'tingting',
+  'meijia', 'mei-jia', 'child', 'kid', 'girl', '女'];
+
+/**
+ * 宠物说童声台词（抚摸/喂养/玩耍/清洁/戴装饰等）
+ * 若本机有小朋友语音（如 Microsoft Yaoyao）直接用，只轻微升调；
+ * 没有童声时退回女声并把音高拉高，尽量接近奶音。跟随音效开关。
+ * 连续点击时 cancel 掉上一句，只保留最新一句，避免声音叠加。
+ * @param {string} text 台词
+ * @param {number} [delay] 延迟毫秒，用来错开音效
+ */
+export function speakPet(text, delay = 0) {
+  if (!speechReady || !enabled || !text) return;
+  clearTimeout(petSpeechTimer);
+  petSpeechTimer = setTimeout(() => {
+    const voice = pickVoice('zh-CN', CHILD_VOICE_HINTS);
+    const isChildVoice = !!voice && /yaoyao|xiaoyi|xiaoxiao|child|kid|girl/i.test(voice.name || '');
+    speakNow(text, {
+      lang: 'zh-CN',
+      voice,
+      rate: isChildVoice ? 1.06 : 1.16,
+      pitch: isChildVoice ? 1.3 : 1.85,
+    });
+  }, delay);
 }
 
 /**

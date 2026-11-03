@@ -9,7 +9,7 @@
  * 其他模块一律通过这里读写，统一走 getUserKey()，不散落硬编码键名。
  */
 
-// 注意：不能导入 score.js（会形成循环依赖），这里的 1 必须和 score.js 的 TASK_POINTS 保持一致
+// 注意：不能导入 score.js（会形成循环依赖），这里的 2 必须和 score.js 的 TASK_POINTS 保持一致
 
 export const APP_USERS_KEY = 'app_users';
 export const APP_CURRENT_KEY = 'app_currentUser';
@@ -217,8 +217,11 @@ export function save(data) {
 
 export function update(mutator) {
   const data = load();
-  mutator(data);
-  return save(data);
+  // 把 mutator 的返回值原样带出：宠物模块的 update 回调返回 { ok, reason, ... }，
+  // 若只返回 data，调用方拿不到 ok，会导致「领养/改名其实成功但 UI 报失败」。
+  const result = mutator(data);
+  save(data);
+  return result === undefined ? data : result;
 }
 
 function normalize(raw) {
@@ -261,7 +264,7 @@ function normalize(raw) {
 function snapshotOf(day, data) {
   const done = day.tasks.filter((t) => t.done);
   const pointsEarned =
-    done.length * 1 +  // 与 score.js 的 TASK_POINTS 保持一致：每完成一个任务 +1 分
+    done.length * 2 +  // 与 score.js 的 TASK_POINTS 保持一致：每完成一个任务 +2 分
     (day.allDoneBonus || 0) +
     (day.streakBonus || 0) +
     (day.chest?.rewardPoints || 0) +

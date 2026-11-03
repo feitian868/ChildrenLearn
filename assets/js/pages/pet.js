@@ -14,7 +14,7 @@
 
 import * as store from '../core/store.js';
 import { el, clear, toast } from '../core/ui.js';
-import { sfxClick, sfxWin, unlockAudio, speakCongrats,
+import { sfxClick, sfxWin, unlockAudio, speakPet, setSoundEnabled,
   sfxPetPet, sfxPetEat, sfxPetPlay, sfxPetClean,
   sfxPetLevelUp, sfxPetYawn, sfxPetWalk, sfxPetHappy, sfxPetSad, sfxPetUnlock,
   sfxPetWhine, sfxPetNo, sfxPetPop, sfxPetSparkle, sfxPetChirp, sfxPetBite
@@ -26,10 +26,142 @@ import {
 } from '../core/pet.js';
 import { SPECIES, SCENES } from '../data/pet-assets.js';
 import { PET_FOODS, PET_DECOS, PET_SCENES, SPECIES_TRAITS, foodModifierFor } from '../data/pet-shop.js';
+import { shopState, redeemItem } from '../core/shop.js';
 
 const app = document.getElementById('pet-app');
 let currentTab = 'feed';
 let _greeted = false;
+
+/* ============================================================
+   童声互动：头顶气泡 + 语音
+   ============================================================ */
+
+// 物种台词缺失时的通用台词（保证任何宠物都有话说）
+const FALLBACK_VOICES = {
+  pet: '真舒服啊~再摸摸我嘛~',
+  feed: '真好吃啊~谢谢~',
+  play: '好开心呀！再来一次嘛~',
+  clean: '洗得香香的，真舒服~',
+  dress: '哇，我好漂亮呀！',
+  undress: '咦，摘掉啦~',
+  scene: '新家真好看~',
+  limit: '今天玩累啦，明天再玩吧~',
+  hungry: '肚子饿啦，去商店换点吃的吧~',
+};
+
+/** 取当前宠物的台词：优先物种专属，其次通用台词 */
+function voiceOf(key) {
+  const pet = stateOf();
+  const line = pet && SPECIES_TRAITS[pet.species]?.voices?.[key];
+  return line || FALLBACK_VOICES[key] || '';
+}
+
+let _bubbleTimer = 0;
+
+/** 宠物说话：头顶气泡展示台词，同时用童声读出来 */
+function say(text) {
+  if (!text) return;
+  const arena = document.querySelector('.pet-arena');
+  if (arena) {
+    let bubble = arena.querySelector('.pet-bubble');
+    if (!bubble) {
+      bubble = el('div', { class: 'pet-bubble' });
+      arena.append(bubble);
+    }
+    bubble.textContent = text;
+    bubble.classList.remove('show');
+    void bubble.offsetWidth; // 重排以重播弹出动画
+    bubble.classList.add('show');
+    clearTimeout(_bubbleTimer);
+    _bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 2600);
+  }
+  speakPet(text, 200);
+}
+
+/* ============================================================
+   积分商店（乐园内直接兑换食物 / 装饰 / 乐园）
+   完成每日挑战任务每项 +2 分，积分可用于这里兑换
+   ============================================================ */
+function openShop() {
+  if (document.querySelector('.pet-shop-overlay')) return;
+  sfxClick();
+
+  const body = el('div', { class: 'pet-shop-body' });
+  const pointsLine = el('div', { class: 'pet-shop-points' });
+  const overlay = el('div', { class: 'pet-shop-overlay' });
+  const close = () => { overlay.remove(); render(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+  const sheet = el('div', { class: 'pet-shop-sheet' }, [
+    el('div', { class: 'pet-shop-head' }, [
+      el('h2', { text: '🛒 积分商店' }),
+      el('button', { class: 'btn btn-ghost', type: 'button', text: '关闭', onclick: close }),
+    ]),
+    pointsLine,
+    body,
+  ]);
+  overlay.append(sheet);
+  document.body.append(overlay);
+
+  const petNow = () => stateOf() || {};
+
+  function itemCard(item, kind) {
+    const s = shopState();
+    const count = kind === 'food' ? (petNow().inventory?.food?.[item.id] || 0) : 0;
+    const owned = kind === 'deco' ? (petNow().ownedDeco || []).includes(item.id)
+      : kind === 'scene' ? (petNow().ownedScene || []).includes(item.id) : false;
+    const affordable = s.points >= item.cost;
+    const cls = 'panel-item shop-item' + (owned ? ' owned' : affordable ? ' can-buy' : ' disabled');
+    const priceText = kind === 'food' && count > 0 ? `已兑换 ×${count}` : owned ? '已拥有' : `${item.cost} 分`;
+    const actionText = kind === 'food' ? (affordable ? '兑换' : `还差 ${item.cost - s.points} 分`)
+      : owned ? '已解锁' : affordable ? '兑换' : `还差 ${item.cost - s.points} 分`;
+    const box = el('div', { class: cls, title: `${item.name} · ${item.cost} 分` }, [
+      el('div', { class: 'emoji', text: item.emoji }),
+      el('div', { class: 'name', text: item.name }),
+      el('div', { class: 'price', text: priceText }),
+    ]);
+    box.append(el('div', { class: 'shop-buy', text: actionText }));
+
+    box.addEventListener('click', () => {
+      if (owned) { toast('已经拥有啦', 'bad'); return; }
+      const res = redeemItem(item.id);
+      if (res.ok) {
+        sfxPetUnlock();
+        toast(`兑换成功：${item.name}`, 'ok');
+        fill();
+        render();
+      } else if (res.reason === 'points') {
+        sfxPetNo();
+        toast(`还差 ${res.shortfall} 分，完成挑战任务就能加分啦`, 'bad');
+      } else if (res.reason === 'already-owned') {
+        toast('已经拥有啦', 'bad');
+      } else {
+        sfxPetNo();
+        toast('暂时换不了', 'bad');
+      }
+    });
+    return box;
+  }
+
+  function section(title, items, kind) {
+    return el('div', { class: 'pet-shop-sec' }, [
+      el('h3', { text: title }),
+      el('div', { class: 'panel-grid' }, items.map((it) => itemCard(it, kind))),
+    ]);
+  }
+
+  function fill() {
+    const s = shopState();
+    pointsLine.textContent = `当前 ${s.points} 分 · 每完成 1 个挑战任务 +2 分 · 兑换后立即到账`;
+    clear(body);
+    body.append(
+      section('🍪 食物（可重复兑换）', PET_FOODS, 'food'),
+      section('💄 装饰（永久解锁）', PET_DECOS, 'deco'),
+      section('🏖️ 乐园（永久解锁）', PET_SCENES.filter((x) => x.cost > 0), 'scene'),
+    );
+  }
+  fill();
+}
 
 // 全局定时器（render 时先清再重建，避免重影）
 let _behaviorTimers = [];
@@ -41,6 +173,8 @@ function clearBehaviorTimers() {
 /* ============================================================
    入口
    ============================================================ */
+// 继承工作台里的音效开关设置（静音时不朗读、不出声）
+setSoundEnabled(store.load()?.settings?.sound !== false);
 unlockAudio();
 render();
 
@@ -53,11 +187,11 @@ function render() {
   } else {
     app.append(renderArena(pet));
     scheduleIdleBehaviors(); // 大舞台渲染完后开启自发行为定时器
-    // 首次进入时让宠物用自己的声音打招呼
+    // 首次进入时让宠物用童声打招呼
     if (!_greeted) {
       _greeted = true;
       const trait = SPECIES_TRAITS[pet.species];
-      if (trait) speakCongrats(`${pet.nickname}说：${trait.voices.hi}`, 600);
+      if (trait) setTimeout(() => say(trait.voices.hi), 500);
     }
   }
 }
@@ -111,7 +245,8 @@ function renderArena(pet) {
   // 顶部栏
   const topBar = el('div', { style: 'display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:white; border-bottom:1px solid #eee;' }, [
     el('button', { class: 'btn btn-ghost', type: 'button', text: '← 回工作台', onclick: () => { sfxClick(); window.location.href = 'index.html'; } }),
-    el('div', { style: 'font-weight:700; font-size:15px;', text: `${pet.speciesEmoji} ${pet.nickname} · Lv.${pet.level}` }),
+    el('div', { class: 'pet-title', style: 'font-weight:700; font-size:15px;', text: `${pet.speciesEmoji} ${pet.nickname} · Lv.${pet.level}` }),
+    el('button', { class: 'btn btn-ghost', type: 'button', text: '🛒', title: `积分商店（${store.load().profile?.points || 0} 分）`, 'aria-label': '积分商店', onclick: openShop }),
     el('button', { class: 'btn btn-ghost', type: 'button', text: '🔄', title: '刷新', onclick: () => render() }),
   ]);
 
@@ -123,7 +258,7 @@ function renderArena(pet) {
   const scale = pet.growthScale;
   const petWrap = el('div', { class: `pet-wrap ${pet.moodClass}`, 'data-scale': scale, style: {
     left: '50%', transform: `translateX(-50%) scale(${scale})`,
-    transformOrigin: '50% 100%', transition: 'transform .5s ease',
+    transformOrigin: '50% 100%', transition: 'left 2.4s ease-in-out, transform .5s ease',
   } });
   petWrap.innerHTML = pet.speciesSvg;
   // 点宠物 = 抚摸
@@ -131,14 +266,14 @@ function renderArena(pet) {
   sceneWrap.append(petWrap);
 
   // 快捷互动按钮（每个触发独立手势）
-  const actionRow = el('div', { style: {
+  const actionRow = el('div', { class: 'pet-quick-actions', style: {
     position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
     display: 'flex', gap: '8px', zIndex: '10',
   } }, [
     el('button', { class: 'btn btn-ghost', type: 'button', text: '🤲 抚摸', title: '无限次', onclick: () => triggerTouch(sceneWrap, petWrap) }),
     el('button', { class: 'btn btn-ghost', type: 'button', text: '🍪 喂养', title: '先去背包选食物', onclick: () => { sfxClick(); currentTab = 'feed'; render(); } }),
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🎾 玩耍' + (pet.daily.played ? ' ✓' : ''), title: '每天一次', onclick: () => triggerPlay(sceneWrap, petWrap) }),
-    el('button', { class: 'btn btn-ghost', type: 'button', text: '🛁 清洁' + (pet.daily.cleaned ? ' ✓' : ''), title: '每天一次', onclick: () => triggerClean(sceneWrap, petWrap) }),
+    el('button', { class: 'btn btn-ghost', type: 'button', 'data-act': 'play', text: '🎾 玩耍' + (pet.daily.played ? ' ✓' : ''), title: '每天一次', onclick: () => triggerPlay(sceneWrap, petWrap) }),
+    el('button', { class: 'btn btn-ghost', type: 'button', 'data-act': 'clean', text: '🛁 清洁' + (pet.daily.cleaned ? ' ✓' : ''), title: '每天一次', onclick: () => triggerClean(sceneWrap, petWrap) }),
   ]);
   sceneWrap.append(actionRow);
 
@@ -172,20 +307,41 @@ function renderArena(pet) {
 const _fxTimers = [];
 
 /** 找到 petWrap 里的 svg.pet，切 act-* class 触发骨骼动画 */
+const ACT_CLASSES = ['act-pat', 'act-feed', 'act-play', 'act-clean'];
+/* 移除 act-* 的 DUR 必须覆盖 iteration-count 的总时长：
+   act-pat 的尾巴 swayJoy = .35s × 6 = 2.1s（不能只按 head 的 .9s 移除）。 */
+const ACT_DUR = { 'act-pat': 2100, 'act-feed': 1100, 'act-play': 900, 'act-clean': 800 };
+const _actTimers = new WeakMap();
+
 function getPetSvg(petWrap) { return petWrap.querySelector('svg.pet'); }
+
 function actOn(petWrap, actClass) {
   const svg = getPetSvg(petWrap);
   if (!svg) return;
-  svg.classList.remove('act-pat','act-feed','act-play','act-clean');
-  void svg.offsetWidth;
+  const prev = _actTimers.get(svg);
+  if (prev) clearTimeout(prev);
+  _actTimers.delete(svg);
+  svg.classList.remove(...ACT_CLASSES);
+  void svg.offsetWidth; // 强制 reflow，让同名动画重新开始
+  if (!actClass) return;
   svg.classList.add(actClass);
-  setTimeout(() => svg.classList.remove(actClass), 1600);
+  const dur = ACT_DUR[actClass] ?? 900;
+  _actTimers.set(svg, setTimeout(() => {
+    svg.classList.remove(actClass);
+    _actTimers.delete(svg);
+  }, dur));
 }
 
 function resetPetAnim(petWrap) {
   petWrap.classList.remove('pet-feed', 'pet-touching', 'pet-play', 'pet-clean', 'pet-idle-yawn', 'pet-idle-tilt', 'pet-idle-lick', 'pet-idle-hop', 'pet-walking');
-  actOn(petWrap, ''); // 清 svg.pet 的 act-*
-  const svg = getPetSvg(petWrap); if (svg) { svg.classList.remove('act-pat','act-feed','act-play','act-clean'); void svg.offsetWidth; }
+  const svg = getPetSvg(petWrap);
+  if (svg) {
+    const t = _actTimers.get(svg);
+    if (t) clearTimeout(t);
+    _actTimers.delete(svg);
+    svg.classList.remove(...ACT_CLASSES);
+    void svg.offsetWidth;
+  }
 }
 
 /** 喂养：手从上落 + 食物飞入 + 宠物张嘴吃 + 舔嘴
@@ -221,6 +377,9 @@ function triggerFeed(sceneWrap, petWrap, foodEmoji = '🍪', preference = 'norma
     spawnParticles(sceneWrap, '💖', 3);              // 一般：3颗爱心
     if (Math.random() < 0.35) setTimeout(() => sfxPetChirp(), 1200);
   }
+
+  // 童声台词：按偏好说不同的话
+  say(preference === 'hate' ? voiceOf('hate') : preference === 'like' ? voiceOf('like') : voiceOf('feed'));
 }
 
 /** 抚摸：手左右扫 + 宠物耳朵贴平 + 眯眼享受 */
@@ -230,12 +389,14 @@ function triggerTouch(sceneWrap, petWrap) {
   sfxPetPet();
   petWrap.classList.add('pet-touching');
   const r = touch();
+  if (r.ok) syncStatus();
 
   const hand = el('div', { class: 'pet-hand', text: '🤚' });
   sceneWrap.append(hand);
   setTimeout(() => hand.remove(), 1500);
 
   spawnParticles(sceneWrap, '💖', 2);
+  say(voiceOf('pet'));
 
   // 30% 概率享受得吱啾一声
   if (Math.random() < 0.3) setTimeout(() => sfxPetChirp(), 900);
@@ -253,19 +414,23 @@ function triggerPlay(sceneWrap, petWrap) {
   const r = play();
   if (!r.ok) {
     sfxPetNo();
+    say(voiceOf('limit'));
     toast(r.reason === 'daily-limit' ? '今天玩过啦，明天再来' : r.reason, 'bad');
     return;
   }
+  // 顺序必须是先 reset 再 actOn，否则 reset 会把刚加上的 act-play 清掉
+  resetPetAnim(petWrap);
   actOn(petWrap, 'act-play');
   sfxPetPlay();
-  resetPetAnim(petWrap);
   petWrap.classList.add('pet-play');
+  syncStatus();
 
   const ball = el('div', { class: 'play-ball', text: '⚽' });
   sceneWrap.append(ball);
   setTimeout(() => ball.remove(), 1400);
 
   spawnParticles(sceneWrap, '⭐', 6);
+  say(voiceOf('play'));
 
   // 接到球后吱啾
   setTimeout(() => sfxPetChirp(), 600);
@@ -283,13 +448,16 @@ function triggerClean(sceneWrap, petWrap) {
   const r = clean();
   if (!r.ok) {
     sfxPetNo();
+    say(voiceOf('limit'));
     toast(r.reason === 'daily-limit' ? '今天清洁过啦' : r.reason, 'bad');
     return;
   }
+  // 同样先 reset 再 actOn，避免 act-clean 被 reset 立刻移除
+  resetPetAnim(petWrap);
   actOn(petWrap, 'act-clean');
   sfxPetClean();
-  resetPetAnim(petWrap);
   petWrap.classList.add('pet-clean');
+  syncStatus();
 
   // 生成 5-7 个泡泡
   const rect = sceneWrap.getBoundingClientRect();
@@ -305,6 +473,7 @@ function triggerClean(sceneWrap, petWrap) {
   // 清洁完亮一下 + 吱啾
   setTimeout(() => sfxPetSparkle(), 1200);
   setTimeout(() => sfxPetChirp(), 1600);
+  say(voiceOf('clean'));
 
   if (r.leveledUp) {
     setTimeout(() => {
@@ -412,7 +581,7 @@ function renderBars(pet) {
   const expNext = pet.levelNextAt - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
   const expCur  = pet.exp - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
   const expPct = expNext > 0 ? Math.round((expCur / expNext) * 100) : 100;
-  const wrap = el('div', { style: { padding: '10px 16px', background: 'white', borderBottom: '1px solid #eee' } });
+  const wrap = el('div', { class: 'pet-status', style: { padding: '10px 16px', background: 'white', borderBottom: '1px solid #eee' } });
   wrap.append(
     barRow('🍖', '饥饿', pet.hunger),
     barRow('💚', '心情', pet.mood),
@@ -423,6 +592,27 @@ function renderBars(pet) {
     el('div', { class: 'pet-level-bar' }, [el('div', { class: 'fill', style: { width: expPct + '%' } })]),
   );
   return wrap;
+}
+
+/* 交互后只同步顶栏 / 状态条 / 快捷按钮，不重建舞台（避免打断正在播的动画） */
+function syncStatus() {
+  const pet = stateOf();
+  if (!pet) return;
+  const title = document.querySelector('.pet-title');
+  if (title) title.textContent = `${pet.speciesEmoji} ${pet.nickname} · Lv.${pet.level}`;
+  const bars = document.querySelector('.pet-status');
+  if (bars) bars.replaceWith(renderBars(pet));
+  const pw = document.querySelector('.pet-wrap');
+  if (pw) {
+    pw.dataset.scale = String(pet.growthScale);
+    if (!pw.classList.contains('pet-walking')) {
+      pw.style.transform = `translateX(-50%) scale(${pet.growthScale})`;
+    }
+  }
+  const playBtn = document.querySelector('.pet-arena [data-act="play"]');
+  if (playBtn) playBtn.textContent = '🎾 玩耍' + (pet.daily.played ? ' ✓' : '');
+  const cleanBtn = document.querySelector('.pet-arena [data-act="clean"]');
+  if (cleanBtn) cleanBtn.textContent = '🛁 清洁' + (pet.daily.cleaned ? ' ✓' : '');
 }
 
 function barRow(icon, label, pct) {
@@ -441,10 +631,15 @@ function barRow(icon, label, pct) {
 function renderPanel(pet) {
   const panel = el('div', { class: 'pet-panel active', style: { maxHeight: '40vh', overflowY: 'auto' } });
   const invFoods = pet.inventory?.food || {};
+  const pts = store.load().profile?.points || 0;
+  const shopBtn = () => el('button', { class: 'btn btn-ghost shop-entry', type: 'button', text: `🛒 积分商店 · ${pts} 分`, onclick: openShop });
 
   if (currentTab === 'feed') {
     panel.append(
-      el('h3', { text: '🍪 宠物背包' }),
+      el('div', { class: 'pet-panel-head' }, [
+        el('h3', { text: '🍪 宠物背包' }),
+        shopBtn(),
+      ]),
       el('p', { style: { fontSize: '12px', color: 'var(--ink2)', marginBottom: '10px' }, text: '每种动物喜欢/讨厌的食物不一样哦！喂对了 +50% 效果，喂错了它会不开心～' }),
       el('div', { class: 'panel-grid' },
         PET_FOODS.map((f) => {
@@ -467,7 +662,13 @@ function renderPanel(pet) {
             count > 0 ? el('div', { class: 'count', text: `× ${count}` }) : el('div', { class: 'price', text: '背包里没有' }),
           ]);
           box.addEventListener('click', () => {
-            if (count <= 0) { sfxPetNo(); toast('去商店兑换点食物吧～', 'bad'); return; }
+            if (count <= 0) {
+              sfxPetNo();
+              say(voiceOf('hungry')); // 没食物时也有童声台词
+              toast('去商店兑换点食物吧～', 'bad');
+              openShop();
+              return;
+            }
             const res = feed(f.id);
             if (res.ok) {
               // toast 显示修饰后的真实数值 + 偏好提示
@@ -479,6 +680,7 @@ function renderPanel(pet) {
               const arena = document.querySelector('.pet-arena');
               const pw = document.querySelector('.pet-wrap');
               if (arena && pw) triggerFeed(arena, pw, f.emoji, res.preference);
+              syncStatus();
               if (res.leveledUp) {
                 sfxPetLevelUp();
                 sfxPetSparkle();
@@ -497,7 +699,10 @@ function renderPanel(pet) {
   else if (currentTab === 'deco') {
     const worn = pet.wear;
     panel.append(
-      el('h3', { text: '💄 我的装饰' }),
+      el('div', { class: 'pet-panel-head' }, [
+        el('h3', { text: '💄 我的装饰' }),
+        shopBtn(),
+      ]),
       el('p', { style: { fontSize: '12px', color: 'var(--ink2)', marginBottom: '10px' }, text: '4 个位置，穿上后宠物会戴上对应的装饰' }),
       el('div', { class: 'panel-grid' },
         PET_DECOS.map((d) => {
@@ -512,11 +717,10 @@ function renderPanel(pet) {
               : el('div', { class: 'price', text: `未解锁 (${d.cost}分)` }),
           ]);
           box.addEventListener('click', () => {
-            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); return; }
+            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); openShop(); return; }
             sfxClick();
-            if (wornHere) { unequipDeco(d.slot); sfxPetPop(); toast('脱下了', 'ok'); }
-            else { equipDeco(d.id); sfxPetUnlock(); toast('穿上啦！', 'ok'); }
-            render();
+            if (wornHere) { unequipDeco(d.slot); sfxPetPop(); toast('脱下了', 'ok'); render(); say(voiceOf('undress')); }
+            else { equipDeco(d.id); sfxPetUnlock(); toast('穿上啦！', 'ok'); render(); say(voiceOf('dress')); }
           });
           return box;
         })
@@ -526,7 +730,10 @@ function renderPanel(pet) {
 
   else if (currentTab === 'scene') {
     panel.append(
-      el('h3', { text: '🏖️ 乐园场景' }),
+      el('div', { class: 'pet-panel-head' }, [
+        el('h3', { text: '🏖️ 乐园场景' }),
+        shopBtn(),
+      ]),
       el('p', { style: { fontSize: '12px', color: 'var(--ink2)', marginBottom: '10px' }, text: '解锁后点击就切换乐园背景' }),
       el('div', { class: 'panel-grid' },
         PET_SCENES.map((s) => {
@@ -541,11 +748,12 @@ function renderPanel(pet) {
               : (s.cost === 0 ? el('div', { class: 'price', text: '初始' }) : el('div', { class: 'price', text: `${s.cost} 积分` })),
           ]);
           box.addEventListener('click', () => {
-            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); return; }
+            if (!owned) { sfxPetNo(); toast('去商店解锁吧', 'bad'); openShop(); return; }
             if (cur) return;
             sfxPetUnlock(); changeScene(s.id);
             setTimeout(() => sfxPetChirp(), 300);
             render();
+            say(voiceOf('scene'));
           });
           return box;
         })
