@@ -1,15 +1,15 @@
 ﻿/**
  * score.js —— 积分结算
- * 规则：每完成一个任务 +2 分；不设全勤/连签额外加成。
+ * 规则：每完成一个任务 +2 分；四科全完成当日 +5 分，连续天数每多一天再 +2 分。
  * 只有游戏页真实达标后才会调用 completeTask，工作台不能手动勾选。
  */
 
 import * as store from './store.js';
 import { allSubjectsDone } from './tasks.js';
 
-export const TASK_POINTS = 2;
-export const DAILY_BONUS = 0;
-export const STREAK_BONUS = 0;
+export const TASK_POINTS = 2;   // 每完成 1 个挑战 +2
+export const DAILY_BONUS = 5;   // 当天四科全完成的基础奖励
+export const STREAK_PER_DAY = 2; // 连续天数每多一天的额外加成（第 N 天 allDone 加 (N-1)*2）
 
 export function completeTask(taskId, result = {}) {
   const data = store.load();
@@ -53,10 +53,7 @@ export function completeTask(taskId, result = {}) {
   if (allDone) day.chest.unlocked = true;
 
   if (allDone && !day.allDoneBonus) {
-    day.allDoneBonus = DAILY_BONUS;
-    dailyBonus = DAILY_BONUS;
-    awarded += DAILY_BONUS;
-
+    // 先更新连续天数，连签加成要用到新 streak
     if (profile.lastFullDate !== day.date) {
       const yesterday = store.shiftDateKey(day.date, -1);
       streak = profile.lastFullDate === yesterday ? (profile.streak || 0) + 1 : 1;
@@ -66,15 +63,14 @@ export function completeTask(taskId, result = {}) {
       streak = profile.streak || 1;
     }
 
-    if (streak > 0 && streak % 7 === 0) {
-      const got = (profile.streakBonusDays || []).some((x) => x.streak === streak);
-      if (!got) {
-        streakBonus = STREAK_BONUS;
-        awarded += STREAK_BONUS;
-        profile.streakBonusDays = [...(profile.streakBonusDays || []), { streak, date: day.date }];
-        day.streakBonus = STREAK_BONUS;
-      }
-    }
+    // 基础 5 分 + 连续天数每多一天 +2（第 1 天 streak=1 → 额外 +0，第 2 天 → +2，第 3 天 → +4 …）
+    dailyBonus = DAILY_BONUS;
+    streakBonus = Math.max(0, (streak - 1)) * STREAK_PER_DAY;
+
+    day.allDoneBonus = dailyBonus;
+    day.streakBonus = streakBonus;
+
+    awarded += dailyBonus + streakBonus;
   }
 
   profile.points += dailyBonus + streakBonus;

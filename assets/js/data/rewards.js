@@ -1,4 +1,4 @@
-﻿/**
+/**
  * rewards.js —— 奖励池集中配置
  * 想增删宝箱奖励或积分商店商品，只改这一个文件。
  *
@@ -182,49 +182,49 @@ export const SHOP_ITEMS = [
     id: 'shop-story',
     name: '睡前多讲一个故事',
     emoji: '📚',
-    cost: 100,
+    cost: 50,
     desc: '今晚由你来挑故事书。'
   },
   {
     id: 'shop-draw',
     name: '画画 / 手工 30 分钟',
     emoji: '🎨',
-    cost: 200,
+    cost: 100,
     desc: '自由创作时间，不被打扰。'
   },
   {
     id: 'shop-game',
     name: '亲子游戏 30 分钟',
     emoji: '🎲',
-    cost: 300,
+    cost: 150,
     desc: '和爸爸妈妈一起玩一局桌游或扑克。'
   },
   {
     id: 'shop-dessert',
     name: '选一份小甜点',
     emoji: '🍰',
-    cost: 400,
+    cost: 200,
     desc: '周末兑现，由你决定吃什么。'
   },
   {
     id: 'shop-movie',
     name: '周末家庭电影夜',
     emoji: '🍿',
-    cost: 600,
+    cost: 300,
     desc: '你来选片，全家一起看。'
   },
   {
     id: 'shop-trip',
     name: '周末公园 / 户外半天',
     emoji: '🌳',
-    cost: 800,
+    cost: 400,
     desc: '去公园骑车、放风筝或散步。'
   },
   {
     id: 'shop-book',
     name: '挑一本新书',
     emoji: '📗',
-    cost: 1000,
+    cost: 500,
     desc: '和爸爸妈妈一起去书店选一本。'
   }
 ];

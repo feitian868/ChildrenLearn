@@ -1,4 +1,4 @@
-﻿/**
+/**
  * workbench.js —— 工作台：任务、打卡进度、宝箱、商店、数据管理、家长核对
  * 任务卡不可手动勾选，完成状态只由游戏页达标后回写。
  */
@@ -254,17 +254,40 @@ function render(data) {
 function renderUserBar(data) {
   const users = store.listUsers();
   const current = store.currentUser();
+  const currentAvatar = store.getUserAvatar(current);
+
+  const avatarEl = el('span', { class: 'user-badge', title: '点击更换头像', text: currentAvatar });
+  avatarEl.style.cursor = 'pointer';
+  avatarEl.style.userSelect = 'none';
+
+  /* 任何已选头像都能再换：点头像，或点下面的「更换头像」 */
+  const openAvatarPicker = async () => {
+    sfxClick();
+    const before = store.getUserAvatar(current);
+    const pick = await promptPickAvatar(before);
+    if (!pick || pick === before) return;
+    const res = store.setUserAvatar(current, pick);
+    if (!res.ok) { toast(res.reason, 'bad'); return; }
+    avatarEl.textContent = pick;
+    const opt = select.options[select.selectedIndex];
+    if (opt && opt.value === current) opt.text = `${pick} ${current}`;
+    toast(`头像已更新为 ${pick}`, 'ok');
+  };
+  avatarEl.addEventListener('click', openAvatarPicker);
 
   const select = el('select', { class: 'user-select', 'aria-label': '切换用户' });
   users.forEach((name) => {
-    select.append(el('option', { value: name, text: name }));
+    const opt = el('option', { value: name, text: `${store.getUserAvatar(name)} ${name}` });
+    select.append(opt);
   });
+  // value 只存纯用户名，显示文本才带 emoji
   select.value = current;
   select.addEventListener('change', () => {
     const name = select.value;
+    if (!store.listUsers().includes(name)) return;
     if (name === store.currentUser()) return;
     sfxClick();
-    store.switchUser(name); // 当前数据已随操作落盘，这里换键重读
+    store.switchUser(name);
     parentOpen = false;
     refresh();
     toast(`已切换到「${name}」`, 'ok');
@@ -273,16 +296,16 @@ function renderUserBar(data) {
   const addBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '＋ 新建用户' });
   addBtn.addEventListener('click', async () => {
     sfxClick();
-    const name = await promptUserName();
-    if (!name) return;
-    const res = store.createUser(name);
+    const picked = await promptNewUser();
+    if (!picked) return;
+    const res = store.createUser(picked.name, picked.avatar);
     if (!res.ok) {
       toast(res.reason, 'bad');
       return;
     }
     parentOpen = false;
     refresh();
-    toast(`欢迎，「${name}」！已切换到新用户`, 'ok');
+    toast(`欢迎，${picked.avatar}「${picked.name}」！已切换到新用户`, 'ok');
   });
 
   const delBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '删除用户' });
@@ -311,11 +334,22 @@ function renderUserBar(data) {
     toast(`已删除「${current}」，当前为「${res.switchedTo}」`, 'ok');
   });
 
+  const changeAvatarBtn = el('button', {
+    class: 'user-avatar-btn',
+    type: 'button',
+    text: '更换头像'
+  });
+  changeAvatarBtn.style.cssText = 'margin:0;padding:0;border:0;background:none;color:#4a7fff;font:inherit;font-size:12px;cursor:pointer;text-decoration:underline';
+  changeAvatarBtn.addEventListener('click', openAvatarPicker);
+
   return el('div', { class: 'card user-bar' }, [
-    el('span', { class: 'user-badge', text: '👤' }),
+    avatarEl,
     el('div', { class: 'user-info' }, [
       el('div', { class: 'user-name', text: current }),
-      el('div', { class: 'user-sub', text: `共 ${users.length} 个用户 · 数据互不影响` })
+      el('div', { class: 'user-sub' }, [
+        el('span', { text: `共 ${users.length} 个用户 · 数据互不影响 · ` }),
+        changeAvatarBtn
+      ])
     ]),
     select,
     addBtn,
@@ -323,21 +357,103 @@ function renderUserBar(data) {
   ]);
 }
 
-/** 新建用户的名字输入弹窗，resolve 名字或 null */
-function promptUserName() {
+/** 一个 emoji 网格选择器，返回 Promise<string|null> */
+function promptPickAvatar(initial = '👤') {
   return new Promise((resolve) => {
+    const pool = store.AVATAR_POOL;
+    let picked = pool.includes(initial) ? initial : pool[0];
+
+    const grid = el('div', { class: 'avatar-grid' });
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(6, 1fr)';
+    grid.style.gap = '8px';
+    grid.style.marginTop = '12px';
+    grid.style.marginBottom = '16px';
+
+    const cells = pool.map((emo) => {
+      const cell = el('button', {
+        class: 'avatar-cell',
+        type: 'button',
+        text: emo,
+        'aria-label': `选择头像 ${emo}`
+      });
+      Object.assign(cell.style, {
+        border: '2px solid transparent',
+        borderRadius: '12px',
+        background: emo === picked ? '#e8f0ff' : '#f4f6fc',
+        fontSize: '26px',
+        lineHeight: '44px',
+        height: '48px',
+        cursor: 'pointer',
+        transition: 'background .15s, border-color .15s'
+      });
+      cell.addEventListener('click', () => {
+        picked = emo;
+        cells.forEach((c) => {
+          c.style.background = c === cell ? '#e8f0ff' : '#f4f6fc';
+          c.style.borderColor = c === cell ? '#4a7fff' : 'transparent';
+        });
+      });
+      if (emo === picked) cell.style.borderColor = '#4a7fff';
+      return cell;
+    });
+    cells.forEach((c) => grid.append(c));
+
+    const overlay = el('div', { class: 'overlay' });
+    const done = (value) => { overlay.remove(); resolve(value); };
+
+    const cancelBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '取消' });
+    const okBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '选好了' });
+    cancelBtn.addEventListener('click', () => done(null));
+    okBtn.addEventListener('click', () => done(picked));
+
+    overlay.append(el('div', { class: 'sheet' }, [
+      el('h3', { text: '选择头像' }),
+      grid,
+      el('div', { class: 'sheet-actions' }, [cancelBtn, okBtn])
+    ]));
+    document.body.append(overlay);
+  });
+}
+
+/** 新建用户：先选头像，再输名字。resolve {name, avatar} 或 null */
+async function promptNewUser() {
+  return new Promise((resolve) => {
+    const pool = store.AVATAR_POOL;
+    let picked = pool[Math.floor(Math.random() * pool.length)]; // 随机给一个初始头像
+
+    const grid = el('div', { class: 'avatar-grid' });
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:4px 0 14px';
+
+    const cells = pool.map((emo) => {
+      const cell = el('button', { type: 'button', text: emo });
+      Object.assign(cell.style, {
+        border: '2px solid transparent', borderRadius: '12px',
+        background: emo === picked ? '#e8f0ff' : '#f4f6fc',
+        fontSize: '26px', lineHeight: '44px', height: '48px', cursor: 'pointer',
+        transition: 'background .15s, border-color .15s'
+      });
+      if (emo === picked) cell.style.borderColor = '#4a7fff';
+      cell.addEventListener('click', () => {
+        picked = emo;
+        cells.forEach((c) => {
+          c.style.background = c === cell ? '#e8f0ff' : '#f4f6fc';
+          c.style.borderColor = c === cell ? '#4a7fff' : 'transparent';
+        });
+      });
+      return cell;
+    });
+    cells.forEach((c) => grid.append(c));
+
     const input = el('input', {
       class: 'user-input',
-      type: 'text',
-      maxlength: '12',
-      placeholder: '输入名字，如：小明',
-      'aria-label': '用户名字'
+      type: 'text', maxlength: '12',
+      placeholder: '输入名字，如：小明', 'aria-label': '用户名字'
     });
+
     const overlay = el('div', { class: 'overlay' });
-    const done = (value) => {
-      overlay.remove();
-      resolve(value);
-    };
+    const done = (value) => { overlay.remove(); resolve(value); };
+
     const cancelBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '取消' });
     const okBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '创建' });
     cancelBtn.addEventListener('click', () => done(null));
@@ -348,12 +464,14 @@ function promptUserName() {
         setTimeout(() => input.classList.remove('anim-shake'), 420);
         return;
       }
-      done(name);
+      done({ name, avatar: picked });
     });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') okBtn.click(); });
+
     overlay.append(el('div', { class: 'sheet' }, [
       el('h3', { text: '新建用户' }),
-      el('p', { text: '不需要账号密码，一个名字就是一份独立的数据。' }),
+      el('p', { text: '不需要账号密码，一个名字 + 一个头像就是一份独立的数据。' }),
+      grid,
       input,
       el('div', { class: 'sheet-actions' }, [cancelBtn, okBtn])
     ]));
@@ -415,7 +533,7 @@ function renderTop(data) {
     el('div', { class: 'wb-brand' }, [
       el('div', { class: 'wb-logo', text: '🎒' }),
       el('div', {}, [
-        el('h1', { text: '小学四科每日任务' }),
+        el('h1', { text: '小学每日学习平台' }),
         el('p', {
           class: 'wb-sub',
           text: `${store.formatDateCN(store.todayKey())} · ${focusTextOf(day.weekday)} · ${GRADE_LABEL[data.grade]}`
@@ -426,7 +544,7 @@ function renderTop(data) {
       el('span', { class: 'stat' }, [
         el('span', { class: 'stat-icon', text: '⭐' }),
         el('b', { id: 'pointsStat', text: points }),
-        el('small', { text: '积分 · 每任务+2' })
+        el('small', { text: '积分 · 每任务+2 · 全勤+5起' })
       ]),
       el('span', { class: 'stat' }, [
         el('span', { class: 'stat-icon', text: '🔥' }),
@@ -555,7 +673,7 @@ function renderSubjects() {
       el('div', { class: 'subject-badge', text: meta.icon }),
       el('div', { class: 'subject-title' }, [
         el('h3', { text: meta.name }),
-        el('p', { text: '首答正确 3 题即达标，答错可重试 · 每完成 1 项 +2 分' })
+        el('p', { text: '首答正确 3 题即达标，答错可重试 · 每任务 +2，四科全完成 +5 起' })
       ])
     ];
 
@@ -951,7 +1069,7 @@ function renderShop() {
   const card = el('div', { class: 'card shop' }, [
     el('div', { class: 'shop-head' }, [
       el('h3', { text: '积分商店' }),
-      el('span', { class: 'shop-points' }, ['当前 ', el('b', { text: state.points }), ' 分 · 每完成 1 项任务 +2 分'])
+      el('span', { class: 'shop-points' }, ['当前 ', el('b', { text: state.points }), ' 分 · 每任务 +2，四科全完成 +5 起'])
     ]),
     list
   ]);

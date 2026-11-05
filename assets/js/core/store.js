@@ -17,6 +17,14 @@ export const VERSION = 4;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
 export const DAYS_KEEP = 90;   // days 同样只留 90 天（否则 localStorage 会被撑爆）
 
+/** 可选的头像 emoji 池，新建/切换时挑选。纯字符，不占存储。 */
+export const AVATAR_POOL = [
+  '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐸',
+  '🐵', '🐧', '🐥', '🦄', '🐙', '🐳', '🦉', '🦋',
+  '🌞', '🌈', '⭐', '🍎', '🍓', '🎃', '🍀', '🌸'
+];
+export const DEFAULT_AVATAR = '👤';
+
 export const SUBJECTS = ['chinese', 'english', 'math', 'science'];
 
 export const SUBJECT_META = {
@@ -117,31 +125,103 @@ function writeRaw(key, value) {
   }
 }
 
-export function listUsers() {
+/** 内部：把任意历史格式的用户列表统一成 [{name, avatar}]，并顺手写回标准格式 */
+function readUserStore() {
+  const raw = readRaw(APP_USERS_KEY);
+  let list = null;      // 读到的原始数组（可能是字符串或对象）
+  let needWrite = false;
+
   try {
-    const arr = JSON.parse(readRaw(APP_USERS_KEY) || '[]');
-    if (Array.isArray(arr) && arr.length) return arr.filter((n) => typeof n === 'string' && n);
-  } catch { /* 落到默认 */ }
-  return ['默认用户'];
+    const parsed = JSON.parse(raw || 'null');
+    if (parsed && Array.isArray(parsed.users)) {
+      list = parsed.users;                    // 新版 { users: [...] }
+    } else if (Array.isArray(parsed)) {
+      list = parsed;                          // 更早的版本直接存数组
+      needWrite = true;
+    }
+  } catch { /* 坏数据，重新初始化 */ }
+
+  if (list && list.length) {
+    const normalized = list
+      .map((u) => {
+        // 兼容三种历史形态：字符串 / {name,avatar} / {avatar}（旧版漏存了 name）
+        if (typeof u === 'string') {
+          const name = u.trim();
+          return name ? { name, avatar: DEFAULT_AVATAR } : null;
+        }
+        if (u && typeof u === 'object' && u.name) {
+          return {
+            name: String(u.name).trim(),
+            // avatar 可能被旧代码写成对象/空值，非字符串一律回落到默认头像
+            avatar: typeof u.avatar === 'string' && u.avatar.trim() ? u.avatar.trim() : DEFAULT_AVATAR
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (normalized.length) {
+      if (needWrite || normalized.length !== list.length || raw.indexOf('"name"') === -1) {
+        writeRaw(APP_USERS_KEY, JSON.stringify({ users: normalized }));
+      }
+      return normalized;
+    }
+    needWrite = true; // 数组全被过滤掉了，重建
+  }
+
+  // 完全没有可用用户 → 初始化一个"默认用户"
+  const seed = [{ name: '默认用户', avatar: DEFAULT_AVATAR }];
+  writeRaw(APP_USERS_KEY, JSON.stringify({ users: seed }));
+  if (!readRaw(APP_CURRENT_KEY)) writeRaw(APP_CURRENT_KEY, '默认用户');
+  return seed;
+}
+
+/** 内部：把 [{name, avatar}] 对象数组写回 */
+function writeUserStore(users, current) {
+  writeRaw(APP_USERS_KEY, JSON.stringify({ users }));
+  writeRaw(APP_CURRENT_KEY, current);
+}
+
+/** 对外：返回纯字符串数组（保持与 currentUser / switchUser 等旧调用的兼容） */
+export function listUsers() {
+  return readUserStore().map((u) => u.name);
+}
+
+export function getUserAvatar(name = currentUser()) {
+  const users = readUserStore();
+  const match = users.find((u) => u.name === name);
+  return match ? match.avatar : DEFAULT_AVATAR;
+}
+
+/** 更新某个用户的头像 emoji */
+export function setUserAvatar(name, avatar) {
+  const users = readUserStore();
+  const u = users.find((x) => x.name === name);
+  if (!u) return { ok: false, reason: '用户不存在' };
+  if (typeof avatar !== 'string' || !avatar.trim()) avatar = DEFAULT_AVATAR;
+  u.avatar = avatar.trim();
+  writeUserStore(users, currentUser());
+  return { ok: true };
 }
 
 export function currentUser() {
   const name = readRaw(APP_CURRENT_KEY);
   const users = listUsers();
-  return name && users.includes(name) ? name : users[0];
+  if (name && users.includes(name)) return name;
+  const fallback = users[0];
+  // 旧版本可能把当前用户写成了 "undefined"/对象串，这里顺手修正，避免下次又读到脏值
+  if (fallback && fallback !== name) writeRaw(APP_CURRENT_KEY, fallback);
+  return fallback;
 }
 
-function saveUsers(users, current) {
-  writeRaw(APP_USERS_KEY, JSON.stringify(users));
-  writeRaw(APP_CURRENT_KEY, current);
-}
-
-/** 首次打开：无用户则建“默认用户”；旧版 dailyTaskData 键自动迁移（旧数据优先） */
+/** 首次打开：无用户则建"默认用户"；旧版 dailyTaskData 键自动迁移（旧数据优先） */
 function bootstrapUsers() {
-  if (!readRaw(APP_USERS_KEY)) {
-    saveUsers(['默认用户'], '默认用户');
-  }
+  const users = readUserStore();
   const cur = currentUser();
+  if (!users.find((u) => u.name === cur)) {
+    users.push({ name: cur, avatar: DEFAULT_AVATAR });
+    writeUserStore(users, cur);
+  }
   // 旧版单用户数据迁移：旧数据比新建的空数据珍贵，直接覆盖
   const legacy = readRaw('dailyTaskData');
   if (legacy) {
@@ -154,16 +234,19 @@ function bootstrapUsers() {
 
 /**
  * 新建用户并切换过去
+ * @param {string} name
+ * @param {string} [avatar] emoji 头像
  * @returns {{ok:boolean, reason?:string}}
  */
-export function createUser(name) {
+export function createUser(name, avatar) {
   const trimmed = String(name || '').trim();
   if (!trimmed) return { ok: false, reason: '名字不能为空' };
   if (trimmed.length > 12) return { ok: false, reason: '名字最长 12 个字' };
-  const users = listUsers();
-  if (users.includes(trimmed)) return { ok: false, reason: '已经有同名用户了' };
-  users.push(trimmed);
-  saveUsers(users, trimmed);
+  const users = readUserStore();
+  if (users.some((u) => u.name === trimmed)) return { ok: false, reason: '已经有同名用户了' };
+  const chosenAvatar = (typeof avatar === 'string' && avatar.trim()) ? avatar.trim() : DEFAULT_AVATAR;
+  users.push({ name: trimmed, avatar: chosenAvatar });
+  writeUserStore(users, trimmed);
   writeRaw(getUserKey(trimmed), JSON.stringify(defaultData()));
   memoryCache = null;
   return { ok: true };
@@ -171,21 +254,22 @@ export function createUser(name) {
 
 /** 删除用户及其数据键；不允许删除最后一个用户 */
 export function deleteUser(name) {
-  const users = listUsers();
-  if (!users.includes(name)) return { ok: false, reason: '用户不存在' };
+  const users = readUserStore();
+  const match = users.find((u) => u.name === name);
+  if (!match) return { ok: false, reason: '用户不存在' };
   if (users.length <= 1) return { ok: false, reason: '至少要保留一个用户' };
   try { localStorage.removeItem(getUserKey(name)); } catch { /* 忽略 */ }
-  const rest = users.filter((n) => n !== name);
-  const next = currentUser() === name ? rest[0] : currentUser();
-  saveUsers(rest, next);
+  const rest = users.filter((u) => u.name !== name);
+  const next = currentUser() === name ? rest[0].name : currentUser();
+  writeUserStore(rest, next);
   memoryCache = null;
   return { ok: true, switchedTo: next };
 }
 
 /** 切换用户：当前数据随时随 update 落盘，这里只需清缓存换键 */
 export function switchUser(name) {
-  const users = listUsers();
-  if (!users.includes(name)) return { ok: false, reason: '用户不存在' };
+  const users = readUserStore();
+  if (!users.some((u) => u.name === name)) return { ok: false, reason: '用户不存在' };
   if (name === currentUser()) return { ok: true };
   memoryCache = null; // 清掉当前用户缓存，下次 load 读目标用户
   writeRaw(APP_CURRENT_KEY, name);
