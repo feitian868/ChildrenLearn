@@ -68,6 +68,10 @@ console.log('出现次数 Top 10:');
 console.log('题型分布:', Object.fromEntries([...types.entries()].sort((a, b) => b[1] - a[1])));
 console.log('不同 topic 数:', topics.size);
 
+const dataKey = [...mem.keys()].find((k) => k.includes('_dailyTaskData'));
+const daysCount = dataKey ? Object.keys(JSON.parse(mem.get(dataKey)).days || {}).length : -1;
+
 console.log('\n=== localStorage 体积增长（字符数，含 key）===');
 volume.forEach(([d, c]) => console.log(`  第 ${String(d).padStart(3)} 天: ${(c / 1024 / 1024).toFixed(2)} M 字符 ≈ ${(c * 2 / 1024 / 1024).toFixed(2)} MB(UTF-16) / ${(c / 1024 / 1024).toFixed(2)} MB(UTF-8)`));
-console.log('  ※ 浏览器 localStorage 常见配额 5MB；store.js:101 写入失败仅 console.warn，会被静默吞掉');
+console.log('  ※ 浏览器 localStorage 常见配额 5MB；store.js 写入失败会派发 store:write-failed，工作台会 toast 告警');
+console.log(`data.days 条数: ${daysCount}（DAYS_KEEP=90）`);

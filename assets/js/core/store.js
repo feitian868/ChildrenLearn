@@ -306,6 +306,7 @@ export function load() {
 
 export function save(data) {
   memoryCache = data;
+  trimDays(data);
   writeRaw(getUserKey(currentUser()), JSON.stringify(data));
   return data;
 }
@@ -451,12 +452,16 @@ function snapshotHistory(data) {
   // days 必须一起裁：每个 day 含完整的 questions 数组，
   // 不裁的话用到半年会超过 localStorage 5MB 配额。
   // 历史统计已全部落在 dailyHistory，成长记录不依赖旧 days。
-  const dayKeys = Object.keys(data.days).sort();
-  if (dayKeys.length > DAYS_KEEP) {
-    dayKeys.slice(0, dayKeys.length - DAYS_KEEP).forEach((k) => { delete data.days[k]; });
-    changed = true;
-  }
+  if (trimDays(data)) changed = true;
   return changed;
+}
+
+/** days 只保留最近 DAYS_KEEP 天；写入时也调用，避免「今天新建一天」后变成 91 天 */
+function trimDays(data) {
+  const keys = Object.keys(data.days || {}).sort();
+  if (keys.length <= DAYS_KEEP) return false;
+  keys.slice(0, keys.length - DAYS_KEEP).forEach((k) => { delete data.days[k]; });
+  return true;
 }
 
 /** 成长记录用：历史快照 + 今天（实时计算）合并，键为日期 */
