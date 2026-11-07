@@ -35,21 +35,39 @@ export const WEEKDAY_FOCUS_TEXT = {
   6: '周六 · 英语 + 科学'
 };
 
-export const QUESTIONS_PER_TASK = 4;
-export const PASS_LINE = 3; // 首答正确 ≥3 题即达标
+export const QUESTIONS_PER_TASK = 4; // ★ 硬禁区，年级差异靠「项数 + 达标线」实现
+export const PASS_LINE = 3; // 三年级达标线（保持 v4 口径，兼容旧引用）
 
+/**
+ * P1 年级差异化：每日任务项数（每科）。
+ * 三年级沿用 v4 的 2 项（重点日 3 项），保证 A~E 防回归基线不变。
+ * 题量只动「项数」，不动 QUESTIONS_PER_TASK。
+ */
+export const TASK_BASE_BY_GRADE = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 4 };
+
+/** 达标线：1~2 年级 2 题；3~6 年级 3 题（每题组题量仍为 4） */
+export const PASS_LINE_BY_GRADE = { 1: 2, 2: 2, 3: 3, 4: 3, 5: 3, 6: 3 };
+
+export function passLineFor(grade = 3) {
+  return PASS_LINE_BY_GRADE[Number(grade)] ?? PASS_LINE;
+}
+
+/** 4 档难度标签（P1 统一口径；题池目前只有 1~2 档，3~4 档待 P2 内容补齐） */
 export const LEVEL_LABEL = {
-  1: '基础',
-  2: '挑战'
+  1: '识记',
+  2: '理解',
+  3: '应用',
+  4: '迁移'
 };
 
 export function focusOf(weekday) {
   return WEEKDAY_FOCUS[weekday] || [];
 }
 
-export function taskCountFor(subject, weekday) {
-  if (weekday === 0) return 2;
-  return focusOf(weekday).includes(subject) ? 3 : 2;
+export function taskCountFor(subject, weekday, grade = 3) {
+  const base = TASK_BASE_BY_GRADE[Number(grade)] ?? TASK_BASE_BY_GRADE[3];
+  if (weekday === 0) return base; // 周日：四科复习，不加码
+  return focusOf(weekday).includes(subject) ? base + 1 : base;
 }
 
 export function focusTextOf(weekday) {

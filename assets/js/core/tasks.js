@@ -16,6 +16,7 @@ import {
   PASS_LINE,
   QUESTIONS_PER_TASK,
   focusOf,
+  passLineFor,
   taskCountFor
 } from '../data/curriculum.js';
 import { CHINESE_BANK, chineseGenerated } from '../data/knowledge-chinese.js';
@@ -107,8 +108,20 @@ function getPool(subject, grade, rng, dayKey = '', weakSet = null) {
   return rankWeak(pool, weakSet);
 }
 
-/** 近 7 天首答正确率 → 难度档位：{ l2: 每项挑战题数, stretch: 是否配跨级拔高题 } */
-function adaptTarget(data) {
+/** 掌握度弱项占比：review 态 kid / 有记录 kid（自适应第二信号） */
+function weakRatioOf(data) {
+  const recs = Object.values(data.mastery?.keys || {});
+  if (!recs.length) return 0;
+  return recs.filter((r) => r.status === 'review').length / recs.length;
+}
+
+/**
+ * 难度档位：{ l2: 每项挑战题数, stretch: 是否配跨级拔高题 }
+ * P1：年级 + 近 7 天正确率 + 掌握度弱项占比三信号。
+ * 1~2 年级固定 2 道挑战题、不配拔高；3~6 年级保持 v4 的档位梯度。
+ */
+function adaptTarget(data, grade = 3) {
+  const g = Number(grade) || 3;
   const today = store.todayKey();
   let correct = 0;
   let total = 0;
@@ -119,16 +132,28 @@ function adaptTarget(data) {
       total += h.firstTry.total;
     }
   }
-  if (!total) return { l2: 2, stretch: false }; // 无历史：默认配比
+  // 无历史（新用户 / 刚换册）：用掌握度兜底，而不是一律最低档
+  if (!total) {
+    const recs = Object.values(data.mastery?.keys || {});
+    if (recs.length >= 8) {
+      const mastered = recs.filter((r) => r.status === 'mastered').length;
+      if (mastered / recs.length >= 0.7) return { l2: g <= 2 ? 2 : 3, stretch: false };
+    }
+    return { l2: 2, stretch: false };
+  }
   const acc = correct / total;
-  if (acc >= 0.85) return { l2: 3, stretch: true };
+  if (g <= 2) return { l2: 2, stretch: false }; // 低年级不配拔高题
+  if (acc >= 0.85) {
+    // 正确率高且弱项不成片时才拔高：避免「整体正确率高、但一批 kid 还在 review」时继续加压
+    return { l2: 3, stretch: weakRatioOf(data) < 0.6 };
+  }
   if (acc >= 0.6) return { l2: 3, stretch: false };
   return { l2: 2, stretch: false };
 }
 
 
 
-function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false) {
+function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE) {
   const avail = pool.filter((item) => !used.has(item.id));
   // 知识点冷却起点：key 在 COOLDOWN_DAYS 内考过，本轮先让位给别的知识点
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
@@ -173,7 +198,7 @@ function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = Q
   l1.cool = logicFirst(l1.cool);
 
   // 收敛模式下给每项预留 1 个拓展位：教材题填满也不把逻辑题清空（仍受 MAX_LOGIC_PER_TASK 限制）
-  const reserveLogic = textbookFirst && quota > PASS_LINE;
+  const reserveLogic = textbookFirst && quota > passLine;
   const effQuota = reserveLogic ? quota - 1 : quota;
 
   const picked = [];
@@ -231,7 +256,7 @@ function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = Q
   // 启用课程收敛时：题量不足也接受（不拿未学单元凑数），但每项不得低于达标线；
   // 拓展题严格受 MAX_LOGIC_PER_TASK 限制，不再有兜底放行的后门。
   if (picked.length < quota && (!allowShort || !picked.length)) return [];
-  if (allowShort && picked.length < PASS_LINE) return [];
+  if (allowShort && picked.length < passLine) return [];
   picked.forEach((item) => used.add(item.id));
   return picked;
 }
@@ -333,7 +358,8 @@ function buildDay(key, grade, data) {
   const focus = focusOf(weekday);
   const tasks = [];
   const recent = buildRecent(data); // 365 天题面签名 + 知识点冷却日期，当天只建一次
-  const adapt = adaptTarget(data || {});
+  const adapt = adaptTarget(data || {}, grade);
+  const passLine = passLineFor(grade);
   const usedTemplates = new Map(); // 当日全局模板计数（跨科目）
   const courseScopes = {};        // 各科是否启用了课程单元收敛（阶段 A）
   // 六年级没有更高年级，拔高档转为「全挑战题」
@@ -346,7 +372,7 @@ function buildDay(key, grade, data) {
 
   store.SUBJECTS.forEach((subject) => {
     const meta = store.SUBJECT_META[subject];
-    const count = taskCountFor(subject, weekday);
+    const count = taskCountFor(subject, weekday, grade);
     const rng = mulberry32(hashString(`${key}:${grade}:${subject}`));
     const rawPool = visiblePool(getPool(subject, grade, rng, key, weakSet), approved);
     // 抽题范围收敛：当前单元 + 已学单元；未配置教材时 scope 为 null，保持全年级题池
@@ -416,7 +442,7 @@ function buildDay(key, grade, data) {
         : null;
       const quota = stretchQ ? QUESTIONS_PER_TASK - 1 : QUESTIONS_PER_TASK;
       const l2t = stretchQ ? Math.min(adapt.l2, quota) : (adapt.stretch ? QUESTIONS_PER_TASK : adapt.l2);
-      const questions = pickQuestions(rng, pool, used, usedKeys, recent, l2t, key, quota, usedTemplates, allowShort, reviewQs, weakSet, !!scopeInfo);
+      const questions = pickQuestions(rng, pool, used, usedKeys, recent, l2t, key, quota, usedTemplates, allowShort, reviewQs, weakSet, !!scopeInfo, passLine);
       if (!questions.length) break;
       if (stretchQ) questions.push(stretchQ);
       tasks.push({

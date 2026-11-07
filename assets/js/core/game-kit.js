@@ -4,7 +4,7 @@
  */
 
 import * as store from './store.js';
-import { GRADE_LABEL, LEVEL_LABEL, PASS_LINE, SUBJECT_TIP } from '../data/curriculum.js';
+import { GRADE_LABEL, LEVEL_LABEL, passLineFor, SUBJECT_TIP } from '../data/curriculum.js';
 import { getTaskById } from './tasks.js';
 import { completeTask, markCelebrated } from './score.js';
 import { buildWeeklyQuiz, saveQuizResult } from './mastery.js';
@@ -41,10 +41,10 @@ const WRONG_HINTS = [
   '看看题目里的关键词，再选一次。'
 ];
 
-function achievementFor(subject, correct, total) {
+function achievementFor(subject, correct, total, grade = 3) {
   const list = ACHIEVEMENTS[subject] || ['学习小达人'];
   if (correct >= total) return list[2];
-  if (correct >= PASS_LINE) return list[1];
+  if (correct >= passLineFor(grade)) return list[1];
   return list[0];
 }
 
@@ -689,7 +689,7 @@ export function mountGame(subject) {
       return;
     }
 
-    const passed = first >= PASS_LINE;
+    const passed = first >= passLineFor(task?.grade);
 
     if (!passed) {
       renderResult({ passed: false, first, total });
@@ -730,7 +730,7 @@ export function mountGame(subject) {
       return;
     }
 
-    const achievement = achievementFor(task.subject, first, total);
+    const achievement = achievementFor(task.subject, first, total, task.grade);
     celebrate({
       emoji: SUBJECT_EMOJI[task.subject] || '🎉',
       title: achievement,
@@ -797,9 +797,9 @@ export function mountGame(subject) {
     if (isReplay) {
       body = '这次是复习，不重复加分，但知识又巩固了一遍。';
     } else if (passed) {
-      body = `首答正确 ${first}/${total}，达标线是 ${PASS_LINE} 题。`;
+      body = `首答正确 ${first}/${total}，达标线是 ${passLineFor(task?.grade)} 题。`;
     } else {
-      body = `首答正确 ${first}/${total}，达标需要 ${PASS_LINE} 题。答错不扣分，看看提示再来一次。`;
+      body = `首答正确 ${first}/${total}，达标需要 ${passLineFor(task?.grade)} 题。答错不扣分，看看提示再来一次。`;
     }
 
     const stats = el('div', { class: 'result-stats' }, [chip(`首答 ${first}/${total}`, 'chip-line')]);
