@@ -4,7 +4,7 @@
  * 跑法：node verify/sim_grade.mjs
  * 冻结日期 2026-11-04（周三，英语日），逐年级新建用户并生成当天任务，贴：
  *   年级 | 每日项数 | 每项题数 | 达标线 | 挑战题(l2) | 拔高题 | 总题量
- * 断言：项数与总题量随年级递增（允许平台期）；每项题数 ≥ 该年级达标线且 ≤ 4；
+ * 断言：项数与总题量随年级递增（4~6 年级允许稳定期）；每项题数 ≥ 该年级达标线且 ≤ 4；
  *       1~2 年级不配拔高题；3~6 年级 l2 目标不低于低年级。
  */
 const RealDate = Date;
@@ -74,8 +74,12 @@ assert(rows.every((r) => r.maxQ <= QUESTIONS_PER_TASK), `每项题数 ≤ ${QUES
 assert(rows[0].l2 <= rows[5].l2, `高年级挑战题不少于一年级（${rows[0].l2} → ${rows[5].l2}）`);
 assert(rows.slice(0, 2).every((r) => r.stretch === 0), '1~2 年级不配拔高题');
 assert(passLineFor(1) === 2 && passLineFor(6) === 3, '达标线：1~2 年级 2 题 / 3~6 年级 3 题');
-assert(taskCountFor('math', 0, 1) === 1 && taskCountFor('math', 2, 6) === 5,
-  '周日不加码；重点科 = 基础项 +1（六年级 4+1=5）');
+assert(taskCountFor('math', 0, 1) === 1 && taskCountFor('math', 2, 6) === 4,
+  '周日不加码；重点科 = 基础项 +1（六年级 3+1=4）');
+assert(rows[3].base === rows[4].base && rows[4].base === rows[5].base,
+  `4~6 年级稳定期：同为 ${rows[3].base} 项（年级差异靠难度/达标线/拔高，不再加项）`);
+assert(rows[5].totalQ <= 52,
+  `六年级单日总题量 ≤ 52（实测 ${rows[5].totalQ}，不出现 68 题）`);
 
 console.log(`\n=== 汇总：${pass} 通过 / ${fail} 失败 ===`);
 if (fail) process.exitCode = 1;
