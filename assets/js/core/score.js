@@ -6,6 +6,7 @@
 
 import * as store from './store.js';
 import { allSubjectsDone } from './tasks.js';
+import { applyTaskOutcome } from './mastery.js';
 
 export const TASK_POINTS = 2;   // 每完成 1 个挑战 +2
 export const DAILY_BONUS = 5;   // 当天四科全完成的基础奖励
@@ -40,6 +41,12 @@ export function completeTask(taskId, result = {}) {
   if (Array.isArray(result.questionResults)) {
     task.questionResults = result.questionResults;
   }
+
+  // 阶段 B：掌握度累积 + 错题排进间隔复习队列（累积状态，不依赖 90 天的 dailyHistory）
+  applyTaskOutcome(data, day, task, {
+    questionResults: task.questionResults,
+    wrongReasons: task.wrongReasons || []
+  });
 
   const profile = data.profile;
   let awarded = TASK_POINTS;

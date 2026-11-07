@@ -1,12 +1,20 @@
 ﻿/**
- * olympic.js —— 奥数专区（数学思维加餐）
- * 不占每日任务、不影响宝箱；每套 4 题，首答对 +1，每日上限 5 分。
+ * olympic.js —— 奥数专题闯关（阶段 D：只重组现有题库，不新增题目）
+ *   专题顺序：和差倍 → 盈亏 → 鸡兔同笼 → 行程 → 计数 → 组合（本年级没有的专题直接跳过）
+ *   每专题 4 关：例题 → 变式 → 挑战 → 综合，答对才进下一关；
+ *   4 关里首答对 ≥3 关才算专题掌握，未达标重练本专题，不放行下一专题。
+ * 不占每日任务、不影响宝箱；首答对 +1，每日上限 5 分（四科全完成后 8 分）。
  * 得分写入 days[今天].olympicEarned，成长记录会统计。
  */
 
 import * as store from '../core/store.js';
 import { ensureToday } from '../core/tasks.js';
-import { olympicSet } from '../data/knowledge-olympic.js';
+import {
+  olympicTopics,
+  olympicTopicQuestion,
+  LEVELS_PER_TOPIC,
+  LEVEL_LABELS
+} from '../data/knowledge-olympic.js';
 import { GRADE_LABEL } from '../data/curriculum.js';
 import { el, clear, toast } from '../core/ui.js';
 import { celebrate } from '../core/fx.js';
@@ -16,58 +24,38 @@ import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
 
 const BASE_CAP = 5;
 const OVER_CAP = 8;   // 四科全完成后的上限
-const SET_SIZE = 4;
-const RECENT_SETS = 2;               // 模板去重：只避开最近 2 套用过的（保留 8 个）
-const MAX_RECENT_TEMPLATES = SET_SIZE * RECENT_SETS;
-const MAX_RECENT_HASHES = 400;       // hash 去重：保留最近 400 个题目实例
+const MASTERY_LINE = 3; // 4 关里首答对 ≥3 才算专题过关
 const app = document.getElementById('app');
 document.body.dataset.subject = 'math';
 
-let questions = [];
-let index = 0;
-let results = [];      // 'first' | 'retry'
+const data = store.load();
+const grade = data.grade;
+const topics = olympicTopics(grade);
+const py = needsPinyin(grade);
+
+let topicIndex = 0;
+let levelIndex = 0;
+let run = { first: 0, total: 0 }; // 本专题本轮 4 关的首答对/总数
+let earnedThisTopic = 0;
+let q = null;
 let locked = false;
-let earnedThisSet = 0;
-let py = false;        // 当前年级是否需要拼音（newSet 里设）
+let hintLevel = 0; // 当前题已揭示的提示步数
 
-/* ---------------- 去重持久化 ---------------- */
+/* ---------------- 进度持久化 ---------------- */
 
-/** 从 profile 里读出去重相关字段（兼容旧数据） */
-function readDedup(data) {
-  const p = data.profile || {};
-  return {
-    // { [grade: number]: templateId[] }
-    templates: p.olympicSeenTemplates || {},
-    // number[] —— 最近见过的 prompt hash
-    hashes: p.olympicSeenHashes || []
-  };
+function progressOf() {
+  const all = data.olympicProgress || (data.olympicProgress = {});
+  const p = all[grade] || (all[grade] = { topicIndex: 0, levelIndex: 0, stats: {} });
+  if (p.topicIndex >= topics.length) p.topicIndex = 0; // 全部过关后回到第 1 专题巩固
+  return p;
 }
 
-/** 写入新用过的 template IDs 和 prompt hashes */
-function writeDedup(grade, templateIds, hashes) {
-  store.update((d) => {
-    const p = d.profile = d.profile || {};
-    // templates per grade
-    const gradeKey = String(grade);
-    const existing = (p.olympicSeenTemplates?.[gradeKey] || []).slice();
-    templateIds.forEach((id) => {
-      // 去重：同一个模板如果之前在 list 里，先删掉旧位置再 push 到末尾
-      const i = existing.indexOf(id);
-      if (i >= 0) existing.splice(i, 1);
-      existing.push(id);
-    });
-    // 只保留最近 N 个（够覆盖 5 轮 bag 刷新）
-    p.olympicSeenTemplates = {
-      ...(p.olympicSeenTemplates || {}),
-      [gradeKey]: existing.slice(-MAX_RECENT_TEMPLATES)
-    };
-    // hashes：全局滑动窗口
-    const all = (p.olympicSeenHashes || []).slice();
-    hashes.forEach((h) => {
-      if (!all.includes(h)) all.push(h);
-    });
-    p.olympicSeenHashes = all.slice(-MAX_RECENT_HASHES);
-  });
+function saveProgress() {
+  const p = progressOf();
+  p.topicIndex = topicIndex;
+  p.levelIndex = levelIndex;
+  p.run = { ...run };
+  store.save(data);
 }
 
 function allTodayDone() {
@@ -78,38 +66,36 @@ function allTodayDone() {
 function dailyCap() {
   return allTodayDone() ? OVER_CAP : BASE_CAP;
 }
-
 function todayEarned() {
   return store.getToday()?.olympicEarned || 0;
 }
 
-function newSet() {
-  // 真随机：每次进入/再来一组都换新数值
-  const rng = mulberry32(hashString(`oly-${Date.now()}-${Math.random()}`));
-  const data = store.load();
-  const grade = data.grade;
-  py = needsPinyin(grade);
+/* ---------------- 关卡生成（沿用现有模板参数化，不新增题目） ---------------- */
 
-  // 读出去重池
-  const dedup = readDedup(data);
-  const recentTemplates = new Set(dedup.templates[String(grade)] || []);
-  const recentHashes = new Set(dedup.hashes || []);
+function topic() {
+  return topics[topicIndex];
+}
 
-  // 生成（olympicSet 返回 {questions, usedTemplateIds, usedHashes}）
-  const { questions: qs, usedTemplateIds, usedHashes } = olympicSet(grade, rng, {
-    excludeTemplateIds: recentTemplates,
-    excludePromptHashes: recentHashes
-  });
-  questions = qs;
+function makeQuestion() {
+  const t = topic();
+  const tpl = t.templates[levelIndex % t.templates.length];
+  const rng = mulberry32(hashString(`oly:${grade}:${t.id}:${levelIndex}:${Date.now()}:${Math.random()}`));
+  q = olympicTopicQuestion(grade, tpl.genIndex, levelIndex + 1, rng);
+  locked = false;
+  hintLevel = 0;
+}
 
-  // 写回去重池
-  writeDedup(grade, usedTemplateIds, usedHashes);
-
-  index = 0;
-  results = [];
-  earnedThisSet = 0;
+function startTopic(index) {
+  topicIndex = index;
+  levelIndex = 0;
+  run = { first: 0, total: 0 };
+  earnedThisTopic = 0;
+  saveProgress();
+  makeQuestion();
   render();
 }
+
+/* ---------------- 渲染 ---------------- */
 
 function pyHtml(text) {
   return py ? pinyinize(text) : text;
@@ -118,29 +104,29 @@ function pyHtml(text) {
 function render() {
   unlockAudio();
   clear(app);
-  if (index >= questions.length) return renderResult();
+  if (!topics.length) return renderNoTopic();
+  if (topicIndex >= topics.length) return renderAllDone();
+  if (!q) makeQuestion();
 
-  const q = questions[index];
-  locked = false;
-
-  const back = el('a', { class: 'btn btn-ghost game-back', href: 'index.html', text: '←', 'aria-label': '返回工作台' });
-  const dots = el('div', { class: 'dots' });
-  questions.forEach((_, i) => {
-    dots.append(el('span', {
-      class: `dot${i < index ? (results[i] === 'first' ? ' is-correct' : ' is-miss') : ''}${i === index ? ' is-current' : ''}`
-    }));
-  });
-
-  const gradeLabel = GRADE_LABEL[store.load().grade];
+  const t = topic();
+  const label = LEVEL_LABELS[levelIndex] || `第 ${levelIndex + 1} 关`;
   const cap = dailyCap();
   const overHint = allTodayDone()
     ? '🌟 四科已全完成，奥数上限提升到 8 分！'
     : `四科全部完成后上限提升到 ${OVER_CAP} 分`;
+
+  const dots = el('div', { class: 'dots' });
+  for (let i = 0; i < LEVELS_PER_TOPIC; i++) {
+    dots.append(el('span', {
+      class: `dot${i < levelIndex ? ' is-correct' : ''}${i === levelIndex ? ' is-current' : ''}`
+    }));
+  }
+
   const top = el('div', { class: 'game-top' }, [
-    back,
+    el('a', { class: 'btn btn-ghost game-back', href: 'index.html', text: '←', 'aria-label': '返回工作台' }),
     el('div', { class: 'game-heading' }, [
-      el('h1', { text: `🧠 奥数专区 · ${gradeLabel}` }),
-      el('p', { text: `思维训练加餐 · 每套 ${questions.length} 题 · 今日已得 ${todayEarned()}/${cap} 分 · ${overHint}` })
+      el('h1', { text: `🧠 奥数专题闯关 · ${GRADE_LABEL[grade]}` }),
+      el('p', { text: `专题 ${topicIndex + 1}/${topics.length}「${t.name}」· 第 ${levelIndex + 1}/${LEVELS_PER_TOPIC} 关（${label}）· 今日已得 ${todayEarned()}/${cap} 分 · ${overHint}` })
     ]),
     dots
   ]);
@@ -148,12 +134,11 @@ function render() {
   const stage = el('div', { class: 'game-stage' });
   const card = el('div', { class: 'q-card' }, [
     el('div', { class: 'q-head' }, [
-      el('span', { class: 'q-topic', text: `${q.topic} · 第 ${index + 1}/${questions.length} 题` }),
+      el('span', { class: 'q-topic', text: `${t.name} · ${q.topic} · ${label}` }),
       el('div', { class: 'q-prompt', html: pyHtml(q.prompt) })
     ])
   ]);
   const feedback = el('div', { class: 'oly-feedback', role: 'status' });
-  // 把 reset 函数传给 choice/input，用于重试
   let resetFn = null;
   if (q.type === 'choice') {
     card.append(renderChoice(q, feedback, (fn) => { resetFn = fn; }));
@@ -164,35 +149,45 @@ function render() {
   stage.append(card);
 
   const foot = el('div', { class: 'game-foot oly-foot' }, [
-    el('span', { text: '答错可以重试，首答对 +1 分' }),
+    el('span', { text: `本专题掌握度 ${run.first}/${Math.max(run.total, 1)} · 首答对 ${MASTERY_LINE}/${LEVELS_PER_TOPIC} 关即过关 · 答错可重试` }),
     el('a', { class: 'btn btn-ghost oly-back-home', href: 'index.html', text: '🏠 返回工作台' })
   ]);
-  // 让 showWrong 可以拿到 resetFn
   card._reset = () => resetFn && resetFn();
   feedback._reset = () => resetFn && resetFn();
 
   app.append(top, stage, foot);
 }
 
-/* ------------------------- 作答反馈 ------------------------- */
+/* ------------------------- 作答反馈（分步提示） ------------------------- */
 
-/** 答对：显示「答对啦」+ 解析 + 下一题大按钮 */
-function showCorrect(feedback, q) {
+/** 把解析拆成 1~4 步；只有一句时按逗号再拆一次 */
+function explainSteps(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  let parts = raw.split(/[；。]/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 1) parts = raw.split(/[，]/).map((s) => s.trim()).filter(Boolean);
+  return parts.slice(0, 4);
+}
+
+function showCorrect(feedback, question) {
   clear(feedback);
   feedback.className = 'oly-feedback is-correct';
 
-  const isLast = index + 1 >= questions.length;
-  const nextBtn = el('button', {
-    class: 'btn btn-primary oly-next',
-    type: 'button'
-  });
+  const isLast = levelIndex + 1 >= LEVELS_PER_TOPIC;
+  const nextBtn = el('button', { class: 'btn btn-primary oly-next', type: 'button' });
   nextBtn.append(
-    el('span', { class: 'oly-next-main', text: isLast ? '🏁 查看本组结果' : '▶ 下一题' }),
-    el('span', { class: 'oly-next-sub', text: isLast ? '去算积分 · 领奖励' : '继续加油！' })
+    el('span', { class: 'oly-next-main', text: isLast ? '🏁 查看本专题结果' : '▶ 下一关' }),
+    el('span', { class: 'oly-next-sub', text: isLast ? '看掌握度是否过关' : `下一关：${LEVEL_LABELS[levelIndex + 1]}` })
   );
   nextBtn.addEventListener('click', () => {
     sfxClick();
-    next();
+    advance();
+  });
+
+  const steps = explainSteps(question.explain);
+  const stepBox = el('div', { class: 'oly-steps' });
+  (steps.length ? steps : [question.explain || `正确答案：${question.answer}`]).forEach((s, i) => {
+    stepBox.append(el('div', { class: 'oly-step', text: `${i + 1}. ${s}` }));
   });
 
   feedback.append(
@@ -200,43 +195,59 @@ function showCorrect(feedback, q) {
       el('span', { class: 'oly-fb-icon', text: '✅' }),
       el('span', { text: '答对啦！' })
     ]),
-    el('div', { class: 'oly-fb-text', text: q.explain ? `解析：${q.explain}` : `正确答案：${q.answer}` }),
+    stepBox,
     nextBtn
   );
 }
 
-/** 答错：显示「❌ 再试一次」+ 明确的重试按钮（恢复所有选项/输入） */
 function showWrong(feedback, reset) {
   clear(feedback);
   feedback.className = 'oly-feedback is-wrong';
 
-  const retryBtn = el('button', {
-    class: 'btn oly-retry',
-    type: 'button',
-    text: '🔄 重新作答'
-  });
+  const steps = explainSteps(q.explain);
+  hintLevel = Math.min(hintLevel + 1, Math.max(1, steps.length));
+  const shown = steps.slice(0, hintLevel);
+
+  const hintBox = el('div', { class: 'oly-steps' });
+  shown.forEach((s, i) => hintBox.append(el('div', { class: 'oly-step', text: `提示 ${i + 1}：${s}` })));
+
+  const retryBtn = el('button', { class: 'btn oly-retry', type: 'button', text: '🔄 重新作答' });
   retryBtn.addEventListener('click', () => {
     sfxClick();
     reset && reset();
     clear(feedback);
   });
 
+  const moreBtn = hintLevel < steps.length
+    ? el('button', { class: 'btn oly-retry', type: 'button', text: '💡 再提示一步' })
+    : null;
+  if (moreBtn) {
+    moreBtn.addEventListener('click', () => {
+      sfxClick();
+      showWrong(feedback, reset);
+    });
+  }
+
   feedback.append(
     el('div', { class: 'oly-fb-head' }, [
       el('span', { class: 'oly-fb-icon', text: '❌' }),
-      el('span', { text: '答错了，再试一次' })
+      el('span', { text: '答错了，先看一步提示再试' })
     ]),
-    retryBtn
+    hintBox,
+    el('div', { class: 'mini-actions', style: { display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' } }, [
+      moreBtn,
+      retryBtn
+    ].filter(Boolean))
   );
 }
 
 /* ------------------------- 选择题 ------------------------- */
 
-function renderChoice(q, feedback, onReset) {
+function renderChoice(question, feedback, onReset) {
   const wrap = el('div', { class: 'choices' });
   let tried = false;
   const buttons = [];
-  q.options.forEach((opt, i) => {
+  question.options.forEach((opt, i) => {
     const btn = el('button', { class: 'choice', type: 'button' }, [
       el('span', { class: 'opt-key', text: 'ABCD'[i] }),
       el('span', { html: pyHtml(String(opt)) })
@@ -244,12 +255,12 @@ function renderChoice(q, feedback, onReset) {
     btn.addEventListener('click', () => {
       if (locked || btn.disabled) return;
       unlockAudio();
-      if (i === q.answer) {
+      if (i === question.answer) {
         locked = true;
         sfxCorrect();
         btn.classList.add('is-correct');
         record(tried ? 'retry' : 'first');
-        showCorrect(feedback, q);
+        showCorrect(feedback, question);
       } else {
         tried = true;
         sfxWrong();
@@ -262,10 +273,9 @@ function renderChoice(q, feedback, onReset) {
     buttons.push(btn);
     wrap.append(btn);
   });
-  // 暴露重置函数：恢复所有选项可点
   const reset = () => {
     tried = false;
-    buttons.forEach(b => { b.disabled = false; b.classList.remove('is-wrong', 'is-correct'); });
+    buttons.forEach((b) => { b.disabled = false; b.classList.remove('is-wrong', 'is-correct'); });
   };
   onReset(reset);
   return wrap;
@@ -273,7 +283,7 @@ function renderChoice(q, feedback, onReset) {
 
 /* ------------------------- 数字输入题 ------------------------- */
 
-function renderInput(q, feedback, onReset) {
+function renderInput(question, feedback, onReset) {
   let value = '';
   let tried = false;
   const box = el('div', { class: 'calc-box', text: '?' });
@@ -283,12 +293,12 @@ function renderInput(q, feedback, onReset) {
   const submit = () => {
     if (locked || !value) return;
     unlockAudio();
-    if (Math.abs(Number(value) - Number(q.answer)) < 0.001) {
+    if (Math.abs(Number(value) - Number(question.answer)) < 0.001) {
       locked = true;
       sfxCorrect();
       box.classList.add('is-correct');
       record(tried ? 'retry' : 'first');
-      showCorrect(feedback, q);
+      showCorrect(feedback, question);
     } else {
       tried = true;
       sfxWrong();
@@ -309,7 +319,7 @@ function renderInput(q, feedback, onReset) {
   };
   onReset(reset);
 
-  ['1','2','3','4','5','6','7','8','9','.','0','⌫'].forEach((k) => {
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].forEach((k) => {
     const btn = el('button', { class: 'key', type: 'button', text: k });
     btn.addEventListener('click', () => {
       if (locked) return;
@@ -334,12 +344,13 @@ function renderInput(q, feedback, onReset) {
 /* ------------------------- 记分与流程 ------------------------- */
 
 function record(kind) {
-  results.push(kind);
+  run.total += 1;
+  if (kind === 'first') run.first += 1;
+  saveProgress();
   const pts = kind === 'first' ? 1 : 0;
-  // todayEarned() 读的是 store 实时值，已包含本组之前的得分，不能再减 earnedThisSet
   const room = Math.max(0, dailyCap() - todayEarned());
   const add = Math.min(pts, room);
-  earnedThisSet += add;
+  earnedThisTopic += add;
   if (add > 0) {
     store.update((d) => {
       d.profile.points += add;
@@ -349,57 +360,117 @@ function record(kind) {
   }
 }
 
-function next() {
-  index++;
+/** 答对后点「下一关」：本专题 4 关走完进入结果页 */
+function advance() {
+  levelIndex += 1;
+  if (levelIndex >= LEVELS_PER_TOPIC) {
+    renderTopicResult();
+    return;
+  }
+  saveProgress();
+  makeQuestion();
   render();
 }
 
-function renderResult() {
+function renderTopicResult() {
   clear(app);
-  const firsts = results.filter((x) => x === 'first').length;
+  const t = topic();
+  const passed = run.first >= MASTERY_LINE;
+  const p = progressOf();
+  p.stats[t.id] = { passed, first: run.first, total: run.total };
+  if (passed) p.topicIndex = Math.min(topicIndex + 1, topics.length);
+  else p.topicIndex = topicIndex;
+  store.save(data);
+
+  const action = el('button', { class: 'btn btn-primary', type: 'button' });
+  if (passed && topicIndex + 1 < topics.length) {
+    action.textContent = `▶ 进入下一专题：${topics[topicIndex + 1].name}`;
+    action.addEventListener('click', () => { sfxClick(); startTopic(topicIndex + 1); });
+  } else if (passed) {
+    action.textContent = '🏁 完成本年级全部专题';
+    action.addEventListener('click', () => { sfxClick(); renderAllDone(); });
+  } else {
+    action.textContent = '🔁 重练本专题（4 关）';
+    action.addEventListener('click', () => { sfxClick(); startTopic(topicIndex); });
+  }
+
   const capped = todayEarned() >= dailyCap();
-
-  const again = el('button', { class: 'btn btn-primary', type: 'button', text: '再来一组' });
-  again.addEventListener('click', () => { sfxClick(); newSet(); });
-
   app.append(
     el('div', { class: 'game-top' }, [
       el('a', { class: 'btn btn-ghost game-back', href: 'index.html', text: '←', 'aria-label': '返回工作台' }),
-      el('div', { class: 'game-heading' }, [el('h1', { text: '🧠 奥数专区' }), el('p', { text: '本组完成' })])
+      el('div', { class: 'game-heading' }, [
+        el('h1', { text: `🧠 ${t.name} · 专题结果` }),
+        el('p', { text: `第 ${topicIndex + 1}/${topics.length} 个专题 · 4 关已完成` })
+      ])
     ]),
     el('div', { class: 'game-stage' }, [
       el('div', { class: 'q-card', style: { textAlign: 'center' } }, [
-        el('div', { class: 'q-prompt', text: `${firsts}/${questions.length} 题一次答对` }),
-        el('div', { class: 'q-sub', text: capped && earnedThisSet === 0
+        el('div', { class: 'q-prompt', text: `本专题掌握度 ${run.first}/${LEVELS_PER_TOPIC}` }),
+        el('div', { class: 'q-sub', text: passed
+          ? `达标（首答对 ≥${MASTERY_LINE} 关），可以进入下一专题。`
+          : `未达标（首答对需 ≥${MASTERY_LINE} 关），先把这个专题再练一遍。` }),
+        el('div', { class: 'q-sub', text: capped && earnedThisTopic === 0
           ? '今日奥数积分已领满，明天再来吧！'
-          : `本组获得 +${earnedThisSet} 分 · 今日累计 ${todayEarned()}/${dailyCap()} 分` }),
+          : `本轮获得 +${earnedThisTopic} 分 · 今日累计 ${todayEarned()}/${dailyCap()} 分` }),
         el('div', { class: 'mini-actions', style: { display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' } }, [
-          again,
+          action,
           el('a', { class: 'btn btn-ghost', href: 'index.html', style: { background: '#eef2ff', color: 'var(--accent)', border: '2px solid var(--accent-2)', fontWeight: 800 }, text: '🏠 回到工作台' })
         ])
       ])
     ])
   );
 
-  if (firsts >= 3) {
+  if (passed) {
     celebrate({
       emoji: '🧠',
-      title: firsts === 4 ? '奥数小天才' : '思维小达人',
-      subtitle: `${firsts} 题一次答对`,
-      points: earnedThisSet,
+      title: '专题过关！',
+      subtitle: `${t.name} · 首答对 ${run.first}/${LEVELS_PER_TOPIC}`,
+      points: earnedThisTopic,
       variant: 'task',
       buttonText: '继续'
     });
   }
 }
 
+function renderAllDone() {
+  clear(app);
+  app.append(
+    el('div', { class: 'game-top' }, [
+      el('a', { class: 'btn btn-ghost game-back', href: 'index.html', text: '←', 'aria-label': '返回工作台' }),
+      el('div', { class: 'game-heading' }, [el('h1', { text: '🧠 奥数专题闯关' }), el('p', { text: '本年级专题已全部过关' })])
+    ]),
+    el('div', { class: 'game-stage' }, [
+      el('div', { class: 'q-card', style: { textAlign: 'center' } }, [
+        el('div', { class: 'q-prompt', text: '🎉 全部专题已完成' }),
+        el('div', { class: 'q-sub', text: '明天可以再从第 1 个专题开始巩固，仍然只练现有题库。' }),
+        el('a', { class: 'btn btn-primary', href: 'index.html', text: '🏠 回到工作台' })
+      ])
+    ])
+  );
+}
+
+function renderNoTopic() {
+  clear(app);
+  app.append(
+    el('div', { class: 'game-top' }, [
+      el('a', { class: 'btn btn-ghost game-back', href: 'index.html', text: '←', 'aria-label': '返回工作台' }),
+      el('div', { class: 'game-heading' }, [el('h1', { text: '🧠 奥数专题闯关' }), el('p', { text: '本年级暂无可用专题（不新增题目）' })])
+    ])
+  );
+}
+
 /* ------------------------- 启动 ------------------------- */
 
-// 供自动化测试读取当前题目 / 重置当日奥数分（不影响功能）
+// 供自动化测试读取当前题目与专题结构
 window.__olyDebug = {
-  current: () => questions[index],
-  index: () => index,
-  total: () => questions.length,
+  current: () => q,
+  state: () => ({
+    grade,
+    topicIndex,
+    levelIndex,
+    run: { ...run },
+    topics: topics.map((t) => ({ id: t.id, name: t.name, templates: t.templates.length }))
+  }),
   resetOlympic: () => store.update((d) => {
     const day = d.days[store.todayKey()];
     if (day) day.olympicEarned = 0;
@@ -407,4 +478,15 @@ window.__olyDebug = {
 };
 
 ensureToday(); // 保证今天 day 存在（olympicEarned 挂在 day 上）
-newSet();
+{
+  const p = progressOf();
+  topicIndex = Math.min(p.topicIndex || 0, Math.max(0, topics.length - 1));
+  levelIndex = Math.max(0, Math.min(p.levelIndex || 0, LEVELS_PER_TOPIC));
+  run = p.run ? { first: p.run.first || 0, total: p.run.total || 0 } : { first: 0, total: 0 };
+  if (levelIndex >= LEVELS_PER_TOPIC) {
+    renderTopicResult();
+  } else {
+    makeQuestion();
+    render();
+  }
+}

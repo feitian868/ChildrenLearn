@@ -5,6 +5,7 @@
 
 import * as store from '../core/store.js';
 import { ensureToday } from '../core/tasks.js';
+import { weeklyReport, masterySeries, latestQuiz, captureWeeklySnapshot } from '../core/mastery.js';
 import { el, clear } from '../core/ui.js';
 import { unlockAudio } from '../core/audio.js';
 
@@ -17,6 +18,7 @@ function chip(text, cls = '') {
 function render() {
   const data = store.load();
   ensureToday(); // 打开本页也算“打开系统”，补齐今日任务与昨日快照
+  store.update((d) => { captureWeeklySnapshot(d); }); // E1：每周记录「待复习」数，供跨周对比
   const fresh = store.load();
   const history = store.historyWithToday(fresh);
   const today = store.todayKey();
@@ -42,6 +44,9 @@ function render() {
         el('p', { text: `${store.currentUser()} · 数据保存在本机浏览器，最多保留最近 90 天` })
       ])
     ]),
+
+    /* ---------- E1 常驻入口：家长周报（掌握度曲线 + 周结论 + 小测 + 跨周对比） ---------- */
+    renderMastery(fresh),
 
     /* ---------- 统计总览 ---------- */
     el('div', { class: 'card gp-stats' }, [
@@ -275,6 +280,103 @@ function renderDiagnosis(history, last7) {
   }
 
   app.append(card);
+}
+
+/** 阶段 B：知识点掌握度曲线 +「本周新掌握 / 待复习」+ 家长一句人话结论 */
+function renderMastery(data) {
+  const report = weeklyReport(data);
+  const quiz = latestQuiz(data);
+  const { dates, series } = masterySeries(data, 30, 6);
+  const COLORS = ['#4fc3f7', '#ff8a65', '#81c784', '#ba68c8', '#ffb74d', '#7986cb'];
+  const W = 640;
+  const H = 200;
+  const PAD = 28;
+  const xAt = (i) => PAD + (dates.length <= 1 ? 0 : (i / (dates.length - 1)) * (W - 2 * PAD));
+  const yAt = (v) => PAD + (1 - v / 100) * (H - 2 * PAD);
+
+  let svg = '';
+  if (series.length) {
+    const grid = [0, 50, 100].map((v) => (
+      `<line x1="${PAD}" y1="${yAt(v)}" x2="${W - PAD}" y2="${yAt(v)}" stroke="#e6edf7" stroke-width="1"/>`
+      + `<text x="6" y="${yAt(v) + 4}" font-size="11" fill="#93a5bd">${v}</text>`
+    )).join('');
+    const lines = series.map((s, si) => {
+      let d = '';
+      let pen = false;
+      s.points.forEach((p, i) => {
+        if (p.value === null) { pen = false; return; }
+        d += `${pen ? 'L' : 'M'}${xAt(i).toFixed(1)} ${yAt(p.value).toFixed(1)} `;
+        pen = true;
+      });
+      const last = [...s.points].reverse().find((p) => p.value !== null);
+      const dot = last
+        ? `<circle cx="${xAt(s.points.indexOf(last)).toFixed(1)}" cy="${yAt(last.value).toFixed(1)}" r="3.5" fill="${COLORS[si % COLORS.length]}"/>`
+        : '';
+      return `<path d="${d.trim()}" fill="none" stroke="${COLORS[si % COLORS.length]}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${dot}`;
+    }).join('');
+    svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="知识点掌握度曲线" style="width:100%;height:auto;">`
+      + grid + lines
+      + `<text x="${PAD}" y="${H - 6}" font-size="11" fill="#93a5bd">${dates[0].slice(5)}</text>`
+      + `<text x="${W - PAD}" y="${H - 6}" font-size="11" fill="#93a5bd" text-anchor="end">${dates[dates.length - 1].slice(5)}</text>`
+      + '</svg>';
+  }
+
+  const legend = el('div', { class: 'gp-weak-list' });
+  series.forEach((s, si) => {
+    const vals = s.points.filter((p) => p.value !== null).map((p) => p.value);
+    const delta = vals.length >= 2 ? vals[vals.length - 1] - vals[0] : 0;
+    legend.append(el('div', { class: 'gp-weak-row' }, [
+      el('span', {
+        style: {
+          width: '10px',
+          height: '10px',
+          borderRadius: '50%',
+          background: COLORS[si % COLORS.length],
+          display: 'inline-block',
+          marginRight: '6px'
+        }
+      }),
+      el('span', { class: 'gp-weak-topic', text: s.name }),
+      el('span', {
+        class: 'gp-weak-miss',
+        text: `${s.rate ?? '—'}%${delta ? `（${delta > 0 ? '+' : ''}${delta}）` : ''}`
+      })
+    ]));
+  });
+
+  const cmp = report.compare;
+  const delta = (cur, prev) => (prev === null || prev === undefined)
+    ? '（上周 —）'
+    : `（上周 ${prev}，${cur - prev > 0 ? '+' : ''}${cur - prev}）`;
+
+  const card = el('div', { class: 'card gp-mastery' }, [
+    el('div', { class: 'gp-dia-head' }, [
+      el('h3', { text: '🧠 家长周报 · 知识点掌握度' }),
+      el('span', { class: 'chip chip-line', text: cmp.hasPrev ? '本周 vs 上周' : '近 30 天' })
+    ]),
+    el('p', { class: 'gp-dia-tip', text: report.sentence }),
+    el('div', { class: 'result-stats' }, [
+      chip(`新掌握 ${cmp.newMastered.cur} 个${delta(cmp.newMastered.cur, cmp.newMastered.prev)}`, 'chip-ok'),
+      chip(`退步回复习 ${cmp.regressed.cur} 个${delta(cmp.regressed.cur, cmp.regressed.prev)}`, 'chip-gold'),
+      chip(`待复习 ${cmp.needReview.cur} 个${delta(cmp.needReview.cur, cmp.needReview.prev)}`, 'chip-line'),
+      chip(`7 天内复习 ${report.dueNext7} 道`, 'chip-line')
+    ])
+  ]);
+  if (!cmp.hasPrev) {
+    card.append(el('p', { class: 'gp-dia-tip', text: '第一周使用，下周起这里会显示「本周 vs 上周」的数量变化。' }));
+  }
+  if (report.action) {
+    card.append(el('p', { class: 'gp-dia-tip', text: `📌 ${report.action.sentence}` }));
+  }
+  if (quiz) {
+    card.append(el('p', {
+      class: 'gp-dia-tip',
+      text: `最近小测：${quiz.correct}/${quiz.total}，其中旧知识 ${quiz.oldCount} 题、新知识 ${quiz.newCount} 题。`
+    }));
+  }
+  if (svg) card.append(el('div', { html: svg }), legend);
+  else card.append(el('p', { class: 'gp-empty', text: '完成数学任务后，这里会出现每个知识点的掌握度曲线。' }));
+  return card;
 }
 
 function stat(icon, value, label) {

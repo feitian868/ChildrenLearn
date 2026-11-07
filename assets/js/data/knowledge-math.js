@@ -1522,6 +1522,91 @@ GENERATORS.push({
 });
 
 /* ============================================================
+   阶段 C · ma-u01 手写教材题（唯一允许生成题目的位置，硬上限 8 道，不铺开四科）
+   - 全部 status:'pending-review'：默认【不进抽题池】；
+     家长在工作台「待审核新题」里逐题 approved 后才生效（见 tasks.js / mastery.js 过滤）。
+   - 每道题按 question-spec.js 的 ma-u01 规格书写，askPattern 对应规格书问法；
+     入库前必须过 question-check.js 的 4 条断言（verify/sim_content.mjs 验收）。
+   - 课本（版本/册次）未核对：source 沿用现有课程骨架出处，只作挂接、不作教材事实。
+   ============================================================ */
+const C3_REVIEW = [
+  {
+    id: 'ma-u01-c3-01', askPattern: 'inverse-recall', level: 1, type: 'input',
+    topic: '表内乘法',
+    prompt: '把口诀补充完整：三七（ ），括号里填的数是多少？',
+    answer: 21,
+    explain: '口诀：三七二十一，所以括号里填 21。'
+  },
+  {
+    id: 'ma-u01-c3-02', askPattern: 'inverse-recall', level: 1, type: 'choice',
+    topic: '表内乘法',
+    prompt: '（ ）× 8 = 56，括号里应该填几？',
+    options: ['6', '7', '8', '9'],
+    answer: 1,
+    explain: '想口诀：七八五十六，所以括号里填 7。（6 是六八四十八、9 是八九七十二，都是相邻口诀混淆。）'
+  },
+  {
+    id: 'ma-u01-c3-03', askPattern: 'meaning-translate', level: 1, type: 'choice',
+    topic: '表内乘法',
+    prompt: '5 个 6 相加，和是多少？',
+    options: ['30', '11', '35', '36'],
+    answer: 0,
+    explain: '5 个 6 相加就是 5 × 6 = 30。（11 是把乘法当加法 5 + 6；35 是五七三十五、36 是六六三十六，均为口诀混淆。）'
+  },
+  {
+    id: 'ma-u01-c3-04', askPattern: 'compare-operate', level: 1, type: 'choice',
+    topic: '表内乘法',
+    prompt: '7 × 6 ○ 40，○ 里填什么符号？',
+    options: ['>', '<', '='],
+    answer: 0,
+    explain: '7 × 6 = 42，42 > 40，所以填「>」。'
+  },
+  {
+    id: 'ma-u01-c3-05', askPattern: 'apply-solve', level: 2, type: 'input',
+    topic: '表内乘法',
+    prompt: '教室里有 6 排桌子，每排 8 张，一共有多少张桌子？',
+    answer: 48,
+    unit: '张',
+    explain: '每排 8 张、有 6 排，就是 6 个 8：6 × 8 = 48（张）。'
+  },
+  {
+    id: 'ma-u01-c3-06', askPattern: 'product-recall', level: 2, type: 'choice',
+    topic: '表内乘法',
+    prompt: '计算 4 × 9 时，应该用下面哪句口诀？',
+    options: ['四九三十六', '四八三十二', '五九四十五', '三九二十七'],
+    answer: 0,
+    explain: '4 × 9 用口诀「四九三十六」，得 36。（四八三十二、五九四十五、三九二十七都是相邻口诀混淆。）'
+  },
+  {
+    id: 'ma-u01-c3-07', askPattern: 'meaning-translate', level: 1, type: 'choice',
+    topic: '表内乘法',
+    prompt: '3 + 3 + 3 + 3 可以改写成下面哪个乘法算式？',
+    options: ['3 × 4', '3 + 4', '4 + 4 + 4', '3 × 3'],
+    answer: 0,
+    explain: '4 个 3 相加，相同的加数是 3、有 4 个，改写成乘法是 3 × 4。（3 + 4 没理解乘法；4 + 4 + 4 加数看错；3 × 3 份数数错。）'
+  },
+  {
+    id: 'ma-u01-c3-08', askPattern: 'inverse-recall', level: 2, type: 'choice',
+    topic: '表内乘法',
+    prompt: '6 ○ 7 = 42，○ 里应该填什么运算符号？',
+    options: ['×', '+', '-'],
+    answer: 0,
+    explain: '6 × 7 = 42（口诀：六七四十二）；6 + 7 = 13、6 - 7 不够减，都不等于 42，所以填「×」。'
+  }
+].map((q) => ({
+  ...q,
+  subject: 'math',
+  grades: [2, 3],
+  status: 'pending-review', // 硬约束：默认不进抽题池，家长审核 approved 才生效
+  source: src(2, '表内乘法（一）（二）') // 沿用课程骨架出处挂接 ma-u01，课本核对前不作教材事实
+}));
+
+/** 待审核新题清单（家长核对页用，返回副本防止外部改库） */
+export function pendingReviewBank() {
+  return C3_REVIEW.map((q) => ({ ...q }));
+}
+
+/* ============================================================
    对外接口
    ============================================================ */
 export function mathPool(grade, rng) {
@@ -1550,6 +1635,10 @@ export function mathPool(grade, rng) {
         source: made.source
       });
     }
+  });
+  // 阶段 C：手写待审题随年级进池（status 字段保留；是否可抽由 tasks.js / mastery.js 按 questionReview 过滤）
+  C3_REVIEW.forEach((q) => {
+    if (q.grades.includes(grade)) items.push({ ...q });
   });
   return items;
 }

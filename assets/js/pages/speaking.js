@@ -1,9 +1,11 @@
 ﻿/**
- * speaking.js —— 每日英语口语跟读（三段式）
- *   ① 单词跟读：按年级 2/3/4/5 个，先听发音 → 看中文拼出单词 → 再读一遍（拼写 + 发音双通过）
- *   ② 句子跟读：每日 4 句，听示范后跟读
- *   ③ 情景对话跟读：每日 1 组，逐句跟读 A/B 台词
- * 同一天刷新内容不变；内容 365 天内优先不重复，词库用尽后按「最久未用」轮换。
+ * speaking.js —— 听说练习（三段式，不做发音判定）
+ *   ① 单词听读：按年级 2/3/4/5 个，先听发音 → 看中文拼出单词 → 朗读（拼写是唯一可判定的部分）
+ *   ② 句子听读：每日 4 句，听示范后朗读
+ *   ③ 情景对话听读：每日 1 组，逐句听读 A/B 台词
+ * 纯前端没有可靠的发音评测，本专区不判断读得对不对，只记录「练过」。
+ * 练过的单词和句子进入跨天复习队列：origin+1 → origin+3 → origin+7 天回来，然后毕业。
+ * 内容 365 天内优先不重复，词库用尽后按「最久未用」轮换。
  */
 
 import * as store from '../core/store.js';
@@ -12,6 +14,7 @@ import { speak, unlockAudio, sfxClick, sfxCorrect, sfxWrong, sfxWin } from '../c
 import { el, clear, toast } from '../core/ui.js';
 import { WORD_BANK, SENTENCE_BANK, DIALOGUE_BANK } from '../data/speaking-content.js';
 import { ENGLISH_BANK } from '../data/knowledge-english.js';
+import { levelOfItem, levelName, scheduleNext, dueEntries } from '../data/speaking-plan.js';
 
 const app = document.getElementById('app');
 const data = store.load();
@@ -26,6 +29,7 @@ const grade = data.grade;
    ============================================================ */
 
 const avoid = data.speakingRecent || (data.speakingRecent = {});
+const queue = data.speakingQueue || (data.speakingQueue = {});
 const cutoff = store.shiftDateKey(dayKey, -365);
 const rng = mulberry32(hashString(`${dayKey}:${grade}:speaking`));
 
@@ -49,12 +53,21 @@ function pickFresh(pool, count, sigOf) {
 const wordSig = (it) => `spw:${String(it.word || it.w).toLowerCase()}`;
 const wordCount = WORDS_PER_DAY[grade] || 5;
 const wordPool = WORD_BANK.filter((w) => w.g <= grade);
-const wordItems = pickFresh(wordPool, wordCount, wordSig).map((w) => ({
-  id: `w:${w.w.toLowerCase()}`,
-  word: w.w,
-  zh: w.zh,
-  type: 'word'
-}));
+// 到期复习优先占位，空位用 365 天内没出现过的新词补
+const wordDue = dueEntries(queue, dayKey, 'word').slice(0, wordCount);
+const queuedIds = new Set(Object.keys(queue));
+const freshWords = pickFresh(
+  wordPool.filter((w) => !queuedIds.has(`w:${w.w.toLowerCase()}`)),
+  Math.max(0, wordCount - wordDue.length),
+  wordSig
+);
+const wordItems = [
+  ...wordDue.map(([id, e]) => ({ id, word: e.text, zh: e.zh, type: 'word', level: e.level, reviewStep: e.step })),
+  ...freshWords.map((w) => ({
+    id: `w:${w.w.toLowerCase()}`, word: w.w, zh: w.zh, type: 'word',
+    level: levelOfItem({ type: 'word', text: w.w })
+  }))
+].sort((a, b) => a.level - b.level);
 
 /* ---------- ② 句子 ---------- */
 
@@ -108,12 +121,19 @@ const sentencePool = (() => {
     .forEach((q) => push(q.speak, (q.explain || '').replace(/[。！？]$/, '')));
   return [...map.values()];
 })();
-const sentenceItems = pickFresh(sentencePool, SENTENCE_COUNT, sentenceSig).map((s) => ({
-  id: `s:${s.text.toLowerCase()}`,
-  text: s.text,
-  zh: s.zh,
-  type: 'sentence'
-}));
+const sentenceDue = dueEntries(queue, dayKey, 'sentence').slice(0, SENTENCE_COUNT);
+const freshSentences = pickFresh(
+  sentencePool.filter((s) => !queuedIds.has(`s:${s.text.toLowerCase()}`)),
+  Math.max(0, SENTENCE_COUNT - sentenceDue.length),
+  sentenceSig
+);
+const sentenceItems = [
+  ...sentenceDue.map(([id, e]) => ({ id, text: e.text, zh: e.zh, type: 'sentence', level: e.level, reviewStep: e.step })),
+  ...freshSentences.map((s) => ({
+    id: `s:${s.text.toLowerCase()}`, text: s.text, zh: s.zh, type: 'sentence',
+    level: levelOfItem({ type: 'sentence', text: s.text })
+  }))
+].sort((a, b) => a.level - b.level);
 
 /* ---------- ③ 情景对话 ---------- */
 
@@ -127,42 +147,52 @@ const dialogueLines = dialogue.lines.map((line, i) => ({
   zh: line.zh
 }));
 
-/* 生成即登记，明天起 365 天内不再重复（今天的记录会被 isRecent 放过） */
-[...wordItems, ...sentenceItems].forEach((it) => {
-  avoid[it.type === 'word' ? wordSig(it) : sentenceSig(it)] = dayKey;
+/* 新内容生成即登记，明天起 365 天内不再重复；复习条目不再重复登记 */
+[...freshWords, ...freshSentences].forEach((it) => {
+  avoid['w' in it ? wordSig(it) : sentenceSig(it)] = dayKey;
 });
 avoid[dialogueSig(dialogue)] = dayKey;
 Object.keys(avoid).forEach((k) => { if (avoid[k] < cutoff) delete avoid[k]; });
 store.save(data);
 
 /* ============================================================
-   进度
+   进度：只记录「今天练过」，掌握状态由跨天队列负责
    ============================================================ */
 
 const saved = (data.speakingProgress || {})[dayKey] || {};
-const progress = {
-  done: new Set(Array.isArray(saved.done) ? saved.done : []),
-  passed: new Set(Array.isArray(saved.passed) ? saved.passed : [])
-};
+const practiced = new Set(Array.isArray(saved.practiced) ? saved.practiced : []);
 
-const totalSections = wordItems.length + sentenceItems.length + 1;
-const passedSections = () =>
-  wordItems.filter((i) => progress.passed.has(i.id)).length +
-  sentenceItems.filter((i) => progress.passed.has(i.id)).length +
-  (dialogueLines.every((l) => progress.passed.has(l.id)) ? 1 : 0);
+const totalSections = wordItems.length + sentenceItems.length + dialogueLines.length;
+const practicedSections = () =>
+  wordItems.filter((i) => practiced.has(i.id)).length +
+  sentenceItems.filter((i) => practiced.has(i.id)).length +
+  dialogueLines.filter((l) => practiced.has(l.id)).length;
+
+/** 练完一项：单词/句子进跨天队列，对话台词只记当天 */
+function markPracticed(item) {
+  practiced.add(item.id);
+  if (item.type === 'word' || item.type === 'sentence') {
+    const next = scheduleNext(queue[item.id], dayKey, item.level);
+    if (next) {
+      queue[item.id] = { ...next, kind: item.type, text: item.word || item.text, zh: item.zh };
+    } else {
+      delete queue[item.id];
+    }
+  }
+  persist();
+}
 
 function persist() {
   data.speakingProgress = data.speakingProgress || {};
   data.speakingProgress[dayKey] = {
-    done: [...progress.done],
-    passed: [...progress.passed],
+    practiced: [...practiced],
     total: totalSections
   };
-  if (passedSections() >= totalSections && !(data.speakingAward || {})[dayKey]) {
+  if (practicedSections() >= totalSections && !(data.speakingAward || {})[dayKey]) {
     data.speakingAward = data.speakingAward || {};
     data.speakingAward[dayKey] = true;
     data.profile.points = (data.profile.points || 0) + 1;
-    toast('今天的跟读全部完成，积分 +1 🎉', 'ok');
+    toast('今天的听说练习完成了，积分 +1 🎉', 'ok');
   }
   store.save(data);
 }
@@ -175,25 +205,15 @@ const SR = (() => {
   try { return new (window.SpeechRecognition || window.webkitSpeechRecognition)(); }
   catch { return null; }
 })();
-const srEnabled = !!SR;
+// ?sr=0 可强制关闭语音识别，用于浏览器验收「不显示任何判定态」
+const srEnabled = !!SR && !/[?&]sr=0(&|$)/.test(location.search);
 if (SR) {
   SR.lang = 'en-US';
   SR.continuous = true;       // 长按模式必须开，允许持续录音
   SR.interimResults = true;  // 显示中间识别结果
   SR.maxAlternatives = 3;
 }
-
-function judge(target, transcript) {
-  const t = target.toLowerCase().replace(/[^a-z'\s]/g, '').trim();
-  const u = transcript.toLowerCase().replace(/[^a-z'\s]/g, '').trim();
-  if (!u) return false;
-  if (t === u) return true;
-  const keyWords = new Set(t.split(/\s+/).filter((w) => w.length >= 4));
-  if (keyWords.size === 0) return u.includes(t);
-  let hit = 0;
-  keyWords.forEach((w) => { if (u.includes(w)) hit++; });
-  return hit / keyWords.size >= 0.6;
-}
+// 不做发音判定：识别文本只作为「听到的内容」展示，不比较、不打分
 
 /**
  * 长按录音：
@@ -203,11 +223,10 @@ function judge(target, transcript) {
  *   - 不支持长按的环境（PC 鼠标）：短按一次自动录 4 秒再停止
  *
  * @param {HTMLElement} btn   要绑定的按钮元素
- * @param {string}      text  目标文本（用于 judge 打分）
- * @param {function}    onResult  结束回调 ({ passed, transcript })
+ * @param {function}    onResult  结束回调 ({ transcript })——只回传识别文本，不判定对错
  */
-function recordPress(btn, text, onResult) {
-  if (!SR) { onResult({ passed: false, transcript: '' }); return; }
+function recordPress(btn, onResult) {
+  if (!SR) { onResult({ transcript: '' }); return; }
 
   let holding = false;
   let started = false;
@@ -244,11 +263,11 @@ function recordPress(btn, text, onResult) {
     };
     SR.onerror = () => {
       // 只有不是我们主动 stop 的情况下才报错
-      if (holding || started) finish({ passed: false, transcript: finalTranscript });
+      if (holding || started) finish({ transcript: finalTranscript });
     };
     SR.onend = () => {
       // 只有不是我们主动 stop 的情况下才兜底 finish
-      if (!holding && started) finish({ passed: judge(text, finalTranscript), transcript: finalTranscript });
+      if (!holding && started) finish({ transcript: finalTranscript });
     };
 
     // Chrome: 如果 SR 已经在 running，先 stop 等 300ms 再 start
@@ -256,7 +275,7 @@ function recordPress(btn, text, onResult) {
       try { SR.start(); }
       catch {
         // "not allowed" / "service not available" — 不可恢复
-        finish({ passed: false, transcript: '' });
+        finish({ transcript: '' });
       }
     };
     if (SR.state === 'running' || SR.state === 'starting') {
@@ -291,13 +310,13 @@ function recordPress(btn, text, onResult) {
     holding = false;
     clearTimeout(autoStopTimer);
     btn.classList.remove('is-recording');
-    btn.textContent = '🎤 跟我读';
+    btn.textContent = '🎤 读一读';
     btn.disabled = true;
     try { SR.stop(); } catch { /* ignore */ }
     // SR 停掉后可能还有最后一个 final result
     setTimeout(() => {
       btn.disabled = false;
-      finish({ passed: judge(text, finalTranscript), transcript: finalTranscript });
+      finish({ transcript: finalTranscript });
     }, 400);
   }
 
@@ -306,7 +325,7 @@ function recordPress(btn, text, onResult) {
     holding = false;
     clearTimeout(autoStopTimer);
     btn.classList.remove('is-recording');
-    btn.textContent = '🎤 跟我读';
+    btn.textContent = '🎤 读一读';
     resetSR();
     onResult(res);
   }
@@ -324,7 +343,7 @@ function recordPress(btn, text, onResult) {
 
   // 同时也保留 click 作为 PC 端的兜底短按
   btn.addEventListener('click', (e) => {
-    // 如果已经通过 pointerdown 启动过，click 不再触发
+    // 如果已经由 pointerdown 启动过，click 不再触发
     if (started || fallBackShortPress) return;
     startRec();
     // 给 PC 端 4 秒自动停
@@ -338,8 +357,8 @@ function recordPress(btn, text, onResult) {
 }
 
 /** 旧版单次录音兼容保留（list 外部入口） */
-function recordOnce(btn, text, onResult) {
-  recordPress(btn, text, onResult);
+function recordOnce(btn, onResult) {
+  recordPress(btn, onResult);
 }
 
 /* ============================================================
@@ -352,7 +371,7 @@ function render() {
   app.className = 'spk';
   const nodes = [renderTop(), renderSummary()];
   if (!srEnabled) {
-    nodes.push(el('div', { class: 'spk-banner', html: '⚠ 本浏览器不支持语音识别（或未授权麦克风），跟读评分已降级为「朗读 + 自评」。建议用 Chrome 浏览器。' }));
+    nodes.push(el('div', { class: 'spk-banner', html: 'ℹ️ 当前浏览器不支持语音识别。这里只提供「听示范 + 自己朗读」，不判断发音对错，也不显示任何判定结果。' }));
   }
   nodes.push(
     renderWords(),
@@ -364,22 +383,25 @@ function render() {
 }
 
 function renderTop() {
+  const reviewWords = wordDue.length;
+  const reviewSentences = sentenceDue.length;
   return el('div', { class: 'spk-top' }, [
     el('a', { class: 'icon-btn spk-back', href: 'index.html', text: '←' }),
     el('div', { class: 'spk-heading' }, [
-      el('h1', { text: '英语口语跟读 🎤' }),
-      el('p', { text: `${grade}年级 · 单词 ${wordItems.length} 个 · 句子 ${sentenceItems.length} 句 · 对话 1 组` })
+      el('h1', { text: '听说练习 🎤' }),
+      el('p', { text: `${grade}年级 · 单词 ${wordItems.length} 个（复习 ${reviewWords}）· 句子 ${sentenceItems.length} 句（复习 ${reviewSentences}）· 对话 1 组` })
     ])
   ]);
 }
 
 function renderSummary() {
-  const done = passedSections();
+  const done = practicedSections();
+  const queued = Object.keys(queue).length;
   return el('div', { class: 'spk-foot' }, [
     el('div', { class: 'spk-bar' }, [
       el('div', { class: 'spk-bar-fill', style: { width: `${Math.min(100, (done / totalSections) * 100)}%` } })
     ]),
-    el('div', { class: 'spk-foot-text', text: `已完成 ${done} / ${totalSections} 项${done >= totalSections ? ' · 完美！' : ''}` })
+    el('div', { class: 'spk-foot-text', text: `今天已练 ${done} / ${totalSections} 项 · 复习队列 ${queued} 项（练过之后 +1/+3/+7 天回来）` })
   ]);
 }
 
@@ -388,22 +410,23 @@ function renderSummary() {
 function renderWords() {
   const list = el('ul', { class: 'spk-list' });
   wordItems.forEach((item, idx) => {
-    const passed = progress.passed.has(item.id);
+    const done = practiced.has(item.id);
     list.append(el('li', { class: 'spk-item' }, [
-      el('span', { class: `spk-idx ${passed ? 'ok' : ''}`, text: String(idx + 1) }),
+      el('span', { class: 'spk-idx', text: String(idx + 1) }),
       el('div', { class: 'spk-main' }, [
         el('div', { class: 'spk-text spk-word-zh', text: item.zh }),
-        el('div', { class: 'spk-zh', text: passed ? item.word : `先听发音，再拼出这个单词（${item.word.length} 个字母）` })
+        el('div', { class: 'spk-zh', text: done ? item.word : `先听发音，再拼出这个单词（${item.word.length} 个字母）` }),
+        el('div', { class: 'spk-zh', text: `${levelName(item.level)}${item.reviewStep != null ? ' · 复习' : ''}` })
       ]),
       el('button', {
         class: 'btn spk-go', type: 'button', 'data-kind': 'word', 'data-id': item.id,
-        text: passed ? '✔ 已完成' : '开始'
+        text: done ? '再练一次' : (item.reviewStep != null ? '复习' : '开始')
       })
     ]));
   });
   return el('section', { class: 'spk-sec' }, [
-    el('h2', { class: 'spk-sec-title', text: `① 单词跟读（${wordItems.filter((i) => progress.passed.has(i.id)).length}/${wordItems.length}）` }),
-    el('p', { class: 'spk-sec-desc', text: '听发音 → 看中文拼出单词 → 再读一遍，拼写和发音都对了才算完成。' }),
+    el('h2', { class: 'spk-sec-title', text: `① 单词听读（${wordItems.filter((i) => practiced.has(i.id)).length}/${wordItems.length}）` }),
+    el('p', { class: 'spk-sec-desc', text: '听发音 → 看中文拼出单词 → 跟着示范朗读。拼写会被检查，发音只练不判。' }),
     list
   ]);
 }
@@ -413,22 +436,23 @@ function renderWords() {
 function renderSentences() {
   const list = el('ul', { class: 'spk-list' });
   sentenceItems.forEach((item, idx) => {
-    const passed = progress.passed.has(item.id);
+    const done = practiced.has(item.id);
     list.append(el('li', { class: 'spk-item' }, [
-      el('span', { class: `spk-idx ${passed ? 'ok' : ''}`, text: String(idx + 1) }),
+      el('span', { class: 'spk-idx', text: String(idx + 1) }),
       el('div', { class: 'spk-main' }, [
         el('div', { class: 'spk-text', html: highlight(item.text) }),
-        el('div', { class: 'spk-zh', text: item.zh })
+        el('div', { class: 'spk-zh', text: item.zh }),
+        el('div', { class: 'spk-zh', text: `${levelName(item.level)}${item.reviewStep != null ? ' · 复习' : ''}` })
       ]),
       el('button', {
         class: 'btn spk-go', type: 'button', 'data-kind': 'sentence', 'data-id': item.id,
-        text: passed ? '✔ 已完成' : '开始'
+        text: done ? '再练一次' : (item.reviewStep != null ? '复习' : '开始')
       })
     ]));
   });
   return el('section', { class: 'spk-sec' }, [
-    el('h2', { class: 'spk-sec-title', text: `② 句子跟读（${sentenceItems.filter((i) => progress.passed.has(i.id)).length}/${sentenceItems.length}）` }),
-    el('p', { class: 'spk-sec-desc', text: '点「开始」听示范，再对着麦克风读一遍。' }),
+    el('h2', { class: 'spk-sec-title', text: `② 句子听读（${sentenceItems.filter((i) => practiced.has(i.id)).length}/${sentenceItems.length}）` }),
+    el('p', { class: 'spk-sec-desc', text: '点「开始」听示范，再自己朗读一遍，读完点「练完这一句」。发音不做判定。' }),
     list
   ]);
 }
@@ -436,11 +460,10 @@ function renderSentences() {
 /* ---------- ③ 情景对话 ---------- */
 
 function renderDialogue() {
-  const doneCount = dialogueLines.filter((l) => progress.passed.has(l.id)).length;
-  const passAll = doneCount === dialogueLines.length;
+  const doneCount = dialogueLines.filter((l) => practiced.has(l.id)).length;
   const rows = el('div', { class: 'spk-lines' });
   dialogueLines.forEach((line) => {
-    const passed = progress.passed.has(line.id);
+    const done = practiced.has(line.id);
     rows.append(el('div', { class: `spk-line ${line.who === 'A' ? 'is-a' : 'is-b'}` }, [
       el('span', { class: 'spk-who', text: line.who }),
       el('div', { class: 'spk-main' }, [
@@ -449,15 +472,14 @@ function renderDialogue() {
       ]),
       el('button', {
         class: 'btn spk-go', type: 'button', 'data-kind': 'line', 'data-id': line.id,
-        text: passed ? '✔' : '🎤 读'
+        text: done ? '再读一次' : '🎤 读'
       })
     ]));
   });
   return el('section', { class: 'spk-sec' }, [
     el('h2', { class: 'spk-sec-title', text: `③ 情景对话：${dialogue.title}（${doneCount}/${dialogueLines.length}）` }),
-    el('p', { class: 'spk-sec-desc', text: 'A、B 两句都跟读一遍，整组对话就完成了。' }),
-    rows,
-    passAll ? el('div', { class: 'spk-done-tip', text: '✔ 这组对话已完成，明天换新的！' }) : null
+    el('p', { class: 'spk-sec-desc', text: 'A、B 台词各听读一遍，点「练完这一句」记录。' }),
+    rows
   ]);
 }
 
@@ -501,13 +523,12 @@ function closeDialog() {
   dialog.className = 'spk-dialog';
 }
 
-/* ---------- 单词：展示 → 拼写 → 发音 ---------- */
+/* ---------- 单词：展示 → 拼写 → 朗读（不判定） ---------- */
 
 function practiceWord(item) {
   if (!item) return;
-  // 三阶段：'show' 展示词卡 → 'spell' 拼写检查 → 'done' 完成
-  let phase = progress.passed.has(item.id) ? 'done' : 'show';
-  const state = { spelled: progress.passed.has(item.id), spoken: progress.passed.has(item.id) };
+  // 三阶段：'show' 展示词卡 → 'spell' 拼写检查 → 'done' 朗读 + 记录
+  let phase = practiced.has(item.id) ? 'done' : 'show';
 
   const wordEl = el('div', { class: 'spk-m-word is-big', text: item.word });
   const zhEl = el('div', { class: 'spk-m-zh', text: item.zh });
@@ -526,23 +547,24 @@ function practiceWord(item) {
   const listenBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '🔊 听发音' });
   const nextBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '我记住了，开始拼写 ✍️' });
   const checkBtn = el('button', { class: 'btn', type: 'button', text: '✍️ 检查拼写', style: { display: 'none' } });
-  const readBtn = el('button', { class: 'btn', type: 'button', text: '🎤 读一读', style: { display: 'none' } });
-  const selfBtn = srEnabled ? null : el('button', { class: 'btn btn-outline', type: 'button', text: '✅ 我读对了（自评）', style: { display: 'none' } });
+  const readBtn = srEnabled
+    ? el('button', { class: 'btn', type: 'button', text: '🎤 读一读（只录音）', style: { display: 'none' } })
+    : null;
+  const doneBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '练完这一项', style: { display: 'none' } });
   const closeBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '返回' });
 
   function setPhase(p) {
     phase = p;
-    // reset
     input.style.display = 'none';
     nextBtn.style.display = 'none';
     checkBtn.style.display = 'none';
-    readBtn.style.display = 'none';
-    if (selfBtn) selfBtn.style.display = 'none';
+    if (readBtn) readBtn.style.display = 'none';
+    doneBtn.style.display = 'none';
 
     if (p === 'show') {
       wordEl.classList.remove('is-hidden');
       wordEl.textContent = item.word;
-      hint.textContent = `看看这个词，然后点「我记住了」开始拼写`;
+      hint.textContent = '看看这个词，然后点「我记住了」开始拼写';
       nextBtn.style.display = '';
     } else if (p === 'spell') {
       wordEl.classList.add('is-hidden');
@@ -555,20 +577,16 @@ function practiceWord(item) {
     } else if (p === 'done') {
       wordEl.classList.remove('is-hidden');
       wordEl.textContent = item.word;
-      hint.textContent = state.spoken ? '拼写和发音都对了 ✔' : '拼写正确！再读一遍就完成了';
-      checkBtn.style.display = 'none';
-      readBtn.style.display = '';
-      if (selfBtn) selfBtn.style.display = '';
+      hint.textContent = '拼写正确。跟着示范多读几遍，读完点「练完这一项」记入复习队列。';
+      if (readBtn) readBtn.style.display = '';
+      doneBtn.style.display = '';
     }
   }
 
-  const tryFinish = () => {
-    if (!(state.spelled && state.spoken)) return;
-    progress.passed.add(item.id);
-    progress.done.add(item.id);
-    persist();
+  const finishItem = () => {
+    markPracticed(item);
     sfxWin();
-    toast(`${item.word} 完成 ✔`, 'ok');
+    toast(`${item.word} 已记入复习（+1/+3/+7 天回来）`, 'ok');
     closeDialog();
     render();
   };
@@ -579,43 +597,32 @@ function practiceWord(item) {
     const val = input.value.trim().toLowerCase();
     if (!val) { toast('先拼一拼再检查哦', 'warn'); return; }
     if (val === item.word.toLowerCase()) {
-      state.spelled = true;
       sfxCorrect();
-      toast('拼写正确 ✔', 'ok');
+      toast('拼写正确', 'ok');
       setPhase('done');
-      tryFinish();
     } else {
       sfxWrong();
       hint.textContent = `还不对：共 ${item.word.length} 个字母，首字母是 “${item.word[0]}”`;
       toast('再想想～', 'warn');
     }
   });
-  readBtn.addEventListener('click', () => {
-    recordOnce(readBtn, item.word, ({ passed, transcript }) => {
-      logBox.textContent = transcript ? `识别到："${transcript}"` : '';
-      if (passed) {
-        state.spoken = true;
-        sfxCorrect();
-        toast('发音通过 ✔', 'ok');
-        tryFinish();
-      } else {
-        sfxWrong();
-        toast('再读一遍试试', 'warn');
-      }
+  if (readBtn) {
+    readBtn.addEventListener('click', () => {
+      recordOnce(readBtn, ({ transcript }) => {
+        logBox.textContent = transcript ? `听到你说："${transcript}"（仅供参考，不做判定）` : '';
+      });
     });
-  });
-  if (selfBtn) {
-    selfBtn.addEventListener('click', () => { state.spoken = true; tryFinish(); });
   }
+  doneBtn.addEventListener('click', finishItem);
   closeBtn.addEventListener('click', () => { sfxClick(); closeDialog(); render(); });
 
   openDialog([
-    el('div', { class: 'spk-m-tag', text: '① 单词跟读' }),
+    el('div', { class: 'spk-m-tag', text: '① 单词听读' }),
     zhEl,
     wordEl,
     input,
     hint,
-    el('div', { class: 'spk-m-ctrls' }, [listenBtn, nextBtn, checkBtn, readBtn, selfBtn, closeBtn]),
+    el('div', { class: 'spk-m-ctrls' }, [listenBtn, nextBtn, checkBtn, readBtn, doneBtn, closeBtn]),
     logBox
   ]);
   setPhase('show');          // 先展示单词
@@ -628,35 +635,36 @@ function practiceSentence(item) {
   if (!item) return;
   const logBox = el('div', { class: 'spk-m-log' });
   const listenBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '🔊 听一听' });
-  const readBtn = el('button', { class: 'btn', type: 'button', disabled: !srEnabled, text: '🎤 跟我读' });
-  const selfBtn = srEnabled ? null : el('button', { class: 'btn btn-outline', type: 'button', text: '✅ 我读对了（自评）' });
+  const readBtn = srEnabled
+    ? el('button', { class: 'btn', type: 'button', text: '🎤 录一遍' })
+    : null;
+  const doneBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '练完这一句' });
   const closeBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '返回' });
 
-  const onPass = () => {
-    progress.passed.add(item.id);
-    progress.done.add(item.id);
-    persist();
+  const finishItem = () => {
+    markPracticed(item);
     sfxWin();
+    toast('这一句已记入复习（+1/+3/+7 天回来）', 'ok');
     closeDialog();
     render();
   };
 
   listenBtn.addEventListener('click', () => { sfxClick(); speak(item.text, 'en-US'); });
-  readBtn.addEventListener('click', () => {
-    recordOnce(readBtn, item.text, ({ passed, transcript }) => {
-      logBox.textContent = transcript ? `识别到："${transcript}"` : '';
-      if (passed) { sfxCorrect(); toast('通过！🎉', 'ok'); onPass(); }
-      else { sfxWrong(); toast('没听清，再来一次', 'warn'); }
+  if (readBtn) {
+    readBtn.addEventListener('click', () => {
+      recordOnce(readBtn, ({ transcript }) => {
+        logBox.textContent = transcript ? `听到你说："${transcript}"（仅供参考，不做判定）` : '';
+      });
     });
-  });
-  if (selfBtn) selfBtn.addEventListener('click', onPass);
+  }
+  doneBtn.addEventListener('click', finishItem);
   closeBtn.addEventListener('click', () => { sfxClick(); closeDialog(); render(); });
 
   openDialog([
-    el('div', { class: 'spk-m-tag', text: '② 句子跟读' }),
+    el('div', { class: 'spk-m-tag', text: '② 句子听读' }),
     el('div', { class: 'spk-m-text', html: highlight(item.text) }),
     el('div', { class: 'spk-m-zh', text: item.zh }),
-    el('div', { class: 'spk-m-ctrls' }, [listenBtn, readBtn, selfBtn, closeBtn]),
+    el('div', { class: 'spk-m-ctrls' }, [listenBtn, readBtn, doneBtn, closeBtn]),
     logBox
   ]);
   setTimeout(() => speak(item.text, 'en-US'), 250);
@@ -669,35 +677,35 @@ function practiceLine(lineId) {
   if (!line) return;
   const logBox = el('div', { class: 'spk-m-log' });
   const listenBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '🔊 听一听' });
-  const readBtn = el('button', { class: 'btn', type: 'button', disabled: !srEnabled, text: '🎤 跟我读' });
-  const selfBtn = srEnabled ? null : el('button', { class: 'btn btn-outline', type: 'button', text: '✅ 我读对了（自评）' });
+  const readBtn = srEnabled
+    ? el('button', { class: 'btn', type: 'button', text: '🎤 录一遍' })
+    : null;
+  const doneBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '练完这一句' });
   const closeBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '返回' });
 
-  const onPass = () => {
-    progress.passed.add(line.id);
-    progress.done.add(line.id);
-    persist();
+  const finishItem = () => {
+    markPracticed(line);
     sfxWin();
     closeDialog();
     render();
   };
 
   listenBtn.addEventListener('click', () => { sfxClick(); speak(line.text, 'en-US'); });
-  readBtn.addEventListener('click', () => {
-    recordOnce(readBtn, line.text, ({ passed, transcript }) => {
-      logBox.textContent = transcript ? `识别到："${transcript}"` : '';
-      if (passed) { sfxCorrect(); toast('通过！🎉', 'ok'); onPass(); }
-      else { sfxWrong(); toast('没听清，再来一次', 'warn'); }
+  if (readBtn) {
+    readBtn.addEventListener('click', () => {
+      recordOnce(readBtn, ({ transcript }) => {
+        logBox.textContent = transcript ? `听到你说："${transcript}"（仅供参考，不做判定）` : '';
+      });
     });
-  });
-  if (selfBtn) selfBtn.addEventListener('click', onPass);
+  }
+  doneBtn.addEventListener('click', finishItem);
   closeBtn.addEventListener('click', () => { sfxClick(); closeDialog(); render(); });
 
   openDialog([
     el('div', { class: 'spk-m-tag', text: `③ 情景对话 · ${dialogue.title} · 角色 ${line.who}` }),
     el('div', { class: 'spk-m-text', text: line.text }),
     el('div', { class: 'spk-m-zh', text: line.zh }),
-    el('div', { class: 'spk-m-ctrls' }, [listenBtn, readBtn, selfBtn, closeBtn]),
+    el('div', { class: 'spk-m-ctrls' }, [listenBtn, readBtn, doneBtn, closeBtn]),
     logBox
   ]);
   setTimeout(() => speak(line.text, 'en-US'), 250);

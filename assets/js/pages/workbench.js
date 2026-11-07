@@ -4,7 +4,7 @@
  */
 
 import * as store from '../core/store.js';
-import { GRADES, GRADE_LABEL, focusTextOf } from '../data/curriculum.js';
+import { GRADES, GRADE_LABEL, QUESTIONS_PER_TASK, focusTextOf } from '../data/curriculum.js';
 import {
   ensureToday,
   regenerateToday,
@@ -20,6 +20,12 @@ import {
   LEVEL_THRESHOLDS,
 } from '../core/pet.js';
 import { markCelebrated } from '../core/score.js';
+import {
+  weeklyReport,
+  latestQuiz,
+  resetMastery,
+  migrateKnowledgeId
+} from '../core/mastery.js';
 import { celebrate, playerName } from '../core/fx.js';
 import { openMinigame } from '../core/minigames.js';
 import { SONGS, SONG_MAP, playSong } from '../core/songs.js';
@@ -30,6 +36,8 @@ import {
   unlockAudio
 } from '../core/audio.js';
 import { el, clear, dialog, longPress, toast } from '../core/ui.js';
+import { COURSE_UNITS, COURSE_META, COURSE_VERSIONS } from '../data/course-map.js';
+import { pendingReviewBank } from '../data/knowledge-math.js';
 
 const app = document.getElementById('app');
 let parentOpen = false;
@@ -240,6 +248,8 @@ function render(data) {
       el('div', { class: 'wb-side' }, [renderChest(), renderPet(), renderShop(), renderData()])
     ]),
     renderGrowth(data),
+    renderMastery(data),
+    renderCourse(data),
     renderParent(),
     el('div', {
       class: 'wb-foot',
@@ -503,6 +513,70 @@ function renderGrowth(data) {
   ]);
 }
 
+/* ------------------------- 阶段 B：掌握度入口 ------------------------- */
+
+function renderMastery(data) {
+  const report = weeklyReport(data);
+  const quiz = latestQuiz(data);
+  const keys = Object.values(data.mastery?.keys || {});
+  const mastered = keys.filter((r) => r.status === 'mastered').length;
+  const learning = keys.length - mastered;
+
+  const quizLink = el('a', { class: 'btn btn-primary', href: 'math.html?quiz=1', text: '本周小测（10 题）' });
+  quizLink.addEventListener('click', () => unlockAudio());
+
+  const resetBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '重置掌握度' });
+  resetBtn.addEventListener('click', () => {
+    sfxClick();
+    if (!window.confirm('只清空掌握度 / 复习队列 / 掌握度曲线，积分和任务记录不动。确定重置吗？')) return;
+    store.update((d) => resetMastery(d));
+    toast('掌握度已重置');
+    render(store.load());
+  });
+
+  const fieldStyle = {
+    padding: '8px 10px',
+    borderRadius: '10px',
+    border: '1px solid #dfe7f3',
+    flex: '1 1 180px',
+    minWidth: '140px'
+  };
+  const from = el('input', { type: 'text', placeholder: '旧知识点 id（如 ma-u01-k1）', style: fieldStyle });
+  const to = el('input', { type: 'text', placeholder: '新知识点 id', style: fieldStyle });
+  const migrateBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '迁移 id' });
+  migrateBtn.addEventListener('click', () => {
+    const fromId = from.value.trim();
+    const toId = to.value.trim();
+    if (!fromId || !toId || fromId === toId) {
+      toast('新旧 id 不能为空，且必须不同', 'bad');
+      return;
+    }
+    store.update((d) => migrateKnowledgeId(d, fromId, toId));
+    toast('知识点 id 已迁移');
+    render(store.load());
+  });
+
+  return el('div', { class: 'card mastery-entry' }, [
+    el('div', { class: 'growth-entry-info' }, [
+      el('h3', { text: '🧠 掌握度 · 诊断闭环' }),
+      el('p', { text: report.sentence }),
+      el('p', {
+        text: `已掌握 ${mastered} 个 · 学习中 ${learning} 个 · 7 天内待复习 ${report.dueNext7} 道`
+          + (quiz ? ` · 最近小测 ${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} · 新 ${quiz.newCount}）` : '')
+      })
+    ]),
+    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' } }, [
+      quizLink,
+      resetBtn
+    ]),
+    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' } }, [
+      from,
+      to,
+      migrateBtn
+    ])
+  ]);
+}
+
 /* ------------------------- 顶部 ------------------------- */
 
 function chip(text, cls = '') {
@@ -713,7 +787,7 @@ function renderSubjects() {
       const olympicGo = el('a', {
         class: 'btn btn-ghost btn-block olympic-entry',
         href: 'olympic.html',
-        text: '🧠 奥数专区 · 思维加餐（每日上限 5 分）'
+        text: '🧠 奥数专题闯关（每日上限 5 分）'
       });
       olympicGo.addEventListener('click', () => unlockAudio());
       cardChildren.push(el('div', { class: 'olympic-entry-wrap' }, [olympicGo]));
@@ -724,23 +798,23 @@ function renderSubjects() {
     );
   });
 
-  // 英语口语跟读（独立卡片，不参与四科进度）
+  // 听说练习（独立卡片，不参与四科进度；不做发音判定，只记练过）
   // 整张卡片就是链接，点标题、进度、按钮任意位置都能进入，避免只有小按钮可点
   const dataNow = store.load();
   const sk = store.todayKey();
   const spProg = dataNow.speakingProgress?.[sk] || {};
   const spTotal = spProg.total || 12;
-  const spDone = Math.min(spProg.passed?.length || 0, spTotal);
+  const spDone = Math.min((spProg.practiced || spProg.passed || []).length, spTotal);
   const spCard = el('a', {
     class: 'card subject spk-card',
     href: 'speaking.html',
-    'aria-label': '进入英语口语跟读'
+    'aria-label': '进入听说练习'
   }, [
     el('div', { class: 'subject-head' }, [
       el('div', { class: 'subject-badge', text: '🎤' }),
       el('div', { class: 'subject-title' }, [
-        el('h3', { text: '英语口语跟读' }),
-        el('p', { text: '单词拼写 + 句子 + 情景对话 · 约 10 分钟' })
+        el('h3', { text: '听说练习' }),
+        el('p', { text: '单词拼写 + 句子听读 + 情景对话 · 跨天 +1/+3/+7 复习' })
       ]),
       el('span', {
         class: `subject-count ${spDone >= spTotal ? 'done' : ''}`.trim(),
@@ -749,7 +823,7 @@ function renderSubjects() {
     ]),
     el('span', {
       class: `btn btn-block ${spDone >= spTotal ? 'btn-ghost' : 'btn-primary'}`,
-      text: spDone >= spTotal ? '🔁 再练一遍' : '🎤 开始跟读'
+      text: spDone >= spTotal ? '🔁 再练一遍' : '🎤 开始练习'
     })
   ]);
   spCard.addEventListener('click', () => { unlockAudio(); sfxClick(); });
@@ -1189,6 +1263,110 @@ function pickImportFile() {
   input.click();
 }
 
+/* ------------------------- 课程设置（阶段 A 骨架） ------------------------- */
+
+function renderCourse(data) {
+  const course = data.settings?.course || {};
+  const todayDay = data.days?.[store.todayKey()];
+  const status = todayDay?.courseScope?.math;
+  // 实际抽到的教材/拓展题数（可抽池 ≠ 实际出题，状态行必须按实际数说）
+  const mathTasks = (todayDay?.tasks || []).filter((t) => t.subject === 'math');
+  const pickedQs = mathTasks.flatMap((t) => t.questions);
+  const textbookPicked = status?.textbookPicked
+    ?? pickedQs.filter((q) => q.courseTrack === 'textbook').length;
+  const extensionPicked = status?.extensionPicked
+    ?? pickedQs.filter((q) => q.courseTrack === 'extension').length;
+  const quota = status?.quota ?? mathTasks.length * QUESTIONS_PER_TASK;
+  const inputStyle = 'width:100%;padding:8px 10px;border:1px solid #dfe5f2;border-radius:10px;font:inherit;background:#fff';
+  const labelStyle = 'display:block;font-size:12px;font-weight:700;color:#6b7794;margin:10px 0 4px';
+
+  const versionSel = el('select', { style: inputStyle });
+  versionSel.append(el('option', { value: '', text: '未设置（按课本封面选择）' }));
+  COURSE_VERSIONS.forEach((v) => {
+    versionSel.append(el('option', { value: v, text: v }));
+  });
+  // 兼容旧值：存档里已有、但不在选项里的版本名，动态补一个，避免显示成空白
+  if (course.version && !COURSE_VERSIONS.includes(course.version)) {
+    versionSel.append(el('option', { value: course.version, text: course.version }));
+  }
+  versionSel.value = course.version || '';
+
+  const termSel = el('select', { style: inputStyle });
+  [['', '未设置'], ['上册', '上册'], ['下册', '下册']].forEach(([v, t]) => {
+    termSel.append(el('option', { value: v, text: t }));
+  });
+  termSel.value = course.term || '';
+
+  const unitSel = el('select', { style: inputStyle });
+  unitSel.append(el('option', { value: '', text: '未设置（不限定单元）' }));
+  COURSE_UNITS.forEach((u) => {
+    unitSel.append(el('option', {
+      value: u.id,
+      text: `${u.order}. ${u.name}（${u.metaGrade}年级${u.metaTerm}）`
+    }));
+  });
+  unitSel.value = course.currentUnitId || '';
+
+  const saveBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '保存课程设置' });
+  saveBtn.addEventListener('click', () => {
+    sfxClick();
+    const version = versionSel.value;
+    const term = termSel.value;
+    const unitId = unitSel.value || null;
+    store.update((d) => {
+      const c = d.settings.course || (d.settings.course = {});
+      c.subject = 'math';
+      c.version = version;
+      c.term = term;
+      c.currentUnitId = unitId;
+      const unit = COURSE_UNITS.find((u) => u.id === unitId);
+      if (unit) c.grade = unit.metaGrade;
+    });
+    // 今天的任务已按旧范围生成：未开始做才重建；已有做题记录则明天生效，不抹掉进度
+    const today = store.load().days?.[store.todayKey()];
+    const started = !!today && (today.chest?.opened || (today.tasks || []).some((t) => t.done));
+    if (started) {
+      toast('课程设置已保存；今天已有做题记录，不重排，新范围从明天生效', 'ok');
+    } else {
+      regenerateToday(store.load().grade);
+      toast(unitId
+        ? '课程设置已保存，今天的数学题已按「当前单元 + 已学单元」重排'
+        : '课程设置已保存，今天数学题恢复全年级题池', 'ok');
+    }
+    refresh();
+  });
+
+  const statusText = !course.currentUnitId
+    ? '未配置当前单元：数学仍使用全年级题池（不会误收敛）'
+    : status
+      ? `已收敛：当前单元「${status.currentUnitName}」及之前的 ${status.allowedUnits?.length ?? 1} 个已学单元可抽教材题；`
+        + `教材题可抽 ${status.textbookAvailable ?? 0} 道 → 实际抽到 ${textbookPicked} 道教材 + ${extensionPicked} 道拓展`
+        + `（当天配额 ${quota} 道；逻辑题作为拓展题占位，每项最多 2 道）`
+        + (status.taskCount < (status.desiredTaskCount ?? status.taskCount)
+          ? `；因教材题不足，今日数学减为 ${status.taskCount} 项（原 ${status.desiredTaskCount} 项），不提前给未学单元`
+          : status.shortage
+            ? `；教材池不足以铺满 ${status.desiredTaskCount * QUESTIONS_PER_TASK} 道，但不提前给未学单元`
+            : '')
+      : '已配置课程单元，今天的题尚未重建（保存后会自动重建）';
+
+  return el('div', { class: 'card parent', style: 'margin-top:16px' }, [
+    el('div', { class: 'parent-head' }, [
+      el('h3', { text: '课程设置 · 数学（阶段 A 骨架）' }),
+      el('span', { class: 'src', text: '骨架 · 待核对' })
+    ]),
+    el('p', { class: 'parent-hint', text: COURSE_META.note }),
+    el('p', { class: 'parent-hint', text: '当前仅支持三年级数学；语文/英语/科学尚未建课程表，配置后仍用全年级题池。' }),
+    el('label', { style: labelStyle, text: '教材版本（以课本封面为准）' }),
+    versionSel,
+    el('label', { style: labelStyle, text: '册次' }),
+    termSel,
+    el('label', { style: labelStyle, text: '当前单元' }),
+    unitSel,
+    el('div', { style: { marginTop: '12px' } }, [saveBtn]),
+    el('p', { class: 'parent-hint', style: { marginTop: '10px' }, text: statusText })
+  ]);
+}
+
 /* ------------------------- 家长核对 ------------------------- */
 
 function answerText(q) {
@@ -1268,8 +1446,122 @@ function renderParent() {
     body.append(group);
   });
 
+  body.append(renderQuestionReview());
+
   card.append(body);
   return card;
+}
+
+/* ------------------------- 阶段 C：待审核新题（人工审核开关） ------------------------- */
+
+/**
+ * 生成题一律 status:'pending-review'，默认不进抽题池。
+ * 家长在这里逐题「通过 / 驳回」，写入 data.questionReview[id]：
+ *   approved → 进入抽题池；rejected / 未审核 → 不进池。
+ * 这不是口头「已审核」：抽题链路（tasks.js / mastery.js）只认 questionReview 里的 approved。
+ */
+function renderQuestionReview() {
+  const data = store.load();
+  const review = data.questionReview || {};
+  const list = pendingReviewBank();
+
+  const wrap = el('div', { class: 'answer-group' }, [
+    el('h4', { text: '📝 待审核新题（阶段 C · ma-u01）' }),
+    el('p', {
+      class: 'parent-hint',
+      text: '新题默认不进抽题池；逐题核对题干、答案和解析后点「通过」才生效，「驳回」则永久不进池。'
+    })
+  ]);
+
+  if (!list.length) {
+    wrap.append(el('p', { class: 'parent-hint', text: '当前没有待审核的新题。' }));
+    return wrap;
+  }
+
+  let dirty = false;
+  const hint = el('p', { class: 'parent-hint', text: '' });
+
+  const setStatus = (id, status, ui) => {
+    sfxClick();
+    store.update((d) => {
+      const r = d.questionReview || (d.questionReview = {});
+      r[id] = status;
+    });
+    if (ui) {
+      // 只更新本行状态，不整页重排：连点 8 题也只会在点「完成审核」时重排一次
+      ui.statusCell.textContent = status === 'approved' ? '已通过 ✓' : '已驳回 ✗';
+      ui.approveBtn.disabled = status === 'approved';
+      ui.rejectBtn.disabled = status === 'rejected';
+      ui.approveBtn.textContent = status === 'approved' ? '已通过' : '通过';
+      ui.rejectBtn.textContent = status === 'rejected' ? '已驳回' : '驳回';
+    }
+    dirty = true;
+    hint.textContent = '有改动未应用：点下方「完成审核」后，今天还没开始做题就立即重排，已开始则从明天生效。';
+  };
+
+  list.forEach((q) => {
+    const status = review[q.id] || '';
+    const statusText = status === 'approved' ? '已通过 ✓' : status === 'rejected' ? '已驳回 ✗' : '待审核';
+    const approveBtn = el('button', {
+      class: `btn btn-sm ${status === 'approved' ? 'btn-ghost' : 'btn-primary'}`,
+      type: 'button',
+      text: status === 'approved' ? '已通过' : '通过'
+    });
+    approveBtn.disabled = status === 'approved';
+    const rejectBtn = el('button', {
+      class: 'btn btn-sm btn-ghost',
+      type: 'button',
+      text: status === 'rejected' ? '已驳回' : '驳回'
+    });
+    rejectBtn.disabled = status === 'rejected';
+    const statusCell = el('td', { class: 'lv', text: statusText });
+    const ui = { statusCell, approveBtn, rejectBtn };
+    approveBtn.addEventListener('click', () => setStatus(q.id, 'approved', ui));
+    // 驳回不是永久删除：题仍在面板里，随时可以再点「通过」复审（复审入口就在同一行）
+    rejectBtn.addEventListener('click', () => setStatus(q.id, 'rejected', ui));
+
+    const table = el('table', { class: 'answer-table' });
+    table.append(
+      el('thead', {}, [
+        el('tr', {}, [
+          el('th', { text: '题目' }),
+          el('th', { text: '答案' }),
+          el('th', { text: '解析 / 出处' }),
+          el('th', { text: '状态' })
+        ])
+      ]),
+      el('tbody', {}, [
+        el('tr', {}, [
+          el('td', { class: 'q', text: q.prompt + (q.type === 'choice' ? `（选项：${(q.options || []).join(' / ')}）` : '') }),
+          el('td', { class: 'ans', text: answerText(q) }),
+          el('td', {}, [
+            el('div', { text: q.explain }),
+            el('div', { class: 'src', text: q.source })
+          ]),
+          statusCell
+        ])
+      ])
+    );
+    wrap.append(
+      table,
+      el('div', { style: { display: 'flex', gap: '8px', margin: '4px 0 14px' } }, [approveBtn, rejectBtn])
+    );
+  });
+
+  const applyBtn = el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: '完成审核（应用改动）' });
+  applyBtn.addEventListener('click', () => {
+    if (!dirty) { toast('没有待应用的改动', 'bad'); return; }
+    sfxClick();
+    // 今天还没开始做题：重排一次让 approved 的新题立即可抽；已有记录则明天生效，不抹进度
+    const today = store.load().days?.[store.todayKey()];
+    const started = !!today && (today.chest?.opened || (today.tasks || []).some((t) => t.done));
+    if (!started) regenerateToday(store.load().grade);
+    toast(started ? '审核已保存，今天已有做题记录，新题从明天生效' : '审核已保存，今日题单已按新审核结果重排', 'ok');
+    render(store.load());
+  });
+  wrap.append(hint, el('div', { style: { display: 'flex', gap: '8px', margin: '6px 0 2px' } }, [applyBtn]));
+
+  return wrap;
 }
 
 /* ------------------------- 每日庆祝 ------------------------- */

@@ -7,6 +7,7 @@ import * as store from './store.js';
 import { GRADE_LABEL, LEVEL_LABEL, PASS_LINE, SUBJECT_TIP } from '../data/curriculum.js';
 import { getTaskById } from './tasks.js';
 import { completeTask, markCelebrated } from './score.js';
+import { buildWeeklyQuiz, saveQuizResult } from './mastery.js';
 import { celebrate, playerName } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
@@ -78,8 +79,36 @@ export function mountGame(subject) {
   clear(app);
 
   const params = new URLSearchParams(location.search);
+  const quizMode = params.get('quiz') === '1' && subject === 'math';
   const taskId = params.get('task');
-  const task = taskId ? getTaskById(taskId) : null;
+  let task = null;
+  let weeklyQuiz = null;
+
+  if (quizMode) {
+    // 每周 10 题小测：只从现有数学题池抽题，不生成新题；结果单独存，不加积分
+    const data = store.load();
+    weeklyQuiz = buildWeeklyQuiz(data, data.grade, store.todayKey());
+    if (!weeklyQuiz.items.length) {
+      emptyView(app, '本周小测暂时没有可用的题目，先完成今天的数学任务吧。');
+      return;
+    }
+    task = {
+      id: `quiz-${weeklyQuiz.weekKey}`,
+      subject,
+      subjectName: store.SUBJECT_META[subject].name,
+      icon: store.SUBJECT_META[subject].icon,
+      grade: data.grade,
+      title: '本周小测 · 新旧知识点混合',
+      questions: weeklyQuiz.items,
+      level2: weeklyQuiz.items.filter((q) => q.level === 2).length,
+      done: false,
+      doneAt: null,
+      firstTryCorrect: null,
+      attempts: 0
+    };
+  } else {
+    task = taskId ? getTaskById(taskId) : null;
+  }
 
   if (!task || task.subject !== subject) {
     emptyView(app, task ? '这个任务不属于当前科目。' : '任务可能已经过期，回到工作台重新进入即可。');
@@ -104,7 +133,12 @@ export function mountGame(subject) {
       dots
     ]),
     stage,
-    el('div', { class: 'game-foot', text: SUBJECT_TIP[subject] || '答错不扣分，都可以再试一次。' })
+    el('div', {
+      class: 'game-foot',
+      text: quizMode
+        ? '小测只答一次、不给提示，新旧知识点混在一起，用来看看这周掌握得怎么样。'
+        : (SUBJECT_TIP[subject] || '答错不扣分，都可以再试一次。')
+    })
   );
 
   function renderHeader(q, i) {
@@ -216,8 +250,9 @@ export function mountGame(subject) {
     locked = true;
     markFirst(true);
     sfxCorrect();
-    hint?.show('答对啦！');
-    setTimeout(nextQuestion, 720);
+    // 小测不提示（不告诉孩子对错解析），只给颜色反馈后直接进入下一题
+    if (!quizMode) hint?.show('答对啦！');
+    setTimeout(nextQuestion, quizMode ? 520 : 720);
   }
 
   async function wrongThenRetry(hint, extra) {
@@ -226,6 +261,11 @@ export function mountGame(subject) {
     locked = true;
     markFirst(false);
     sfxWrong();
+    // 小测：不弹错因、不提示、不重做，只记为错并进入下一题
+    if (quizMode) {
+      setTimeout(nextQuestion, 900);
+      return;
+    }
     // 首答错因反思（replay 模式跳过）
     if (!replay && wrongReasons[index] === null) {
       try {
@@ -628,6 +668,27 @@ export function mountGame(subject) {
     locked = true;
     const total = task.questions.length;
     const first = results.filter((r) => r === 'correct').length;
+
+    // 小测：不加积分、不重复刷分，结果单独存进 quizzes[weekKey]
+    if (quizMode) {
+      const items = task.questions.map((q, i) => ({
+        kid: q.kid,
+        kind: q.quizKind,
+        ok: results[i] === 'correct'
+      }));
+      store.update((d) => {
+        saveQuizResult(d, {
+          weekKey: weeklyQuiz.weekKey,
+          date: weeklyQuiz.date,
+          total,
+          correct: first,
+          items
+        });
+      });
+      renderQuizResult({ correct: first, total, items });
+      return;
+    }
+
     const passed = first >= PASS_LINE;
 
     if (!passed) {
@@ -695,6 +756,33 @@ export function mountGame(subject) {
         }
       }
     });
+  }
+
+  /** 小测结算：不给「再练一次」（不重做），直接看成长页变化 */
+  function renderQuizResult({ correct, total, items }) {
+    clear(stage);
+    const oldItems = items.filter((it) => it.kind === 'old');
+    const newItems = items.filter((it) => it.kind !== 'old');
+    const oldOk = oldItems.filter((it) => it.ok).length;
+    const newOk = newItems.filter((it) => it.ok).length;
+    const rate = total ? Math.round(correct / total * 100) : 0;
+    const panel = el('div', { class: 'result' }, [
+      el('div', { class: 'result-emoji', text: correct >= 8 ? '🎯' : '📘' }),
+      el('h2', { text: '本周小测完成' }),
+      el('p', { text: `答对 ${correct}/${total}（${rate}%）。小测不加积分、也不能重做，只用来看这周真实掌握。` }),
+      el('div', { class: 'result-stats' }, [
+        chip(`首答 ${correct}/${total}`, 'chip-line'),
+        chip(`旧知识 ${oldOk}/${oldItems.length}`, 'chip-ok'),
+        chip(`新知识 ${newOk}/${newItems.length}`, 'chip-gold')
+      ])
+    ]);
+    panel.append(
+      el('div', { class: 'result-actions' }, [
+        el('a', { class: 'btn btn-primary', href: 'growth.html', text: '看掌握度变化' }),
+        el('a', { class: 'btn btn-ghost', href: 'index.html', text: '回到工作台' })
+      ])
+    );
+    stage.append(panel);
   }
 
   function chip(text, cls = '') {

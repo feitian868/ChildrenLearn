@@ -16,6 +16,8 @@ export const APP_CURRENT_KEY = 'app_currentUser';
 export const VERSION = 4;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
 export const DAYS_KEEP = 90;   // days 同样只留 90 天（否则 localStorage 会被撑爆）
+const RECENT_KEEP = 365;       // recentByDay/recentKeys 回避窗口，必须与 tasks.js 的 AVOID_DAYS 一致
+const TREND_KEEP = 45;         // masteryTrend 只留 45 天，必须与 mastery.js 的 TREND_KEEP 一致
 
 /** 可选的头像 emoji 池，新建/切换时挑选。纯字符，不占存储。 */
 export const AVATAR_POOL = [
@@ -84,14 +86,34 @@ function defaultData(grade = 3) {
     pet: null, // null = 未领养；完整结构见 pet.js 的 createPet()
     days: {},
     dailyHistory: {}, // { [dateKey]: { completed, total, pointsEarned, chestOpened, streak, firstTry:{correct,total} } }
-    recentQuestions: {}, // { [questionId]: 最后使用日期 }，抽题回避用，保留 365 天
-    speakingProgress: {}, // { [dateKey]: { done: [id], passed: [id] } } 英语跟读当日进度
-    speakingRecent: {},    // { [sig]: 最后使用日期 } 跟读内容回避用，保留 365 天
-    speakingAward: {},     // { [dateKey]: true } 当日跟读 12 句全过的加分已发放标记
+    // B′ 存储紧凑化：取代旧 recentQuestions「每题 3 条 KV」
+    recentByDay: {},   // { [dateKey]: [sig24] } 当日用过的题面签名，抽题回避用，保留 365 天
+    recentKeys: {},    // { [key]: 最后使用日期 } 知识点冷却用，保留 365 天
+    reviewOrig: {},    // { [sig24]: 首次出错日期 } 复习条目 origDate，按签名只存一份不随队列重复
+    questionReview: {}, // { [questionId]: 'approved'|'rejected' } 阶段 C 待审题人工审核状态
+    // 阶段 B：掌握度是【累积状态】，不从 dailyHistory 重算（历史只留 90 天，重算会失忆）
+    mastery: { v: 1, keys: {}, masteredAt: {}, aliases: {} },
+    masteryTrend: {},  // { [dateKey]: { [knowledgeId]: 掌握度 0~100 } }，成长页曲线用
+    reviewQueue: {},   // { [dateKey]: [ 'kid~stage~origSig~lastSig~reason~level', ... ] } 紧凑队列
+    contentGaps: {},   // { [knowledgeId]: { first,last,count,reason } } 无变式时记内容缺口，交阶段 C
+    quizzes: {},       // { [weekKey]: { date,total,correct,items:[[kid,ok,old]] } } 每周小测结果单独存
+    speakingProgress: {}, // { [dateKey]: { practiced: [id], total } } 听说练习当日记录（只记练过）
+    speakingQueue: {},     // { [id]: { kind,text,zh,level,origin,step,due } } 跨天复习队列 +1/+3/+7
+    speakingRecent: {},    // { [sig]: 最后使用日期 } 听读内容回避用，保留 365 天
+    speakingAward: {},     // { [dateKey]: true } 当日听说练习全部练完的加分已发放标记
     orders: [],
     settings: {
       sound: true,
-      parentUnlocked: false
+      parentUnlocked: false,
+      // 课程结构（阶段 A）：教材版本/册次/当前单元均为空，等家长按课本封面确认后填写
+      course: {
+        subject: 'math',
+        version: '',
+        grade: null,
+        term: '',
+        currentUnitId: null,
+        learnedUnits: []
+      }
     }
   };
 }
@@ -320,6 +342,46 @@ export function update(mutator) {
   return result === undefined ? data : result;
 }
 
+/**
+ * B′ 迁移：旧 recentQuestions「每题 3 条 KV」→ recentByDay/recentKeys。
+ * - `k:` 前缀 → recentKeys（知识点冷却，原样保留）；
+ * - `s:<32位十进制>` → 截断为 24 位 Base36 后按日期进 recentByDay，
+ *   与 rng.sig24 对同一内容串的结果完全一致，365 天去重语义不丢失；
+ * - 纯 id 条目丢弃：同内容必同签名，s: 签名已覆盖其去重语义，丢弃不损失；
+ * - 已经是新格式时原样保留，再把两边都裁剪到 365 天窗口。
+ */
+function migrateRecent(raw) {
+  const byDay = raw.recentByDay && typeof raw.recentByDay === 'object' ? raw.recentByDay : {};
+  const keys = raw.recentKeys && typeof raw.recentKeys === 'object' ? raw.recentKeys : {};
+  const old = raw.recentQuestions;
+  if (old && typeof old === 'object') {
+    Object.entries(old).forEach(([k, date]) => {
+      if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      if (k.startsWith('k:')) {
+        const kk = k.slice(2);
+        if (!keys[kk] || keys[kk] < date) keys[kk] = date;
+        return;
+      }
+      if (k.startsWith('s:')) {
+        const n = Number(k.slice(2));
+        if (!Number.isFinite(n)) return;
+        const sig = ((n >>> 0) & 0xffffff).toString(36).padStart(5, '0');
+        const arr = byDay[date] || (byDay[date] = []);
+        if (!arr.includes(sig)) arr.push(sig);
+      }
+      // 纯 id 条目：不迁移（签名已覆盖，见上）
+    });
+  }
+  const cutoff = shiftDateKey(todayKey(), -RECENT_KEEP);
+  Object.keys(byDay).forEach((d) => {
+    if (d < cutoff || !Array.isArray(byDay[d])) delete byDay[d];
+  });
+  Object.keys(keys).forEach((k) => {
+    if (typeof keys[k] !== 'string' || keys[k] < cutoff) delete keys[k];
+  });
+  return { recentByDay: byDay, recentKeys: keys };
+}
+
 function normalize(raw) {
   if (!raw || typeof raw !== 'object') return defaultData();
   const grade = Number(raw.grade);
@@ -331,15 +393,47 @@ function normalize(raw) {
     profile: { ...base.profile, ...(raw.profile || {}) },
     days: raw.days && typeof raw.days === 'object' ? raw.days : {},
     dailyHistory: raw.dailyHistory && typeof raw.dailyHistory === 'object' ? raw.dailyHistory : {},
-    recentQuestions: raw.recentQuestions && typeof raw.recentQuestions === 'object' ? raw.recentQuestions : {},
+    // B′：读时兼容旧 recentQuestions（迁移见 migrateRecent），写时只写新格式
+    ...migrateRecent(raw),
+    reviewOrig: raw.reviewOrig && typeof raw.reviewOrig === 'object' ? raw.reviewOrig : {},
+    questionReview: raw.questionReview && typeof raw.questionReview === 'object' ? raw.questionReview : {},
+    // 阶段 B：老存档没有这些字段时补空结构；已有则原样保留（累积状态不能重置）
+    mastery: {
+      v: 1,
+      keys: raw.mastery?.keys && typeof raw.mastery.keys === 'object' ? raw.mastery.keys : {},
+      masteredAt: raw.mastery?.masteredAt && typeof raw.mastery.masteredAt === 'object' ? raw.mastery.masteredAt : {},
+      // P0 分层：历史归档不是「裁剪」，读回时必须原样保留
+      archive: raw.mastery?.archive && typeof raw.mastery.archive === 'object' ? raw.mastery.archive : {},
+      aliases: raw.mastery?.aliases && typeof raw.mastery.aliases === 'object' ? raw.mastery.aliases : {}
+    },
+    masteryTrend: raw.masteryTrend && typeof raw.masteryTrend === 'object' ? raw.masteryTrend : {},
+    reviewQueue: raw.reviewQueue && typeof raw.reviewQueue === 'object' ? raw.reviewQueue : {},
+    contentGaps: raw.contentGaps && typeof raw.contentGaps === 'object' ? raw.contentGaps : {},
+    quizzes: raw.quizzes && typeof raw.quizzes === 'object' ? raw.quizzes : {},
     speakingProgress: raw.speakingProgress && typeof raw.speakingProgress === 'object' ? raw.speakingProgress : {},
     speakingRecent: raw.speakingRecent && typeof raw.speakingRecent === 'object' ? raw.speakingRecent : {},
     speakingAward: raw.speakingAward && typeof raw.speakingAward === 'object' ? raw.speakingAward : {},
     orders: Array.isArray(raw.orders) ? raw.orders : [],
     pet: raw.pet ?? base.pet,
-    settings: { ...base.settings, ...(raw.settings || {}) }
+    settings: {
+      ...base.settings,
+      ...(raw.settings || {}),
+      // course 是嵌套对象，浅合并会把旧存档的 course 字段抹掉，这里单独兜底
+      course: {
+        ...base.settings.course,
+        ...((raw.settings || {}).course || {}),
+        learnedUnits: Array.isArray((raw.settings || {}).course?.learnedUnits)
+          ? raw.settings.course.learnedUnits
+          : []
+      }
+    }
   };
   if (!Array.isArray(data.profile.streakBonusDays)) data.profile.streakBonusDays = [];
+
+  // B′：masteryTrend 裁到 45 天——只裁曲线；mastery.keys / reviewQueue / quizzes 一律不裁，
+  // 它们是「跨 100 天不失忆」的载体（与 mastery.js 头部的硬约束注释保持一致）
+  const trendCutoff = shiftDateKey(todayKey(), -(TREND_KEEP - 1));
+  Object.keys(data.masteryTrend).forEach((k) => { if (k < trendCutoff) delete data.masteryTrend[k]; });
 
   // 补齐每天的字段，兼容旧数据
   Object.values(data.days).forEach((day) => {

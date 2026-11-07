@@ -12,6 +12,15 @@ export function hashString(str) {
   return h >>> 0;
 }
 
+/**
+ * 24 位内容签名（5 字符 Base36）：recentByDay 与复习队列的统一签名格式。
+ * 碰撞只会「多回避 / 多排队」（把没见过的题误判为见过而跳过），
+ * 不会「误重复 / 丢复习」，因此 365 天题面不重复的硬约束不受碰撞影响。
+ */
+export function sig24(str) {
+  return ((hashString(str) >>> 0) & 0xffffff).toString(36).padStart(5, '0');
+}
+
 /** mulberry32：小而稳的种子随机数发生器 */
 export function mulberry32(seed) {
   let a = seed >>> 0;

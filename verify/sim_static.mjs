@@ -1,7 +1,7 @@
 /**
  * sim_static.mjs —— 验证两件事：
  *  1) 固定静态题池在全年题量里的占比
- *  2) 去重记录（recentQuestions）丢失后（换设备/清缓存/导入旧备份）会发生什么
+ *  2) 去重记录（B′ 后为 recentByDay/recentKeys）丢失后（换设备/清缓存/导入旧备份）会发生什么
  */
 const RealDate = Date;
 const START = new RealDate('2026-01-05T12:00:00+08:00').getTime();
@@ -39,9 +39,9 @@ const CUT = 200;
 
 for (let i = 1; i <= 365; i++) {
   if (i === CUT + 1) {
-    // 模拟：换设备 / 清缓存 / 导入了旧备份 → 365 天去重记录归零
-    store.update((d) => { d.recentQuestions = {}; });
-    console.log(`（第 ${i} 天：recentQuestions 已清空，模拟换设备）`);
+    // 模拟：换设备 / 清缓存 / 导入了旧备份 → 365 天去重记录归零（B′ 新结构）
+    store.update((d) => { d.recentByDay = {}; d.recentKeys = {}; });
+    console.log(`（第 ${i} 天：recentByDay/recentKeys 已清空，模拟换设备）`);
   }
   const day = ensureToday();
   const qs = day.tasks.flatMap((t) => t.questions);

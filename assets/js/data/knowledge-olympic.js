@@ -7,7 +7,7 @@
  * 每题附解析与出处标注，level 统一为 2（应用/分析）。
  */
 
-import { shuffle, hashString } from '../core/rng.js';
+import { shuffle, hashString, mulberry32 } from '../core/rng.js';
 
 const r = (rng, a, b) => a + Math.floor(rng() * (b - a + 1));
 
@@ -43,13 +43,6 @@ const g1 = [
       a + b + 1,
       `前面 ${a} 人 + 后面 ${b} 人 + 小明自己 = ${a}+${b}+1 = ${a + b + 1} 人。`);
   },
-  (rng) => { // 数图形
-    const n = r(rng, 4, 8);
-    return item('ol-g1-xd', '数图形', 'input',
-      `一条直线上有 ${n} 个点，每两个点之间都连成线段，一共能数出几条线段？`,
-      n * (n - 1) / 2,
-      `${n}×(${n}-1)÷2 = ${n * (n - 1) / 2} 条。`);
-  },
   (rng) => { // 找规律（等差）
     const start = r(rng, 1, 9), step = r(rng, 2, 5);
     const seq = [0, 1, 2, 3].map((i) => start + step * i);
@@ -64,15 +57,6 @@ const g1 = [
       `一袋糖吃了一半后还剩 ${n} 块，这袋糖原来有几块？`,
       n * 2,
       `一半就是 ${n} 块，原来一共 ${n}×2 = ${n * 2} 块。`);
-  },
-  (rng) => { // 逻辑推理（比高矮）
-    const names = shuffle(rng, ['小华', '小明', '小强']);
-    const { options, answer } = mc(rng, names[0], [names[1], names[2]]);
-    return item('ol-g1-tl', '逻辑推理', 'choice',
-      `三人比高矮：${names[0]}最高，${names[2]}最矮。谁最高？`,
-      answer,
-      `题目直接告诉我们：${names[0]}最高。`,
-      options);
   },
   (rng) => { // 移多补少
     const half = r(rng, 2, 8);
@@ -326,14 +310,6 @@ const g3 = [
       digits,
       `1-9 页各用 1 个共 9 个，10-${n} 页每页 2 个，共 ${digits} 个。`);
   },
-  (rng) => { // 简单逻辑（话说真话）
-    const { options, answer } = mc(rng, '乙', ['甲', '丙', '丁']);
-    return item('ol-g3-zh', '真话假话', 'choice',
-      `甲乙两人中一人说真话、一人说假话。甲说「乙说假话」。请问谁说真话？`,
-      answer,
-      `如果甲说真话→乙说谎→甲说的是真的→乙确实说谎，自洽！所以甲说真话，乙说谎。`,
-      options);
-  }
 ];
 
 /* ==================== 四年级（g4） ==================== */
@@ -588,14 +564,6 @@ const g6 = [
       pct,
       `盐不变仍是 ${salt} 克，盐水变成 ${m + water} 克，${salt}÷${m + water}≈${pct}%。`);
   },
-  (rng) => { // 逻辑推理（真话假话）
-    const { options, answer } = mc(rng, '甲', ['乙', '丙', '无法确定']);
-    return item('ol-g6-tl', '逻辑推理', 'choice',
-      '甲、乙、丙中只有一人说了真话。甲说：「乙是第一名」；乙说：「我不是第一名」；丙说：「甲不是第一名」。那么第一名是谁？',
-      answer,
-      '假设甲第一：甲的话为假、乙的话为真、丙的话为假——恰好只有一人说真话，所以第一名是甲。',
-      options);
-  },
   // ---- 新增 6 个 ----
   (rng) => { // 利润问题
     const cost = r(rng, 50, 150), rate = r(rng, 10, 40);
@@ -654,6 +622,57 @@ const g6 = [
 
 const GRADE_GEN = { 1: g1, 2: g2, 3: g3, 4: g4, 5: g5, 6: g6 };
 
+/* ==================== 专题闯关（阶段 D：只重组现有模板，不新增题目） ==================== */
+
+export const TOPIC_SEQUENCE = [
+  { id: 'sumdiff', name: '和差倍' },
+  { id: 'profitloss', name: '盈亏' },
+  { id: 'chicken', name: '鸡兔同笼' },
+  { id: 'travel', name: '行程' },
+  { id: 'count', name: '计数' },
+  { id: 'combo', name: '组合' }
+];
+
+/** 每专题 4 关：例题 → 变式 → 挑战 → 综合（level 随关数 1→4 递增） */
+export const LEVELS_PER_TOPIC = 4;
+export const LEVEL_LABELS = ['例题', '变式', '挑战', '综合'];
+
+// 先匹配具体专题，最后的 combo 兜底收纳规律/巧算类模板
+const TOPIC_RULES = [
+  ['sumdiff', /和差|和倍|差倍|移多补少|一半问题|年龄/],
+  ['profitloss', /盈亏/],
+  ['chicken', /鸡兔/],
+  ['travel', /相遇|追及|火车|上下坡|爬楼梯|植树|间隔|排队/],
+  ['count', /数图形|数方块|页码|排列|因数|方阵|容斥|抽屉|概率|周期/],
+  ['combo', /.*/]
+];
+
+/**
+ * 本年级实际存在的专题（没有模板的专题直接跳过，不新增题目）。
+ * 顺序固定为 TOPIC_SEQUENCE，方便「不达标不放行下一专题」。
+ */
+export function olympicTopics(grade) {
+  const gens = GRADE_GEN[grade] || g3;
+  const topics = TOPIC_SEQUENCE.map((t) => ({ ...t, templates: [] }));
+  const byId = new Map(topics.map((t) => [t.id, t]));
+  gens.forEach((gen, genIndex) => {
+    const probe = gen(mulberry32(hashString(`topic-probe:${grade}:${genIndex}`)));
+    const rule = TOPIC_RULES.find(([, re]) => re.test(probe.topic));
+    byId.get(rule[0]).templates.push({ templateId: probe.templateId, topic: probe.topic, genIndex });
+  });
+  return topics.filter((t) => t.templates.length > 0);
+}
+
+/** 生成某一关的题目：沿用现有模板参数化，只按关数写入真实 grade / level */
+export function olympicTopicQuestion(grade, genIndex, level, rng) {
+  const gens = GRADE_GEN[grade] || g3;
+  const q = gens[genIndex || 0](rng);
+  q.grade = grade;
+  q.level = level;
+  q.id = `${q.templateId}-g${grade}-lv${level}`;
+  return q;
+}
+
 /**
  * 生成一套 4 题。支持两种去重：
  *   1. templateId 级：避开最近用过的模板（bag 轮询）
@@ -690,6 +709,7 @@ export function olympicSet(grade, rng, opts = {}) {
       if (!excludeHashes.has(q.promptHash) && !usedHashes.includes(q.promptHash)) break;
     }
     // 如果试了 20 次还冲突，接受最后生成的（极端罕见情况）
+    q.grade = grade;
     q.id = `${q.templateId}-${questions.length}`;
     questions.push(q);
     usedTemplateIds.push(q.templateId);
