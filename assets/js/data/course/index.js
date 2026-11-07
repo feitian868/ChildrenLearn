@@ -12,10 +12,18 @@
 import { VOLUME_CATALOG, BUILT_VOLUME_KEYS, volumeKeyOf, EDITION_ID } from './edition-profile.js';
 
 const LOADERS = {
+  'math:1:上册': () => import('./volumes/math-g1-up.js'),
+  'math:1:下册': () => import('./volumes/math-g1-down.js'),
   'math:2:上册': () => import('./volumes/math-g2-up.js'),
   'math:2:下册': () => import('./volumes/math-g2-down.js'),
   'math:3:上册': () => import('./volumes/math-g3-up.js'),
-  'math:3:下册': () => import('./volumes/math-g3-down.js')
+  'math:3:下册': () => import('./volumes/math-g3-down.js'),
+  'math:4:上册': () => import('./volumes/math-g4-up.js'),
+  'math:4:下册': () => import('./volumes/math-g4-down.js'),
+  'math:5:上册': () => import('./volumes/math-g5-up.js'),
+  'math:5:下册': () => import('./volumes/math-g5-down.js'),
+  'math:6:上册': () => import('./volumes/math-g6-up.js'),
+  'math:6:下册': () => import('./volumes/math-g6-down.js')
 };
 
 const CACHE = new Map();

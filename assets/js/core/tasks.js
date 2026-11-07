@@ -95,7 +95,9 @@ function getPool(subject, grade, rng, dayKey = '', weakSet = null) {
     mulberry32(hashString(`${dayKey}:${grade}:${subject}:logic`)));
   // 数学题每次用同一日期种子重建，保证当天各科任务题目一致
   if (subject === 'math') {
-    return rankWeak([...mathPool(grade, rng), ...logic], weakSet);
+    // includeSpec：规格题（默认 pending-review）随年级进池，
+    // 是否可抽仍由下方 visiblePool + questionReview(approved) 决定。
+    return rankWeak([...mathPool(grade, rng, { includeSpec: true }), ...logic], weakSet);
   }
   const cacheKey = `${subject}:${grade}`;
   if (!poolCache.has(cacheKey)) {
@@ -153,7 +155,7 @@ function adaptTarget(data, grade = 3) {
 
 
 
-function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE) {
+export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE) {
   const avail = pool.filter((item) => !used.has(item.id));
   // 知识点冷却起点：key 在 COOLDOWN_DAYS 内考过，本轮先让位给别的知识点
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
@@ -291,15 +293,10 @@ function pickStretch(rng, pool, used, usedKeys, recent, dayKey, ownSigs, usedTem
 }
 
 /** 题目内容签名：题干 + 选项（排序后）+ 答案文本，跨年级判重用；与选项顺序无关 */
-function contentSig(q) {
-  if (q.type === 'choice') {
-    const opts = (q.options || []).map(String).slice().sort().join(',');
-    return `choice|${q.prompt}|${opts}|${String(q.options[q.answer])}`;
-  }
-  if (q.type === 'match') {
-    return `match|${q.prompt}|${(q.pairs || []).map((p) => `${p.a}=${p.b}`).sort().join(',')}`;
-  }
-  return `${q.type}|${q.prompt}|${String(q.answer)}`;
+export function contentSig(q) {
+  // 题面口径：同一句题干（不论选项/答案如何排列）视为「已出现过」，
+  // 确保 365 天窗口内不重复出题面（R1 口径与 templateKey 分离）。
+  return `prompt|${q.type}|${String(q.prompt || '')}`;
 }
 
 /**
@@ -341,7 +338,7 @@ function buildRecent(data) {
  * 用于认知去重：题面去重只能挡住「换了个数字」，
  * 模板去重才能避免「一天再出现六次同样的配对题」。
  */
-function templateKey(q) {
+export function templateKey(q) {
   return `t:${hashString(`${q.type}|${String(q.prompt || '').replace(/\d+(\.\d+)?/g, '#')}`)}`;
 }
 
@@ -353,7 +350,7 @@ function titleOf(questions) {
   return topics.slice(0, 2).join(' · ');
 }
 
-function buildDay(key, grade, data) {
+export function buildDay(key, grade, data) {
   const weekday = store.weekdayOf(key);
   const focus = focusOf(weekday);
   const tasks = [];
@@ -510,7 +507,7 @@ function buildDay(key, grade, data) {
  * recentByDay 按日期分组存签名数组：当天同签名只存一次（同一天拔高 ↔ 本年级
  * 可能抽到同内容题），体积约为旧「每题 3 条 KV」的 1/3 以下。
  */
-function markUsed(data, day) {
+export function markUsed(data, day) {
   const byDay = data.recentByDay || (data.recentByDay = {});
   const keys = data.recentKeys || (data.recentKeys = {});
   const arr = byDay[day.date] || (byDay[day.date] = []);

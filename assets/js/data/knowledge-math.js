@@ -5,6 +5,7 @@
  */
 
 import { randInt, shuffle, pick, hashString } from '../core/rng.js';
+import { specPoolOfGrade } from './course/specs-math.js';
 
 const gcd = (a, b) => {
   a = Math.abs(a);
@@ -441,10 +442,62 @@ GENERATORS.push({
     const tenths = randInt(rand, 11, 99);
     const b = randInt(rand, 2, 9);
     const product = (tenths * b) / 10;
+    const a = fmt(tenths / 10);
+    const frame = randInt(rand, 0, 5);
+    if (frame === 1) {
+      return {
+        topic: '小数乘法',
+        source: src(5, '小数乘法'),
+        prompt: `每千克 ${a} 元，买 ${b} 千克一共要多少元？`,
+        answer: Number(fmt(product)),
+        unit: '元',
+        explain: `${a} × ${b} = ${fmt(product)}（元）。`
+      };
+    }
+    if (frame === 2) {
+      return {
+        topic: '小数乘法',
+        source: src(5, '小数乘法'),
+        prompt: `一枝笔 ${a} 元，买 ${b} 枝一共要多少元？`,
+        answer: Number(fmt(product)),
+        unit: '元',
+        explain: `${a} × ${b} = ${fmt(product)}（元）。`
+      };
+    }
+    if (frame === 3) {
+      return {
+        topic: '小数乘法',
+        source: src(5, '小数乘法'),
+        prompt: `一根铁丝每米重 ${a} 千克，${b} 米重多少千克？`,
+        answer: Number(fmt(product)),
+        unit: '千克',
+        explain: `${a} × ${b} = ${fmt(product)}（千克）。`
+      };
+    }
+    if (frame === 4) {
+      return {
+        topic: '小数乘法',
+        source: src(5, '小数乘法'),
+        prompt: `一辆汽车每小时行 ${a} 千米，${b} 小时行多少千米？`,
+        answer: Number(fmt(product)),
+        unit: '千米',
+        explain: `${a} × ${b} = ${fmt(product)}（千米）。`
+      };
+    }
+    if (frame === 5) {
+      return {
+        topic: '小数乘法',
+        source: src(5, '小数乘法'),
+        prompt: `每本练习本 ${a} 元，买 ${b} 本要多少元？`,
+        answer: Number(fmt(product)),
+        unit: '元',
+        explain: `${a} × ${b} = ${fmt(product)}（元）。`
+      };
+    }
     return {
       topic: '小数乘法',
       source: src(5, '小数乘法'),
-      prompt: `${fmt(tenths / 10)} × ${b} = （ ）`,
+      prompt: `${a} × ${b} = （ ）`,
       answer: Number(fmt(product)),
       explain: `先按整数乘法算 ${tenths} × ${b} = ${tenths * b}，再点上小数点，得 ${fmt(product)}。`
     };
@@ -500,8 +553,59 @@ GENERATORS.push({
   make(rand, grade) {
     const aT = randInt(rand, 1, 99);
     const bT = randInt(rand, 1, 99);
-    if (rand() < 0.5) {
-      const sum = aT + bT;
+    const frame = randInt(rand, 0, 7);
+    const sum = aT + bT;
+    if (frame === 4) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `妈妈买了 ${fmt(aT / 10)} 千克苹果和 ${fmt(bT / 10)} 千克梨，一共多少千克？`,
+        answer: Number(fmt(sum / 10)),
+        unit: '千克',
+        explain: `${fmt(aT / 10)} + ${fmt(bT / 10)} = ${fmt(sum / 10)}（千克）。`
+      };
+    }
+    if (frame === 5) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `一根绳子长 ${fmt(Math.max(aT, bT) / 10)} 米，剪去 ${fmt(Math.min(aT, bT) / 10)} 米，还剩多少米？`,
+        answer: Number(fmt((Math.max(aT, bT) - Math.min(aT, bT)) / 10)),
+        unit: '米',
+        explain: `${fmt(Math.max(aT, bT) / 10)} - ${fmt(Math.min(aT, bT) / 10)} = ${fmt((Math.max(aT, bT) - Math.min(aT, bT)) / 10)}（米）。`
+      };
+    }
+    if (frame === 6) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `一个文具盒 ${fmt(aT / 10)} 元，一个书包比它贵 ${fmt(bT / 10)} 元，书包多少元？`,
+        answer: Number(fmt(sum / 10)),
+        unit: '元',
+        explain: `${fmt(aT / 10)} + ${fmt(bT / 10)} = ${fmt(sum / 10)}（元）。`
+      };
+    }
+    if (frame === 7) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `仓库有 ${fmt(Math.max(aT, bT) / 10)} 吨货物，运走 ${fmt(Math.min(aT, bT) / 10)} 吨，还剩多少吨？`,
+        answer: Number(fmt((Math.max(aT, bT) - Math.min(aT, bT)) / 10)),
+        unit: '吨',
+        explain: `${fmt(Math.max(aT, bT) / 10)} - ${fmt(Math.min(aT, bT) / 10)} = ${fmt((Math.max(aT, bT) - Math.min(aT, bT)) / 10)}（吨）。`
+      };
+    }
+    if (frame === 2) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `一本书 ${fmt(aT / 10)} 元，一支笔 ${fmt(bT / 10)} 元，买这两样一共多少元？`,
+        answer: Number(fmt(sum / 10)),
+        unit: '元',
+        explain: `${fmt(aT / 10)} + ${fmt(bT / 10)} = ${fmt(sum / 10)}（元）。`
+      };
+    }
+    if (frame === 0) {
       return {
         topic: '小数的加减法',
         source: src(grade, '小数的加法和减法', '下册'),
@@ -512,6 +616,16 @@ GENERATORS.push({
     }
     const big = Math.max(aT, bT);
     const small = Math.min(aT, bT);
+    if (frame === 3) {
+      return {
+        topic: '小数的加减法',
+        source: src(grade, '小数的加法和减法', '下册'),
+        prompt: `小红有 ${fmt(big / 10)} 元，买一本 ${fmt(small / 10)} 元的本子，还剩多少元？`,
+        answer: Number(fmt((big - small) / 10)),
+        unit: '元',
+        explain: `${fmt(big / 10)} - ${fmt(small / 10)} = ${fmt((big - small) / 10)}（元）。`
+      };
+    }
     return {
       topic: '小数的加减法',
       source: src(grade, '小数的加法和减法', '下册'),
@@ -1609,7 +1723,7 @@ export function pendingReviewBank() {
 /* ============================================================
    对外接口
    ============================================================ */
-export function mathPool(grade, rng) {
+export function mathPool(grade, rng, options = {}) {
   const items = [];
   GENERATORS.forEach((gen) => {
     if (!gen.grades.includes(grade)) return;
@@ -1640,5 +1754,9 @@ export function mathPool(grade, rng) {
   C3_REVIEW.forEach((q) => {
     if (q.grades.includes(grade)) items.push({ ...q });
   });
+  // v5 P2：规格书生成的数学题（默认 pending-review；simulateApproved 仅验收仿真用）
+  if (options.includeSpec) {
+    items.push(...specPoolOfGrade(grade, rng, { simulateApproved: Boolean(options.simulateApproved) }));
+  }
   return items;
 }

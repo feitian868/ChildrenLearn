@@ -97,8 +97,9 @@ const MATH_FAMILIES = [
       const cap = CAP(g);
       const start = randInt(rng, 1, Math.max(2, Math.floor(cap / 8)));
       const step = randInt(rng, 2, Math.min(9, Math.max(3, Math.floor(cap / 10))));
-      const seq = [0, 1, 2, 3].map((i) => start + step * i);
-      const ans = start + step * 4;
+      const len = randInt(rng, 3, 5);
+      const seq = new Array(len).fill(0).map((_, i) => start + step * i);
+      const ans = start + step * len;
       const lines = [
         `按规律填数：${seq.join('、')}、（ ）`,
         `接下来该填几？${seq.join('，')}，下一个是（ ）`,
@@ -109,17 +110,19 @@ const MATH_FAMILIES = [
       const c = numChoices(rng, ans, Math.max(3, step));
       return mk('math', g, {
         ...c, prompt,
-        explain: `每次多 ${step}，所以 ${seq[3]} + ${step} = ${ans}。`,
-        source: '数列规律', key: `lg:m:seq:${step}`, templateId: `m-seq-${lines.indexOf(prompt)}`
+        explain: `每次多 ${step}，所以 ${seq[len - 1]} + ${step} = ${ans}。`,
+        source: '数列规律', key: `lg:m:seq:${step}`, templateId: `m-seq-${lines.indexOf(prompt)}-${len}`
       });
     }
   },
   {
     key: 'lg:m:seq2', topic: '找规律', grades: [3, 4, 5, 6], templates: 3,
     make(rng, g) {
-      const a = randInt(rng, 1, 6);
-      const seq = [a, a * 2, a * 3, a * 4];
-      const ans = a * 5;
+      const cap = CAP(g);
+      const a = randInt(rng, 1, Math.max(6, Math.floor(cap / 8)));
+      const len = randInt(rng, 3, 5);
+      const seq = new Array(len).fill(0).map((_, i) => a * (i + 1));
+      const ans = a * (len + 1);
       const lines = [
         `找规律填数：${seq.join('、')}、（ ）`,
         `${seq.join('，')}，括号里应该是几？`,
@@ -129,8 +132,8 @@ const MATH_FAMILIES = [
       const c = numChoices(rng, ans, 6);
       return mk('math', g, {
         ...c, prompt,
-        explain: `第 n 个数是 ${a}×n，所以第 5 个是 ${a}×5=${ans}。`,
-        source: '数列规律', key: `lg:m:seq2:${a}`, templateId: `m-seq2-${lines.indexOf(prompt)}`
+        explain: `第 n 个数是 ${a}×n，所以第 ${len + 1} 个是 ${a}×${len + 1}=${ans}。`,
+        source: '数列规律', key: `lg:m:seq2:${a}`, templateId: `m-seq2-${lines.indexOf(prompt)}-${len}`
       });
     }
   },

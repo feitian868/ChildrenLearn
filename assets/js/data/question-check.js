@@ -179,6 +179,83 @@ function checkExplainConsistent(q) {
   return violations;
 }
 
+/* ------------------------- v5 新增：答案唯一性 / 超纲词 / 结论一致 ------------------------- */
+
+/**
+ * 断言 A：答案唯一（v5）。选择题里不允许出现「两个都自洽」的选项——
+ * 数值等价（7 与 7.0、1/2 与 2/4）或显式 expected 命中多个选项都判废。
+ * 对应 v4 已下线的 ol-g3-zh / ol-g6-tl（两种自洽解）问题。
+ */
+export function checkAnswerUnique(q) {
+  const violations = [];
+  if (q.type !== 'choice') return violations;
+  const options = Array.isArray(q.options) ? q.options.map(String) : [];
+  const correct = correctText(q);
+  const cv = numericValue(correct);
+  if (cv !== null) {
+    const same = options.filter((o, i) => i !== q.answer && numericValue(o) === cv);
+    if (same.length) {
+      violations.push({ rule: 'answer-unique', detail: `选项 ${same.join('、')} 与正确项数值等价，存在两个自洽答案` });
+    }
+  }
+  if (q.expected !== undefined) {
+    const hits = options.filter((o) => String(o).trim() === String(q.expected).trim());
+    if (hits.length !== 1) {
+      violations.push({ rule: 'answer-unique', detail: `expected「${q.expected}」在选项中命中 ${hits.length} 次（必须恰好 1 次）` });
+    }
+  }
+  return violations;
+}
+
+/** 超纲词表：按年级拦截（v5 新增）。1~2 年级不出现分数/小数/负数等。 */
+export const SCOPE_WORD_RULES = [
+  { maxGrade: 2, words: ['分数', '小数', '负数', '方程', '百分数', '比例', '圆周率', 'π', '体积', '面积'] },
+  { maxGrade: 4, words: ['负数', '方程', '百分数', '比例', '圆周率', 'π', '体积'] },
+  { maxGrade: 5, words: ['负数', '比例', '圆周率', 'π'] }
+];
+
+/** 断言 B：超纲词（v5）。检查题干 / 选项 / 解析里的越级词。 */
+export function checkScopeWords(q) {
+  const grade = Number(q.grade || 0);
+  if (!grade) return [];
+  const rules = SCOPE_WORD_RULES.filter((r) => grade <= r.maxGrade);
+  const text = `${q.prompt || ''}|${(q.options || []).join('|')}|${q.explain || ''}`;
+  const violations = [];
+  rules.forEach((r) => {
+    const hit = r.words.filter((w) => text.includes(w));
+    if (hit.length) violations.push({ rule: 'scope-words', detail: `年级 ${grade} 出现超纲词：${hit.join('、')}` });
+  });
+  return violations;
+}
+
+/**
+ * 断言 C：解析结论一致（v5）。补 v4 已知盲区——
+ * 解析里出现正确数值、但最后结论指向错误值时必须抓到。
+ * 只看「所以 / 因此 / 答：」之后的结论段；结论段没有数值则跳过。
+ */
+export function checkExplainConclusion(q) {
+  const explain = String(q.explain || '');
+  const correct = correctText(q);
+  const cv = numericValue(correct);
+  if (!explain || cv === null) return [];
+  if (!/所以|因此|答：/.test(explain)) return [];
+  const tail = explain.split(/所以|因此|答：/).pop();
+  const nums = [...String(tail).matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
+  if (!nums.length) return [];
+  if (tail.includes(correct) || nums.some((n) => Math.abs(n - cv) < 1e-9)) return [];
+  return [{ rule: 'explain-conclusion', detail: `结论段未指向答案 ${correct}，出现的数值：${nums.join('、')}` }];
+}
+
+/** v5 L1：v4 四断言 + 新增三条（不替换 checkQuestion，避免影响 v4 存量口径） */
+export function checkQuestionV5(q, spec = null) {
+  return [
+    ...checkQuestion(q, spec),
+    ...checkAnswerUnique(q),
+    ...checkScopeWords(q),
+    ...checkExplainConclusion(q)
+  ];
+}
+
 /* ------------------------- 断言 3：难度挂在规格书路径上 ------------------------- */
 
 function checkDifficulty(q, spec) {

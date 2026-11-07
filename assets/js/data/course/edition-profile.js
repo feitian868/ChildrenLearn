@@ -87,9 +87,14 @@ export function sourceOf(volume, unitName) {
   return `${version}${name}${g}年级${t} · ${unitName}`;
 }
 
-/** 已建册清单（P0 只把 v4 单册骨架按 metaGrade/metaTerm 拆成 4 册） */
+/** 已建册清单（P2：数学 1~6 年级上下册共 12 册已建；其余三科仍只登记目录） */
 export const BUILT_VOLUME_KEYS = [
-  'math:2:上册', 'math:2:下册', 'math:3:上册', 'math:3:下册'
+  'math:1:上册', 'math:1:下册',
+  'math:2:上册', 'math:2:下册',
+  'math:3:上册', 'math:3:下册',
+  'math:4:上册', 'math:4:下册',
+  'math:5:上册', 'math:5:下册',
+  'math:6:上册', 'math:6:下册'
 ];
 
 export const ID_NAMING = {

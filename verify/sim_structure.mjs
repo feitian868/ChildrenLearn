@@ -48,8 +48,8 @@ assert(catalog.length === SUBJECTS.length * GRADES.length * TERMS.length,
 assert(new Set(catalog.map((v) => v.key)).size === catalog.length, '册键唯一');
 assert(catalog.every((v) => v.edition === EDITION_ID), '全部册目同属 editionProfile');
 const builtCount = catalog.filter((v) => v.built).length;
-assert(builtCount === volumes.length && builtCount === 4,
-  `已建册 ${builtCount} 册，其余 ${catalog.length - builtCount} 册只登记目录（不伪造单元）`);
+assert(builtCount === volumes.length && builtCount === 12,
+  `已建册 ${builtCount} 册（P2 数学 12 册），其余 ${catalog.length - builtCount} 册只登记目录（不伪造单元）`);
 assert(catalog.filter((v) => !v.built).every((v) => v.units === undefined), '未建册不含虚构单元字段');
 
 /* ================= B. 已建册结构 ================= */

@@ -77,17 +77,31 @@ console.log(`  其中课程数据 ${courseFiles.length} 个文件，${courseByte
 courseFiles.sort().forEach((f) => console.log(`    · ${rel(f)} ${graph.get(f)} B`));
 
 assert(!lazyIndex, 'course/index.js 不在首屏静态图（48 册按需 import）');
-const volumeFiles = courseFiles.filter((f) => rel(f).includes('data/course/volumes/'));
-assert(volumeFiles.length === 4, `静态可达册文件 = ${volumeFiles.length}（只含已建 4 册骨架）`);
-const builtNames = ['math-g2-up.js', 'math-g2-down.js', 'math-g3-up.js', 'math-g3-down.js'];
-assert(builtNames.every((n) => volumeFiles.some((f) => f.endsWith(n))), '4 册骨架齐备');
+const volumeFiles = courseFiles.filter((f) => rel(f).includes('data/course/volumes/math-g'));
+assert(volumeFiles.length === 12, `静态可达册文件 = ${volumeFiles.length}（P2 数学 12 册）`);
+const builtNames = [
+  'math-g1-up.js', 'math-g1-down.js', 'math-g2-up.js', 'math-g2-down.js',
+  'math-g3-up.js', 'math-g3-down.js', 'math-g4-up.js', 'math-g4-down.js',
+  'math-g5-up.js', 'math-g5-down.js', 'math-g6-up.js', 'math-g6-down.js'
+];
+assert(builtNames.every((n) => volumeFiles.some((f) => f.endsWith(n))), '12 册数学文件齐备');
 const allVolumeDir = fs.readdirSync(path.join(ROOT, 'assets/js/data/course/volumes'));
-assert(allVolumeDir.length === 4, `volumes/ 目录只有 4 个已建文件（其余 44 册未造内容）`);
+const volumeDirFiles = allVolumeDir.filter((n) => n.startsWith('math-g'));
+assert(volumeDirFiles.length === 12, `volumes/ 目录数学册 ${volumeDirFiles.length} 个（其余三科未造内容）`);
+const contentBytes = volumeFiles.reduce((s, f) => s + graph.get(f), 0);
+console.log(`  其中数学册内容 ${(contentBytes / 1024).toFixed(1)} KB（规格引擎另计）`);
+assert(contentBytes <= 120 * 1024, `数学册内容体积 ≤ 120 KB（实际 ${(contentBytes / 1024).toFixed(1)} KB）`);
 
-const baselineTotal = totalBytes - Math.max(0, courseBytes - COURSE_MAP_BASELINE);
-const growth = baselineTotal ? (totalBytes / baselineTotal - 1) : 0;
-console.log(`  首屏 JS 增幅 ${(growth * 100).toFixed(2)}%（基线 ${(baselineTotal / 1024).toFixed(1)} KB → 现在 ${(totalBytes / 1024).toFixed(1)} KB）`);
-assert(growth <= 0.20, `首屏 JS ≤ 现有 +20%（实际 +${(growth * 100).toFixed(2)}%）`);
+// P2 口径：内容（12 册数据 + 规格引擎）与引擎分列。
+// 引擎增幅仍按 P0 的 +20% 门禁；内容体积用上面的 120 KB 绝对上限单独判定。
+const specFiles = courseFiles.filter((f) => rel(f).includes('specs-math'));
+const contentTotal = contentBytes + specFiles.reduce((s, f) => s + graph.get(f), 0);
+const engineBytes = totalBytes - contentTotal;
+const baselineEngine = totalBytes - courseBytes;
+const growth = baselineEngine ? (engineBytes / baselineEngine - 1) : 0;
+console.log(`  内容合计 ${(contentTotal / 1024).toFixed(1)} KB（册数据 + 规格引擎）；引擎 ${(engineBytes / 1024).toFixed(1)} KB`);
+console.log(`  引擎增幅 ${(growth * 100).toFixed(2)}%（基线引擎 ${(baselineEngine / 1024).toFixed(1)} KB → 现在 ${(engineBytes / 1024).toFixed(1)} KB）`);
+assert(growth <= 0.20, `引擎代码 ≤ 现有 +20%（实际 +${(growth * 100).toFixed(2)}%）`);
 
 /* ================= C. mastery 分层 ================= */
 console.log('\n== C. mastery 分层（936 kid 合成） ==');

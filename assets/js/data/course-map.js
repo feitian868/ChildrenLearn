@@ -13,19 +13,33 @@
  * ⚠ prerequisites 仍【只记录、不参与任何计算】，解冻条件见 ROADMAP §5（P2）。
  */
 
+import { VOLUME as MATH_G1_UP } from './course/volumes/math-g1-up.js';
+import { VOLUME as MATH_G1_DOWN } from './course/volumes/math-g1-down.js';
 import { VOLUME as MATH_G2_UP } from './course/volumes/math-g2-up.js';
 import { VOLUME as MATH_G2_DOWN } from './course/volumes/math-g2-down.js';
 import { VOLUME as MATH_G3_UP } from './course/volumes/math-g3-up.js';
 import { VOLUME as MATH_G3_DOWN } from './course/volumes/math-g3-down.js';
+import { VOLUME as MATH_G4_UP } from './course/volumes/math-g4-up.js';
+import { VOLUME as MATH_G4_DOWN } from './course/volumes/math-g4-down.js';
+import { VOLUME as MATH_G5_UP } from './course/volumes/math-g5-up.js';
+import { VOLUME as MATH_G5_DOWN } from './course/volumes/math-g5-down.js';
+import { VOLUME as MATH_G6_UP } from './course/volumes/math-g6-up.js';
+import { VOLUME as MATH_G6_DOWN } from './course/volumes/math-g6-down.js';
 import { sourceOf, EDITION_ID } from './course/edition-profile.js';
 import { buildAliasMap } from './course/id-spec.js';
+
+export const MATH_VOLUMES = [
+  MATH_G1_UP, MATH_G1_DOWN, MATH_G2_UP, MATH_G2_DOWN,
+  MATH_G3_UP, MATH_G3_DOWN, MATH_G4_UP, MATH_G4_DOWN,
+  MATH_G5_UP, MATH_G5_DOWN, MATH_G6_UP, MATH_G6_DOWN
+];
 
 export const COURSE_SUBJECT = 'math';
 
 /** 仅保留下拉可选版本；实际用书由 editionProfile 决定（不再要求真人翻封面） */
 export const COURSE_VERSIONS = ['人教版', '北师大版', '苏教版'];
 
-export const COURSE_BOOKS = [MATH_G2_UP, MATH_G2_DOWN, MATH_G3_UP, MATH_G3_DOWN].map((v) => ({
+export const COURSE_BOOKS = MATH_VOLUMES.map((v) => ({
   edition: v.edition,
   subject: v.subject,
   grade: v.grade,
@@ -42,8 +56,8 @@ export const COURSE_META = {
   term: '',
   books: COURSE_BOOKS,
   draft: true,
-  note: 'P0 已按单元自带的年级/册次拆成 4 册骨架（2 上 / 2 下 / 3 上 / 3 下）；'
-    + '2 年级单元是前置复习单元，不再混挂进三上教材。其余 44 册只登记目录，待 P2~P5 建包。'
+  note: 'P2 已建数学 1~6 年级上下册共 12 册；2 年级单元是前置复习单元，不再混挂进三上教材。'
+    + '其余三科 36 册只登记目录，待 P3~P5 建包。'
 };
 
 /* ------------------------- 合并已建册 ------------------------- */
@@ -51,7 +65,7 @@ export const COURSE_META = {
 const VOLUME_BY_UNIT = new Map();
 
 export const COURSE_UNITS = [];
-for (const volume of [MATH_G2_UP, MATH_G2_DOWN, MATH_G3_UP, MATH_G3_DOWN]) {
+for (const volume of MATH_VOLUMES) {
   const volumeKey = `${volume.subject}:${volume.grade}:${volume.term}`;
   for (const unit of volume.units) {
     // 出处由索引生成；单元自带的 source 只作 v4 展示文案兼容
@@ -68,7 +82,7 @@ COURSE_UNITS.sort((a, b) => a.order - b.order);
 
 /* ------------------------- 别名（v4 短 id → 规范 id） ------------------------- */
 
-export const ID_ALIASES = buildAliasMap([MATH_G2_UP, MATH_G2_DOWN, MATH_G3_UP, MATH_G3_DOWN]);
+export const ID_ALIASES = buildAliasMap(MATH_VOLUMES);
 
 const UNIT_ID_MAP = new Map();
 for (const unit of COURSE_UNITS) {
