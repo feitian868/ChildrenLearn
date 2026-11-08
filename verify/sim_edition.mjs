@@ -15,7 +15,8 @@ import { sourceOf, SUBJECT_PROFILES } from '../assets/js/data/course/edition-pro
 import { COURSE_UNITS, annotateQuestion, courseScope, resolveUnitId } from '../assets/js/data/course-map.js';
 import { mathPool } from '../assets/js/data/knowledge-math.js';
 import { CHINESE_BANK } from '../assets/js/data/knowledge-chinese.js';
-import { specPoolOfGrade } from '../assets/js/data/course/specs-chinese.js';
+import { specPoolOfGrade as zhSpecPoolOfGrade } from '../assets/js/data/course/specs-chinese.js';
+import { specPoolOfGrade as enSpecPoolOfGrade, ENGLISH_VOLUMES } from '../assets/js/data/course/specs-english.js';
 import { ENGLISH_BANK } from '../assets/js/data/knowledge-english.js';
 import { SCIENCE_BANK } from '../assets/js/data/knowledge-science.js';
 import { mulberry32, hashString } from '../assets/js/core/rng.js';
@@ -80,7 +81,7 @@ const ZH_PARSE = /统编版语文(\d)年级(上|下)册/;
 let zhAnnotated = 0;
 let zhMismatch = 0;
 for (let grade = 1; grade <= 6; grade += 1) {
-  const pool = specPoolOfGrade(grade, mulberry32(hashString(`edition-zh:${grade}`)));
+  const pool = zhSpecPoolOfGrade(grade, mulberry32(hashString(`edition-zh:${grade}`)));
   pool.forEach((q) => {
     const info = annotateQuestion(q);
     if (!info) { zhMismatch += 1; return; }
@@ -95,17 +96,43 @@ for (let grade = 1; grade <= 6; grade += 1) {
 }
 assert(zhMismatch === 0, `语文跨年级 / 跨册错挂 = ${zhMismatch}（可挂接 ${zhAnnotated} 道）`);
 
+// 英语规格题（两套 sub-track）同口径
+const EN_PARSE = /人教\s*(?:新起点|PEP)\s*英语(\d)年级(上|下)册/;
+let enAnnotated = 0;
+let enMismatch = 0;
+for (let grade = 1; grade <= 6; grade += 1) {
+  const pool = enSpecPoolOfGrade(grade, mulberry32(hashString(`edition-en:${grade}`)));
+  pool.forEach((q) => {
+    const info = annotateQuestion(q);
+    if (!info) { enMismatch += 1; return; }
+    enAnnotated += 1;
+    const m = EN_PARSE.exec(q.source || '');
+    if (!m || Number(m[1]) !== info.grade || m[2] !== info.term.slice(0, 1)) {
+      enMismatch += 1;
+      console.log(`  ✗ ${q.id} source=${q.source} → ${info.volumeKey}`);
+    }
+    if (q.grade !== info.grade || q.term !== info.term) enMismatch += 1;
+    if (!info.volumeKey.startsWith('english:')) enMismatch += 1;
+  });
+}
+assert(enMismatch === 0, `英语跨年级 / 跨册 / 跨科错挂 = ${enMismatch}（可挂接 ${enAnnotated} 道）`);
+
 /* ================= D. 跨科不串 ================= */
-console.log('\n== D. 跨科不串（数学 / 语文各挂各的）==');
+console.log('\n== D. 跨科不串（数学 / 语文 / 英语各挂各的）==');
 const mathAnnotated = mathPool(3, mulberry32(hashString('edition-check:cross:math')))
   .map((q) => ({ q, info: annotateQuestion(q) })).filter((x) => x.info);
 const mathLeak = mathAnnotated.filter((x) => !x.info.volumeKey.startsWith('math:'));
 assert(mathLeak.length === 0, `数学题只挂数学单元（样本 ${mathAnnotated.length} 道，越界 ${mathLeak.length} 道）`);
 
-const zhSpecs = specPoolOfGrade(3, mulberry32(hashString('edition-check:cross:chinese')));
+const zhSpecs = zhSpecPoolOfGrade(3, mulberry32(hashString('edition-check:cross:chinese')));
 const zhAttached = zhSpecs.map((q) => ({ q, info: annotateQuestion(q) }));
 const zhLeak = zhAttached.filter((x) => !x.info || !x.info.volumeKey.startsWith('chinese:'));
 assert(zhLeak.length === 0, `语文规格题只挂语文单元（样本 ${zhSpecs.length} 道，越界 ${zhLeak.length} 道）`);
+
+const enSpecs = enSpecPoolOfGrade(3, mulberry32(hashString('edition-check:cross:english')));
+const enAttached = enSpecs.map((q) => ({ q, info: annotateQuestion(q) }));
+const enLeak = enAttached.filter((x) => !x.info || !x.info.volumeKey.startsWith('english:'));
+assert(enLeak.length === 0, `英语规格题只挂英语单元（样本 ${enSpecs.length} 道，越界 ${enLeak.length} 道）`);
 
 const zhBank = CHINESE_BANK.slice(0, 60).map((q) => ({ q, info: annotateQuestion(q) }));
 const bankLeak = zhBank.filter((x) => x.info && !x.info.volumeKey.startsWith('chinese:'));
@@ -113,12 +140,13 @@ assert(bankLeak.length === 0, `语文旧题库不挂进数学单元（样本 ${z
 const zhBankMounted = zhBank.filter((x) => x.info).length;
 console.log(`  · 语文旧题库样本挂接 ${zhBankMounted}/${zhBank.length} 道（无单元出处的题目不挂，属正常）`);
 
+// 旧英/科题库不挂任何单元；英语规格题走自己那一册（上面已单独验证）
 const foreign = [
   ...ENGLISH_BANK.slice(0, 40),
   ...SCIENCE_BANK.slice(0, 40)
 ];
 const foreignMounted = foreign.filter((q) => annotateQuestion(q));
-assert(foreignMounted.length === 0, `英/科 ${foreign.length} 道样本不进课程表 = ${foreignMounted.length}`);
+assert(foreignMounted.length === 0, `旧英/科题库 ${foreign.length} 道样本不进课程表 = ${foreignMounted.length}`);
 
 /* ================= E. 英语两套 track ================= */
 console.log('\n== E. 英语两套 track ==');
@@ -132,6 +160,20 @@ assert([3, 4, 5, 6].every((g) => trackOfGrade(g).every((t) => t === 'pep')), '3~
 assert([1, 2, 3, 4, 5, 6].every((g) => new Set(trackOfGrade(g)).size === 1), '同一册次内不混两套 track');
 assert(SUBJECT_PROFILES.english.tracks[3] === 'pep' && SUBJECT_PROFILES.english.tracks[2] === 'newstart',
   'profile 与目录口径一致');
+
+// 已建册实体的 track 与规格题挂载都不跨 sub-track
+assert(ENGLISH_VOLUMES.length === 12, `已建英语实体 ${ENGLISH_VOLUMES.length} 册`);
+const trackBad = ENGLISH_VOLUMES.filter((v) => v.track !== SUBJECT_PROFILES.english.tracks[v.grade]);
+assert(trackBad.length === 0, `12 册实体 track 与 profile 一致（不符 ${trackBad.map((v) => `${v.grade}${v.term}`).join('、') || 0}）`);
+let crossTrack = 0;
+for (const volume of ENGLISH_VOLUMES) {
+  const pool = enSpecPoolOfGrade(volume.grade, mulberry32(hashString(`edition-track:${volume.grade}:${volume.term}`)));
+  pool.forEach((q) => {
+    const info = annotateQuestion(q);
+    if (info && info.grade !== volume.grade) crossTrack += 1;
+  });
+}
+assert(crossTrack === 0, `英语题不跨年级挂载（越界 ${crossTrack} 道）`);
 
 /* ================= F. courseScope 兼容两种 id ================= */
 console.log('\n== F. courseScope 兼容 legacy / canonical ==');

@@ -77,30 +77,35 @@ console.log(`  其中课程数据 ${courseFiles.length} 个文件，${courseByte
 courseFiles.sort().forEach((f) => console.log(`    · ${rel(f)} ${graph.get(f)} B`));
 
 assert(!lazyIndex, 'course/index.js 不在首屏静态图（48 册按需 import）');
-const volumeFiles = courseFiles.filter((f) => /volumes\/(math|chinese)-g/.test(rel(f)));
-assert(volumeFiles.length === 24, `静态可达册文件 = ${volumeFiles.length}（P2 数学 12 + P3 语文 12）`);
+const volumeFiles = courseFiles.filter((f) => /volumes\/(math|chinese|english)-g/.test(rel(f)));
+assert(volumeFiles.length === 36, `静态可达册文件 = ${volumeFiles.length}（P2 数学 12 + P3 语文 12 + P4 英语 12）`);
 const builtNames = [
   'math-g1-up.js', 'math-g1-down.js', 'math-g2-up.js', 'math-g2-down.js',
   'math-g3-up.js', 'math-g3-down.js', 'math-g4-up.js', 'math-g4-down.js',
   'math-g5-up.js', 'math-g5-down.js', 'math-g6-up.js', 'math-g6-down.js',
   'chinese-g1-up.js', 'chinese-g1-down.js', 'chinese-g2-up.js', 'chinese-g2-down.js',
   'chinese-g3-up.js', 'chinese-g3-down.js', 'chinese-g4-up.js', 'chinese-g4-down.js',
-  'chinese-g5-up.js', 'chinese-g5-down.js', 'chinese-g6-up.js', 'chinese-g6-down.js'
+  'chinese-g5-up.js', 'chinese-g5-down.js', 'chinese-g6-up.js', 'chinese-g6-down.js',
+  'english-g1-up.js', 'english-g1-down.js', 'english-g2-up.js', 'english-g2-down.js',
+  'english-g3-up.js', 'english-g3-down.js', 'english-g4-up.js', 'english-g4-down.js',
+  'english-g5-up.js', 'english-g5-down.js', 'english-g6-up.js', 'english-g6-down.js'
 ];
-assert(builtNames.every((n) => volumeFiles.some((f) => f.endsWith(n))), '24 册文件齐备（数学 12 + 语文 12）');
+assert(builtNames.every((n) => volumeFiles.some((f) => f.endsWith(n))), '36 册文件齐备（数学 12 + 语文 12 + 英语 12）');
 const allVolumeDir = fs.readdirSync(path.join(ROOT, 'assets/js/data/course/volumes'));
-const volumeDirFiles = allVolumeDir.filter((n) => n.startsWith('math-g') || n.startsWith('chinese-g'));
-assert(volumeDirFiles.length === 24, `volumes/ 目录已建册 ${volumeDirFiles.length} 个（数学 12 + 语文 12，其余两科未造内容）`);
+const volumeDirFiles = allVolumeDir.filter((n) => n.startsWith('math-g') || n.startsWith('chinese-g') || n.startsWith('english-g'));
+assert(volumeDirFiles.length === 36, `volumes/ 目录已建册 ${volumeDirFiles.length} 个（数学 12 + 语文 12 + 英语 12，科学未造内容）`);
 const contentBytes = volumeFiles.reduce((s, f) => s + graph.get(f), 0);
 const mathBytes = volumeFiles.filter((f) => rel(f).includes('volumes/math-g')).reduce((s, f) => s + graph.get(f), 0);
-const chineseBytes = contentBytes - mathBytes;
-console.log(`  其中已建册数据 ${(contentBytes / 1024).toFixed(1)} KB（数学 ${(mathBytes / 1024).toFixed(1)} KB + 语文 ${(chineseBytes / 1024).toFixed(1)} KB；规格引擎另计）`);
+const chineseBytes = volumeFiles.filter((f) => rel(f).includes('volumes/chinese-g')).reduce((s, f) => s + graph.get(f), 0);
+const englishBytes = contentBytes - mathBytes - chineseBytes;
+console.log(`  其中已建册数据 ${(contentBytes / 1024).toFixed(1)} KB（数学 ${(mathBytes / 1024).toFixed(1)} KB + 语文 ${(chineseBytes / 1024).toFixed(1)} KB + 英语 ${(englishBytes / 1024).toFixed(1)} KB；规格引擎另计）`);
 assert(mathBytes <= 120 * 1024, `数学册内容体积 ≤ 120 KB（实际 ${(mathBytes / 1024).toFixed(1)} KB）`);
 assert(chineseBytes <= 120 * 1024, `语文册内容体积 ≤ 120 KB（实际 ${(chineseBytes / 1024).toFixed(1)} KB）`);
+assert(englishBytes <= 120 * 1024, `英语册内容体积 ≤ 120 KB（实际 ${(englishBytes / 1024).toFixed(1)} KB）`);
 
-// P2/P3 口径：内容（已建册数据 + 两科规格引擎）与引擎分列。
+// P2/P3/P4 口径：内容（已建册数据 + 三科规格引擎）与引擎分列。
 // 引擎增幅仍按 P0 的 +20% 门禁；内容体积用上面的 120 KB 绝对上限单独判定。
-const specFiles = courseFiles.filter((f) => /specs-(math|chinese)/.test(rel(f)));
+const specFiles = courseFiles.filter((f) => /specs-(math|chinese|english)/.test(rel(f)));
 const contentTotal = contentBytes + specFiles.reduce((s, f) => s + graph.get(f), 0);
 const engineBytes = totalBytes - contentTotal;
 const baselineEngine = totalBytes - courseBytes;

@@ -87,7 +87,7 @@ export function sourceOf(volume, unitName) {
   return `${version}${name}${g}年级${t} · ${unitName}`;
 }
 
-/** 已建册清单（P2 数学 12 册 + P3 语文 12 册；英语、科学仍只登记目录） */
+/** 已建册清单（P2 数学 12 册 + P3 语文 12 册 + P4 英语 12 册；科学仍只登记目录） */
 export const BUILT_VOLUME_KEYS = [
   'math:1:上册', 'math:1:下册',
   'math:2:上册', 'math:2:下册',
@@ -100,7 +100,13 @@ export const BUILT_VOLUME_KEYS = [
   'chinese:3:上册', 'chinese:3:下册',
   'chinese:4:上册', 'chinese:4:下册',
   'chinese:5:上册', 'chinese:5:下册',
-  'chinese:6:上册', 'chinese:6:下册'
+  'chinese:6:上册', 'chinese:6:下册',
+  'english:1:上册', 'english:1:下册',
+  'english:2:上册', 'english:2:下册',
+  'english:3:上册', 'english:3:下册',
+  'english:4:上册', 'english:4:下册',
+  'english:5:上册', 'english:5:下册',
+  'english:6:上册', 'english:6:下册'
 ];
 
 export const ID_NAMING = {

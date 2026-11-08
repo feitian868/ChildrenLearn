@@ -140,12 +140,24 @@ const sentenceItems = [
 const dialogueSig = (d) => `spd:${d.title}`;
 const dialoguePool = DIALOGUE_BANK.filter((d) => d.g <= grade);
 const dialogue = pickFresh(dialoguePool, 1, dialogueSig)[0] || DIALOGUE_BANK[0];
-const dialogueLines = dialogue.lines.map((line, i) => ({
-  id: `d${i}`,
+// 台词 id 带对话标题，避免不同对话的 d0/d1 在复习队列里互相覆盖
+const newLines = dialogue.lines.map((line, i) => ({
+  id: `line:${dialogue.title}:${i}`,
   who: line.who,
   text: line.text,
-  zh: line.zh
+  zh: line.zh,
+  title: dialogue.title,
+  type: 'line',
+  level: levelOfItem({ type: 'sentence', text: line.text })
 }));
+// 到期复习台词优先展示；当日新对话的同一 id 不重复出现
+const lineDue = dueEntries(queue, dayKey, 'line');
+const lineMap = new Map(lineDue.map(([id, e]) => [id, {
+  id, who: e.who || 'A', text: e.text, zh: e.zh, title: e.title || '复习台词',
+  type: 'line', level: e.level, reviewStep: e.step
+}]));
+newLines.forEach((l) => { if (!lineMap.has(l.id)) lineMap.set(l.id, l); });
+const dialogueLines = [...lineMap.values()];
 
 /* 新内容生成即登记，明天起 365 天内不再重复；复习条目不再重复登记 */
 [...freshWords, ...freshSentences].forEach((it) => {
@@ -168,13 +180,18 @@ const practicedSections = () =>
   sentenceItems.filter((i) => practiced.has(i.id)).length +
   dialogueLines.filter((l) => practiced.has(l.id)).length;
 
-/** 练完一项：单词/句子进跨天队列，对话台词只记当天 */
+/** 练完一项：单词 / 句子 / 对话台词都进跨天队列（+1 → +3 → +7 天回来） */
 function markPracticed(item) {
   practiced.add(item.id);
-  if (item.type === 'word' || item.type === 'sentence') {
+  if (item.type === 'word' || item.type === 'sentence' || item.type === 'line') {
     const next = scheduleNext(queue[item.id], dayKey, item.level);
     if (next) {
-      queue[item.id] = { ...next, kind: item.type, text: item.word || item.text, zh: item.zh };
+      queue[item.id] = {
+        ...next, kind: item.type,
+        text: item.word || item.text, zh: item.zh,
+        ...(item.who ? { who: item.who } : {}),
+        ...(item.title ? { title: item.title } : {})
+      };
     } else {
       delete queue[item.id];
     }
@@ -385,11 +402,12 @@ function render() {
 function renderTop() {
   const reviewWords = wordDue.length;
   const reviewSentences = sentenceDue.length;
+  const reviewLines = lineDue.length;
   return el('div', { class: 'spk-top' }, [
     el('a', { class: 'icon-btn spk-back', href: 'index.html', text: '←' }),
     el('div', { class: 'spk-heading' }, [
       el('h1', { text: '听说练习 🎤' }),
-      el('p', { text: `${grade}年级 · 单词 ${wordItems.length} 个（复习 ${reviewWords}）· 句子 ${sentenceItems.length} 句（复习 ${reviewSentences}）· 对话 1 组` })
+      el('p', { text: `${grade}年级 · 单词 ${wordItems.length} 个（复习 ${reviewWords}）· 句子 ${sentenceItems.length} 句（复习 ${reviewSentences}）· 对话 1 组（台词复习 ${reviewLines}）` })
     ])
   ]);
 }
@@ -702,7 +720,7 @@ function practiceLine(lineId) {
   closeBtn.addEventListener('click', () => { sfxClick(); closeDialog(); render(); });
 
   openDialog([
-    el('div', { class: 'spk-m-tag', text: `③ 情景对话 · ${dialogue.title} · 角色 ${line.who}` }),
+    el('div', { class: 'spk-m-tag', text: `③ 情景对话 · ${line.title || dialogue.title} · 角色 ${line.who}` }),
     el('div', { class: 'spk-m-text', text: line.text }),
     el('div', { class: 'spk-m-zh', text: line.zh }),
     el('div', { class: 'spk-m-ctrls' }, [listenBtn, readBtn, doneBtn, closeBtn]),

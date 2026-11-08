@@ -6,6 +6,7 @@
  */
 
 import { shuffle, hashString, pick, sample } from '../core/rng.js';
+import { specPoolOfGrade } from './course/specs-english.js';
 
 const e = (id, grade, level, topic, type, prompt, options, answer, explain, source, extra = {}) => ({
   id: `en-${id}`,
@@ -402,8 +403,18 @@ export const ENGLISH_BANK = [
     '表达建议用 should（应该），比 must（必须）语气更委婉得体。', `${P6B} · Advice`, { speak: 'I think we should exercise more' })
 ];
 
-export function englishPool(grade) {
-  return ENGLISH_BANK.filter((item) => item.grade === grade);
+/**
+ * 英语题池：静态库 + 当天生成题 + P4 规格题（默认待审不参与）
+ * @param {number} grade
+ * @param {() => number} rng 日期种子随机数
+ * @param {{includeSpec?: boolean, simulateApproved?: boolean}} options
+ */
+export function englishPool(grade, rng = () => Math.random(), { includeSpec = false, simulateApproved = false } = {}) {
+  const base = ENGLISH_BANK.filter((item) => item.grade === grade);
+  if (!includeSpec) return base;
+  const generated = englishGenerated(grade, rng);
+  const specs = specPoolOfGrade(grade, rng, { simulateApproved });
+  return [...base, ...generated, ...specs];
 }
 
 /* ============================================================

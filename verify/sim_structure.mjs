@@ -48,8 +48,8 @@ assert(catalog.length === SUBJECTS.length * GRADES.length * TERMS.length,
 assert(new Set(catalog.map((v) => v.key)).size === catalog.length, '册键唯一');
 assert(catalog.every((v) => v.edition === EDITION_ID), '全部册目同属 editionProfile');
 const builtCount = catalog.filter((v) => v.built).length;
-assert(builtCount === volumes.length && builtCount === 24,
-  `已建册 ${builtCount} 册（P2 数学 12 + P3 语文 12），其余 ${catalog.length - builtCount} 册只登记目录（不伪造单元）`);
+assert(builtCount === volumes.length && builtCount === 36,
+  `已建册 ${builtCount} 册（P2 数学 12 + P3 语文 12 + P4 英语 12），其余 ${catalog.length - builtCount} 册只登记目录（不伪造单元）`);
 assert(catalog.filter((v) => !v.built).every((v) => v.units === undefined), '未建册不含虚构单元字段');
 
 /* ================= B. 已建册结构 ================= */
@@ -104,7 +104,7 @@ for (const u of units) {
 }
 assert(misplaced === 0, `跨册错挂 = ${misplaced}`);
 volumes.forEach((v) => {
-  assert(v.edition === EDITION_ID && ['math', 'chinese'].includes(v.subject) && v.grade && v.term,
+  assert(v.edition === EDITION_ID && ['math', 'chinese', 'english'].includes(v.subject) && v.grade && v.term,
     `${v.key}：册元数据 ${v.edition} / ${v.subject} / ${v.grade} / ${v.term}`);
 });
 
@@ -117,8 +117,8 @@ assert(Object.keys(aliases.units).length === unitIds.length
   && Object.keys(aliases.lessons).length === lessonIds.length
   && Object.keys(aliases.knowledge).length === kids.length,
   `别名覆盖 单元 ${Object.keys(aliases.units).length} / 课 ${Object.keys(aliases.lessons).length} / 知识点 ${Object.keys(aliases.knowledge).length}`);
-assert(Object.values(aliases.knowledge).every((v) => /^rj-(math|chinese)-g\d-(up|down)-u\d{2}-l\d{2}-k\d{2}$/.test(v)),
-  `规范 kid 形如 rj-math-g3-up-u01-l01-k01 / rj-chinese-g1-up-u01-l01-k01（${ID_SPEC_VERSION}）`);
+assert(Object.values(aliases.knowledge).every((v) => /^rj-(math|chinese|english)-g\d-(up|down)-u\d{2}-l\d{2}-k\d{2}$/.test(v)),
+  `规范 kid 形如 rj-math-g3-up-u01-l01-k01 / rj-chinese-g1-up-u01-l01-k01 / rj-english-g3-up-u01-l01-k01（${ID_SPEC_VERSION}）`);
 
 /* ================= E. 迁移证据（生产代码） ================= */
 console.log('\n== E. 掌握度 id 迁移证据 ==');
@@ -183,10 +183,11 @@ assert(before.trendRows === after.trendRows && before.trendPoints === after.tren
   `100 天曲线连续（${before.trendPoints} 个点 → ${after.trendPoints}）`);
 assert(beforeTrendValues === afterTrendValues, '曲线数值逐日一致（只换键名，不改值）');
 assert(after.gaps === kids.length, `内容缺口不丢（${before.gaps} → ${after.gaps}）`);
-assert(Object.keys(data.contentGaps).every((k) => k.startsWith('rj-math-') || k.startsWith('rj-chinese-')), '内容缺口台账同步改写为规范 id');
+const isCanonicalKid = (k) => /^rj-(math|chinese|english)-/.test(k);
+assert(Object.keys(data.contentGaps).every(isCanonicalKid), '内容缺口台账同步改写为规范 id');
 assert(after.aliases === kids.length, `别名全部登记（${after.aliases} 条）`);
-assert(after.queueKids.every((k) => k.startsWith('rj-math-') || k.startsWith('rj-chinese-')), '复习队列条目同步改写为规范 id');
-assert(Object.keys(data.mastery.keys).every((k) => k.startsWith('rj-math-') || k.startsWith('rj-chinese-')), '迁移后不再残留 legacy key');
+assert(after.queueKids.every(isCanonicalKid), '复习队列条目同步改写为规范 id');
+assert(Object.keys(data.mastery.keys).every(isCanonicalKid), '迁移后不再残留 legacy key');
 
 console.log(`\n=== 汇总：${pass} 通过 / ${fail} 失败 ===`);
 if (fail) process.exitCode = 1;

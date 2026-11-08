@@ -6,7 +6,7 @@
  * - 未建册返回空 units（不伪造单元名）。
  *
  * 同步场景（抽题 / 掌握度）走 course-map.js 的静态兼容门面，
- * 只静态引入已建的 4 册骨架；其余 44 册一律走这里按需加载。
+ * 只静态引入已建的 36 册骨架；其余 12 册（科学）一律走这里按需加载。
  */
 
 import { VOLUME_CATALOG, BUILT_VOLUME_KEYS, volumeKeyOf, EDITION_ID } from './edition-profile.js';
@@ -35,7 +35,19 @@ const LOADERS = {
   'chinese:5:上册': () => import('./volumes/chinese-g5-up.js'),
   'chinese:5:下册': () => import('./volumes/chinese-g5-down.js'),
   'chinese:6:上册': () => import('./volumes/chinese-g6-up.js'),
-  'chinese:6:下册': () => import('./volumes/chinese-g6-down.js')
+  'chinese:6:下册': () => import('./volumes/chinese-g6-down.js'),
+  'english:1:上册': () => import('./volumes/english-g1-up.js'),
+  'english:1:下册': () => import('./volumes/english-g1-down.js'),
+  'english:2:上册': () => import('./volumes/english-g2-up.js'),
+  'english:2:下册': () => import('./volumes/english-g2-down.js'),
+  'english:3:上册': () => import('./volumes/english-g3-up.js'),
+  'english:3:下册': () => import('./volumes/english-g3-down.js'),
+  'english:4:上册': () => import('./volumes/english-g4-up.js'),
+  'english:4:下册': () => import('./volumes/english-g4-down.js'),
+  'english:5:上册': () => import('./volumes/english-g5-up.js'),
+  'english:5:下册': () => import('./volumes/english-g5-down.js'),
+  'english:6:上册': () => import('./volumes/english-g6-up.js'),
+  'english:6:下册': () => import('./volumes/english-g6-down.js')
 };
 
 const CACHE = new Map();
