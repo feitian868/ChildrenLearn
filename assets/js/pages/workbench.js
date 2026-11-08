@@ -535,15 +535,8 @@ function renderMastery(data) {
     render(store.load());
   });
 
-  const fieldStyle = {
-    padding: '8px 10px',
-    borderRadius: '10px',
-    border: '1px solid #dfe7f3',
-    flex: '1 1 180px',
-    minWidth: '140px'
-  };
-  const from = el('input', { type: 'text', placeholder: '旧知识点 id（如 ma-u01-k1）', style: fieldStyle });
-  const to = el('input', { type: 'text', placeholder: '新知识点 id', style: fieldStyle });
+  const from = el('input', { class: 'dev-input', type: 'text', placeholder: '旧知识点 id（如 ma-u01-k1）' });
+  const to = el('input', { class: 'dev-input', type: 'text', placeholder: '新知识点 id' });
   const migrateBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '迁移 id' });
   migrateBtn.addEventListener('click', () => {
     const fromId = from.value.trim();
@@ -557,23 +550,27 @@ function renderMastery(data) {
     render(store.load());
   });
 
+  const chips = [
+    chip(`已掌握 ${mastered} 个`, 'lv3'),
+    chip(`学习中 ${learning} 个`),
+    chip(`7 天内待复习 ${report.dueNext7} 道`)
+  ];
+  if (quiz) chips.push(chip(`最近小测 ${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} · 新 ${quiz.newCount}）`));
+
   return el('div', { class: 'card mastery-entry' }, [
-    el('div', { class: 'growth-entry-info' }, [
+    el('div', { class: 'mastery-head' }, [
       el('h3', { text: '🧠 掌握度 · 诊断闭环' }),
-      el('p', { text: report.sentence }),
+      el('p', { class: 'mastery-note', text: report.sentence }),
+      el('div', { class: 'mastery-chips' }, chips)
+    ]),
+    el('div', { class: 'mastery-actions' }, [quizLink, resetBtn]),
+    el('details', { class: 'dev-tools' }, [
+      el('summary', { text: '数据维护' }),
       el('p', {
-        text: `已掌握 ${mastered} 个 · 学习中 ${learning} 个 · 7 天内待复习 ${report.dueNext7} 道`
-          + (quiz ? ` · 最近小测 ${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} · 新 ${quiz.newCount}）` : '')
-      })
-    ]),
-    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' } }, [
-      quizLink,
-      resetBtn
-    ]),
-    el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' } }, [
-      from,
-      to,
-      migrateBtn
+        class: 'dev-tools-hint',
+        text: '知识点 id 改名或合并后，在这里把旧 id 的掌握度记录迁到新 id；不迁移的记录仍留在旧 id 下。'
+      }),
+      el('div', { class: 'dev-tools-row' }, [from, to, migrateBtn])
     ])
   ]);
 }

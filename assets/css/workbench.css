@@ -534,6 +534,43 @@
 .growth-entry-info h3 { font-size: 18px; }
 .growth-entry-info p { margin-top: 6px; font-size: 13.5px; color: var(--ink2); line-height: 1.6; }
 
+/* ---------- 工作台：掌握度入口卡 ---------- */
+.mastery-entry { margin-top: 14px; padding: 18px 22px; }
+.mastery-head h3 { font-size: 18px; }
+.mastery-note { margin-top: 6px; font-size: 13.5px; color: var(--ink2); line-height: 1.6; }
+.mastery-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.mastery-chips .chip { font-size: 12.5px; }
+.mastery-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+
+/* 开发者数据维护工具：默认收起，避免与学生端操作混排 */
+.dev-tools { margin-top: 16px; padding-top: 10px; border-top: 1px dashed #e3e9f4; }
+.dev-tools summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--muted);
+  list-style: none;
+}
+.dev-tools summary::-webkit-details-marker { display: none; }
+.dev-tools summary::before { content: '▸ '; }
+.dev-tools[open] summary::before { content: '▾ '; }
+.dev-tools-hint { margin: 8px 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.dev-tools-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; }
+.dev-input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #dfe7f3;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--ink);
+  background: #fbfcff;
+}
+.dev-input:focus { outline: none; border-color: var(--accent); background: #fff; }
+@media (max-width: 560px) {
+  .dev-tools-row { grid-template-columns: 1fr; }
+}
+
 /* ---------- 成长记录独立页 ---------- */
 .gp {
   width: min(980px, 100%);
