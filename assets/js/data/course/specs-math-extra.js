@@ -419,7 +419,8 @@ const logicTree = [
   { askPattern: 'apply-solve', level: 1, make(rand) {
     const len = r(rand, 20, 60);
     const gap = r(rand, 2, 6);
-    return { prompt: `一条 ${len} 米的小路，每隔 ${gap} 米种一棵树（两端都种），一共种几棵？`, answer: len / gap + 1, unit: '棵', explain: `间隔数 ${len} ÷ ${gap} = ${len / gap}，两端都种加 1，共 ${len / gap + 1} 棵。` };
+    const segs = Math.floor(len / gap);
+    return { prompt: `一条 ${len} 米的小路，每隔 ${gap} 米种一棵树（两端都种），一共种几棵？`, answer: segs + 1, unit: '棵', explain: `间隔数 ${len} ÷ ${gap} = ${segs}（取整），两端都种加 1，共 ${segs + 1} 棵。` };
   } },
   { askPattern: 'inverse-recall', level: 2, make(rand) {
     const gap = r(rand, 2, 6);
@@ -429,7 +430,8 @@ const logicTree = [
   { askPattern: 'compare-operate', level: 2, make(rand) {
     const len = r(rand, 20, 60);
     const gap = r(rand, 2, 6);
-    return { prompt: `一条 ${len} 米的路，每隔 ${gap} 米种一棵树（只种一端），一共种几棵？`, answer: len / gap, unit: '棵', explain: `只种一端，棵数等于间隔数：${len} ÷ ${gap} = ${len / gap} 棵。` };
+    const segs = Math.floor(len / gap);
+    return { prompt: `一条 ${len} 米的路，每隔 ${gap} 米种一棵树（只种一端），一共种几棵？`, answer: segs, unit: '棵', explain: `只种一端，棵数等于间隔数：${len} ÷ ${gap} = ${segs}（取整）棵。` };
   } }
 ];
 
