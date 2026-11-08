@@ -197,7 +197,7 @@ const gradeStat = new Map();
 const kidMeta = new Map(allKids.map(({ kid, volume, unit }) => [kid.id, { domain: kid.specDomain, volume: `${volume.grade}${volume.term}`, unit: unit.name }]));
 
 for (const grade of [1, 2, 3, 4, 5, 6]) {
-  const data = { grade, questionReview: {}, recentByDay: {}, recentKeys: {} };
+  const data = { grade, questionReview: {}, reviewBatches: { 'p3-chinese-batch-1': 'approved' }, recentByDay: {}, recentKeys: {} };
   const prompts = new Map();
   const tpls = new Map();
   const tplSamples = new Map();
@@ -211,7 +211,6 @@ for (const grade of [1, 2, 3, 4, 5, 6]) {
     const preview = chinesePool(grade, mulberry32(hashString(`${key}:${grade}:chinese`)), { includeSpec: true, simulateApproved: true });
     preview.forEach((q) => {
       if (!q.specId) return;
-      data.questionReview[q.id] = 'approved';
       if (!kidSupply.has(q.knowledgeId)) kidSupply.set(q.knowledgeId, new Set());
       kidSupply.get(q.knowledgeId).add(q.prompt);
     });

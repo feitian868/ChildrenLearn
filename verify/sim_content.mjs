@@ -234,6 +234,8 @@ function runCourseDay({ approved }) {
     grade: 3,
     days: {}, // store.load 有模块级缓存，storage.clear 不够，必须显式清掉 days 才能强制重建
     questionReview,
+    // 本节只测 v4 逐题 questionReview 门禁，显式清空 v5 批次键
+    reviewBatches: {},
     settings: {
       ...(base.settings || {}),
       stretch: false,

@@ -59,8 +59,9 @@ const MAX_REVIEW_PER_TASK = 2;  // 每项任务最多 2 道间隔复习题，保
 const poolCache = new Map();
 
 /**
- * 阶段 C：status:'pending-review' 的生成题默认【不进抽题池】，
- * 只有家长在工作台审核为 approved（写入 data.questionReview[id]）后才可见。
+ * 阶段 C：status:'pending-review' 的生成题默认【不进抽题池】。
+ * v5 放行按【批次级】：data.reviewBatches[batchId]==='approved' 即整批可见；
+ * v4 逐题 data.questionReview[id]==='approved' 继续兼容读，已签过的旧数据不丢。
  * rejected / 未审核一律排除；复习变式与小测走同一过滤，保证口径一致。
  */
 function approvedSetOf(data) {
@@ -71,8 +72,20 @@ function approvedSetOf(data) {
   );
 }
 
-function visiblePool(pool, approved) {
-  return pool.filter((q) => q.status !== 'pending-review' || approved.has(q.id));
+function approvedBatchSetOf(data) {
+  return new Set(
+    Object.entries(data?.reviewBatches || {})
+      .filter(([, v]) => v === 'approved')
+      .map(([k]) => k)
+  );
+}
+
+function visiblePool(pool, approved, approvedBatches = new Set()) {
+  return pool.filter((q) => (
+    q.status !== 'pending-review'
+    || approved.has(q.id)
+    || (q.reviewBatch && approvedBatches.has(q.reviewBatch))
+  ));
 }
 
 /** 阶段 B：把薄弱知识点排到题池前面（真正的随机化随后在 pickQuestions 内按组打散） */
@@ -120,6 +133,38 @@ function getPool(subject, grade, rng, dayKey = '', weakSet = null) {
   // 生成题 id 由「题干+选项」内容哈希，知识点 key 用于冷却调度
   const pool = gen ? [...staticPool, ...gen(grade, rng), ...logic] : [...staticPool, ...logic];
   return rankWeak(pool, weakSet);
+}
+
+/* ------------------------- 摘要题按需重建 ------------------------- */
+
+/**
+ * 老 day 只存 { id, kid, specId, ... } 摘要时，按「日期种子 + specId」重建完整题目
+ * （题面 / 选项 / 答案 / 解析 / source）。只重建抽到过的 id，绝不生成新题。
+ * 缓存按「日期+科目+年级」复用一个池；重建结果带 __rebuilt 标记，供家长核对页标注。
+ */
+const rebuildPoolCache = new Map();
+
+function rebuildPoolOf(dayKey, subject, grade) {
+  const k = `${dayKey}:${subject}:${grade}`;
+  if (rebuildPoolCache.has(k)) return rebuildPoolCache.get(k);
+  const rng = mulberry32(hashString(`${dayKey}:${grade}:${subject}`));
+  const pool = getPool(subject, grade, rng, dayKey, null);
+  if (rebuildPoolCache.size > 64) rebuildPoolCache.clear();
+  rebuildPoolCache.set(k, pool);
+  return pool;
+}
+
+export function rebuildDayQuestion(dayKey, subject, grade, stub) {
+  if (!stub || !stub.id || !dayKey || !subject) return null;
+  const g = Number(grade) || 3;
+  const grades = g < 6 ? [g, g + 1] : [g];
+  for (const gg of grades) {
+    const pool = rebuildPoolOf(dayKey, subject, gg);
+    const hit = pool.find((q) => q.id === stub.id
+      && (!stub.specId || q.specId === stub.specId));
+    if (hit) return { ...hit, __rebuilt: true };
+  }
+  return null;
 }
 
 /** 掌握度弱项占比：review 态 kid / 有记录 kid（自适应第二信号） */
@@ -376,14 +421,15 @@ export function buildDay(key, grade, data) {
   // 阶段 B：薄弱知识点集合只用于排序加权（来自累积掌握度，不读 dailyHistory）
   const weakSet = new Set(weakKeysOf(data || {}, 8).map((w) => w.kid));
 
-  // 阶段 C：待审题（pending-review）未 approved 一律不进池
+  // 阶段 C：待审题（pending-review）未 approved 一律不进池；v5 批次级 + v4 逐题兼容
   const approved = approvedSetOf(data);
+  const approvedBatches = approvedBatchSetOf(data);
 
   store.SUBJECTS.forEach((subject) => {
     const meta = store.SUBJECT_META[subject];
     const count = taskCountFor(subject, weekday, grade);
     const rng = mulberry32(hashString(`${key}:${grade}:${subject}`));
-    const rawPool = visiblePool(getPool(subject, grade, rng, key, weakSet), approved);
+    const rawPool = visiblePool(getPool(subject, grade, rng, key, weakSet), approved, approvedBatches);
     // 抽题范围收敛：当前单元 + 已学单元；未配置教材时 scope 为 null，保持全年级题池
     const scope = courseScope(data?.settings?.course, subject);
     let pool = rawPool;
@@ -435,7 +481,7 @@ export function buildDay(key, grade, data) {
     const stretchEnabled = wantStretch && !scopeInfo;
     // 拔高题取自高一年级当天题池（用高一年级自己的种子，题目与其当天一致）
     const stretchPool = stretchEnabled
-      ? visiblePool(getPool(subject, grade + 1, mulberry32(hashString(`${key}:${grade + 1}:${subject}`)), key), approved)
+      ? visiblePool(getPool(subject, grade + 1, mulberry32(hashString(`${key}:${grade + 1}:${subject}`)), key), approved, approvedBatches)
       : null;
     // 阶段 B：当天到期的错题变式（只从现有池里选；找不到会记内容缺口）
     const reviewQs = dueReviewCandidates(data || {}, key, subject, pool, recent);

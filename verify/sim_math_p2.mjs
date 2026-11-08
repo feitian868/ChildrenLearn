@@ -8,7 +8,7 @@
  *            规格题字段齐全、source 由索引生成、无跨年级错挂。
  *   R4 供给：每册每个单元作为“当前单元”，模拟 365 天，
  *            教材题可用量 < 当日配额（项数 × 4）记为兜底日；兜底率 <5% 为通过。
- *            ★ 仿真显式按 simulateApproved 放行规格题（线上默认仍 pending-review）。
+ *            ★ 仿真用 reviewBatches 批次键放行规格题（生成器仍输出 pending-review，由 data 层门禁放行）。
  *   R6 L1：v5 新增 3 条断言必须抓到已知盲区反例，且规格批次零违规。
  *   ma-u01：教材题每天 ≥8 道的天数占比 ≥80%。
  *
@@ -194,8 +194,8 @@ console.log('\n== ma-u01 · 每天教材题 ≥8 道的天数占比 ==');
  *        模板键：tasks.js:346 `export function templateKey(q)`
  *        用后落盘：tasks.js:515 `export function markUsed(data, day)`
  * 口径：每册按年级上下册合并 ×365 天（门槛）；分册数字仅诊断。
- * 仿真只做一件事——把当天规格题 id 预先标记 approved（批次放行的最坏口径）；
- * 线上默认仍 pending-review，是否可抽由 tasks.js 的 visiblePool 过滤。
+ * 仿真只做一件事——把 `p2-math-batch-1` 写成 approved（批次放行的最坏口径）；
+ * 生成器仍输出 pending-review，是否可抽由 tasks.js 的 visiblePool 按 reviewBatches 批次键放行。
  */
 console.log('\n== R1 / R2 · 365 天真实抽题（tasks.js buildDay 真口径）==');
 const { buildDay, markUsed, templateKey } = await import('../assets/js/core/tasks.js');
@@ -208,7 +208,7 @@ const gradeStat = new Map();
 
 const kidMeta = new Map(allKids.map(({ kid, volume, unit }) => [kid.id, { domain: kid.specDomain, volume: `${volume.grade}${volume.term}`, unit: unit.name }]));
 for (const grade of [1, 2, 3, 4, 5, 6]) {
-  const data = { grade, questionReview: {}, recentByDay: {}, recentKeys: {} };
+  const data = { grade, questionReview: {}, reviewBatches: { 'p2-math-batch-1': 'approved' }, recentByDay: {}, recentKeys: {} };
   const prompts = new Map();
   const tpls = new Map();
   const tplSamples = new Map();
@@ -219,11 +219,10 @@ for (const grade of [1, 2, 3, 4, 5, 6]) {
   let shortDays = 0;
   for (let d = 0; d < 365; d += 1) {
     const key = dateKeyOf(BASE + d * DAY);
-    // 批次放行仿真：当天规格题 id 预先 approved（与 buildDay 内部同种子 → id 一致）
+    // 批次放行仿真：p2-math-batch-1 整批 approved（由 data.reviewBatches 门禁生效）
     const preview = mathPool(grade, mulberry32(hashString(`${key}:${grade}:math`)), { includeSpec: true, simulateApproved: true });
     preview.forEach((q) => {
       if (!q.specId) return;
-      data.questionReview[q.id] = 'approved';
       // 供给诊断：该 kid 全年生成过的唯一题面
       if (!kidSupply.has(q.knowledgeId)) kidSupply.set(q.knowledgeId, new Set());
       kidSupply.get(q.knowledgeId).add(q.prompt);
@@ -345,6 +344,5 @@ for (const volume of MATH_VOLUMES) {
 assert(violations === 0, `规格批次 L1（v4 四断言 + v5 三断言）零违规（扫描 ${scanned} 道）`);
 
 console.log(`\n=== 汇总：${pass} 通过 / ${fail} 失败 ===`);
-console.log('说明：R4 仿真按“批次放行后”口径计算（simulateApproved）；线上默认仍为 pending-review，');
-console.log('     需 L2 抽样签字后同规格批量转 approved 才生效。');
+console.log('说明：R4 仿真按“批次放行后”口径计算（data.reviewBatches）；v5-release 已写四批 approved。');
 if (fail) process.exitCode = 1;

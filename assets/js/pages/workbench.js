@@ -10,7 +10,8 @@ import {
   regenerateToday,
   subjectProgress,
   dayProgress,
-  allSubjectsDone
+  allSubjectsDone,
+  rebuildDayQuestion
 } from '../core/tasks.js';
 import { chestState, openChest } from '../core/chest.js';
 import { shopState, redeemItem } from '../core/shop.js';
@@ -1424,7 +1425,20 @@ function renderParent() {
         ])
       );
       const tbody = el('tbody');
-      task.questions.forEach((q) => {
+      task.questions.forEach((stored) => {
+        // 近 7 天是完整快照；更早的 day 只存摘要，这里按「日期种子 + specId」按需重建并标注
+        const q = stored.prompt
+          ? stored
+          : (rebuildDayQuestion(day.date, task.subject, task.grade || day.grade, stored) || {
+            ...stored,
+            prompt: '（题面已压缩，重建失败）',
+            answer: null,
+            explain: '',
+            source: '',
+            grade: task.grade || day.grade,
+            level: 1
+          });
+        const rebuiltTag = q.__rebuilt ? ' · 已按日期种子重建' : '';
         tbody.append(
           el('tr', {}, [
             el('td', { class: 'q', text: q.prompt }),
@@ -1433,7 +1447,7 @@ function renderParent() {
               el('div', { text: q.explain }),
               el('div', { class: 'src', text: q.source })
             ]),
-            el('td', { class: 'lv', text: `${GRADE_LABEL[q.grade]} · L${q.level}` })
+            el('td', { class: 'lv', text: `${GRADE_LABEL[q.grade]} · L${q.level}${rebuiltTag}` })
           ])
         );
       });

@@ -705,14 +705,23 @@ function uniqByPrompt(list) {
 export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey()) {
   const scope = courseScope(data?.settings?.course, 'math');
   const rng = mulberry32(hashString(`${dayKey}:${grade}:math:quiz`));
-  // 阶段 C：待审题未 approved 不进小测，与每日任务同一过滤口径
+  // 阶段 C：待审题未 approved 不进小测，与每日任务同一过滤口径（v5 批次级 + v4 逐题兼容）
   const approved = new Set(
     Object.entries(data?.questionReview || {})
       .filter(([, v]) => v === 'approved')
       .map(([k]) => k)
   );
+  const approvedBatches = new Set(
+    Object.entries(data?.reviewBatches || {})
+      .filter(([, v]) => v === 'approved')
+      .map(([k]) => k)
+  );
   const pool = mathPool(grade, mulberry32(hashString(`${dayKey}:${grade}:math:quizpool`)))
-    .filter((q) => q.status !== 'pending-review' || approved.has(q.id))
+    .filter((q) => (
+      q.status !== 'pending-review'
+      || approved.has(q.id)
+      || (q.reviewBatch && approvedBatches.has(q.reviewBatch))
+    ))
     .map((q) => {
       const info = annotateQuestion(q);
       return {

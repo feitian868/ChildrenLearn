@@ -16,8 +16,23 @@ export const APP_CURRENT_KEY = 'app_currentUser';
 export const VERSION = 4;
 export const HISTORY_KEEP = 90; // dailyHistory 只保留最近 90 天
 export const DAYS_KEEP = 90;   // days 同样只留 90 天（否则 localStorage 会被撑爆）
+const SNAPSHOT_DAYS = 7;       // 近 7 天保留完整题目快照（家长核对页看答案/解析），更早只存摘要
 const RECENT_KEEP = 365;       // recentByDay/recentKeys 回避窗口，必须与 tasks.js 的 AVOID_DAYS 一致
 const TREND_KEEP = 45;         // masteryTrend 只留 45 天，必须与 mastery.js 的 TREND_KEEP 一致
+
+/**
+ * v5 放行：P2~P5 四批按「同规格批量」整批生效，只写 4 个批次键。
+ * 8 道 ma-u01-c3-01~08 仍走 v4 逐题 questionReview，单列、不并入批次。
+ */
+export const V5_RELEASE_BATCHES = [
+  'p2-math-batch-1', 'p3-chinese-batch-1', 'p4-english-batch-1', 'p5-science-batch-1'
+];
+
+function releaseBatches() {
+  const out = {};
+  V5_RELEASE_BATCHES.forEach((b) => { out[b] = 'approved'; });
+  return out;
+}
 
 /** 可选的头像 emoji 池，新建/切换时挑选。纯字符，不占存储。 */
 export const AVATAR_POOL = [
@@ -90,7 +105,9 @@ function defaultData(grade = 3) {
     recentByDay: {},   // { [dateKey]: [sig24] } 当日用过的题面签名，抽题回避用，保留 365 天
     recentKeys: {},    // { [key]: 最后使用日期 } 知识点冷却用，保留 365 天
     reviewOrig: {},    // { [sig24]: 首次出错日期 } 复习条目 origDate，按签名只存一份不随队列重复
-    questionReview: {}, // { [questionId]: 'approved'|'rejected' } 阶段 C 待审题人工审核状态
+    questionReview: {}, // { [questionId]: 'approved'|'rejected' } v4 逐题审核（8 道 legacy 单列）
+    reviewBatches: releaseBatches(), // v5 批次级审核：四批默认生效，只写 4 个批次键
+    reviewBatchesMigratedV5: true,   // 老存档一次性迁移标记，回滚后不复写
     // 阶段 B：掌握度是【累积状态】，不从 dailyHistory 重算（历史只留 90 天，重算会失忆）
     mastery: { v: 1, keys: {}, masteredAt: {}, aliases: {} },
     masteryTrend: {},  // { [dateKey]: { [knowledgeId]: 掌握度 0~100 } }，成长页曲线用
@@ -322,13 +339,14 @@ export function load() {
     }
   }
   // 命中缓存也补历史快照：跨天后同一页面再操作时不漏记昨天
-  if (snapshotHistory(data)) save(data);
+  if (snapshotHistory(data) || slimOldDays(data)) save(data);
   return data;
 }
 
 export function save(data) {
   memoryCache = data;
   trimDays(data);
+  slimOldDays(data); // 写时统一瘦身：近 7 天留完整快照，更早只留摘要
   writeRaw(getUserKey(currentUser()), JSON.stringify(data));
   return data;
 }
@@ -386,6 +404,11 @@ function normalize(raw) {
   if (!raw || typeof raw !== 'object') return defaultData();
   const grade = Number(raw.grade);
   const base = defaultData(Number.isInteger(grade) && grade >= 1 && grade <= 6 ? grade : 3);
+  // v5 放行：老存档一次性补写四批 approved；已有显式状态不覆盖（rejected 保留）
+  const batches = raw.reviewBatches && typeof raw.reviewBatches === 'object' ? { ...raw.reviewBatches } : {};
+  if (raw.reviewBatchesMigratedV5 !== true) {
+    V5_RELEASE_BATCHES.forEach((b) => { if (batches[b] === undefined) batches[b] = 'approved'; });
+  }
 
   const data = {
     ...base,
@@ -397,6 +420,8 @@ function normalize(raw) {
     ...migrateRecent(raw),
     reviewOrig: raw.reviewOrig && typeof raw.reviewOrig === 'object' ? raw.reviewOrig : {},
     questionReview: raw.questionReview && typeof raw.questionReview === 'object' ? raw.questionReview : {},
+    reviewBatches: batches,
+    reviewBatchesMigratedV5: true,
     // 阶段 B：老存档没有这些字段时补空结构；已有则原样保留（累积状态不能重置）
     mastery: {
       v: 1,
@@ -556,6 +581,53 @@ function trimDays(data) {
   if (keys.length <= DAYS_KEEP) return false;
   keys.slice(0, keys.length - DAYS_KEEP).forEach((k) => { delete data.days[k]; });
   return true;
+}
+
+/**
+ * 单日瘦身：day.questions 只留 { id, kid, specId, firstTry, wrongReason, attempts, result }，
+ * 题面/选项/答案/解析/source 不落盘，由「日期种子 + specId」按需重建。
+ * 兼容旧存档：带 prompt 的整题结构按同口径投影；已是摘要的题原样保留（幂等）。
+ * @returns {boolean} 是否有改动
+ */
+export function slimDay(day) {
+  if (!day || !Array.isArray(day.tasks)) return false;
+  let changed = false;
+  day.tasks.forEach((task) => {
+    if (!Array.isArray(task.questions)) return;
+    const results = Array.isArray(task.questionResults) ? task.questionResults : [];
+    const reasonByIdx = new Map(
+      (Array.isArray(task.wrongReasons) ? task.wrongReasons : []).map((r) => [r?.qIdx, r?.reason])
+    );
+    task.questions = task.questions.map((q, i) => {
+      if (!q || !q.prompt) return q; // 已是摘要（或空题），不重复投影
+      changed = true;
+      const firstTry = typeof results[i] === 'boolean' ? results[i] : null;
+      return {
+        id: q.id,
+        kid: q.knowledgeId || q.courseKnowledgeId || q.key || '',
+        specId: q.specId || '',
+        firstTry,
+        wrongReason: reasonByIdx.get(i) || null,
+        attempts: task.attempts || 0,
+        result: firstTry == null ? null : firstTry
+      };
+    });
+    // 逐题结果已经投影进 stub，任务级的重复数组不再落盘
+    if (Array.isArray(task.questionResults)) { delete task.questionResults; changed = true; }
+    if (Array.isArray(task.wrongReasons)) { delete task.wrongReasons; changed = true; }
+  });
+  return changed;
+}
+
+/** 近 SNAPSHOT_DAYS 天保留完整快照，更早的天只存摘要 */
+function slimOldDays(data) {
+  const cutoff = shiftDateKey(todayKey(), -(SNAPSHOT_DAYS - 1));
+  let changed = false;
+  Object.keys(data.days || {}).forEach((key) => {
+    if (key >= cutoff) return;
+    if (slimDay(data.days[key])) changed = true;
+  });
+  return changed;
 }
 
 /** 成长记录用：历史快照 + 今天（实时计算）合并，键为日期 */
