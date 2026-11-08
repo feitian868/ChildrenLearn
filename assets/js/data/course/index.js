@@ -23,7 +23,19 @@ const LOADERS = {
   'math:5:上册': () => import('./volumes/math-g5-up.js'),
   'math:5:下册': () => import('./volumes/math-g5-down.js'),
   'math:6:上册': () => import('./volumes/math-g6-up.js'),
-  'math:6:下册': () => import('./volumes/math-g6-down.js')
+  'math:6:下册': () => import('./volumes/math-g6-down.js'),
+  'chinese:1:上册': () => import('./volumes/chinese-g1-up.js'),
+  'chinese:1:下册': () => import('./volumes/chinese-g1-down.js'),
+  'chinese:2:上册': () => import('./volumes/chinese-g2-up.js'),
+  'chinese:2:下册': () => import('./volumes/chinese-g2-down.js'),
+  'chinese:3:上册': () => import('./volumes/chinese-g3-up.js'),
+  'chinese:3:下册': () => import('./volumes/chinese-g3-down.js'),
+  'chinese:4:上册': () => import('./volumes/chinese-g4-up.js'),
+  'chinese:4:下册': () => import('./volumes/chinese-g4-down.js'),
+  'chinese:5:上册': () => import('./volumes/chinese-g5-up.js'),
+  'chinese:5:下册': () => import('./volumes/chinese-g5-down.js'),
+  'chinese:6:上册': () => import('./volumes/chinese-g6-up.js'),
+  'chinese:6:下册': () => import('./volumes/chinese-g6-down.js')
 };
 
 const CACHE = new Map();

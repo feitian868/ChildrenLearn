@@ -7,6 +7,7 @@
  */
 
 import { shuffle, hashString, pick, sample } from '../core/rng.js';
+import { specPoolOfGrade } from './course/specs-chinese.js';
 
 const c = (id, grade, level, topic, type, prompt, options, answer, explain, source, extra = {}) => ({
   id: `zh-${id}`,
@@ -880,4 +881,19 @@ export function chineseGenerated(grade, rng) {
   }
 
   return out;
+}
+
+/* ============================================================
+   对外接口
+   ============================================================ */
+export function chinesePool(grade, rng, options = {}) {
+  const items = [
+    ...CHINESE_BANK.filter((q) => q.grade === grade),
+    ...chineseGenerated(grade, rng)
+  ];
+  // v5 P3：规格书生成的语文题（默认 pending-review；simulateApproved 仅验收仿真用）
+  if (options.includeSpec) {
+    items.push(...specPoolOfGrade(grade, rng, { simulateApproved: Boolean(options.simulateApproved) }));
+  }
+  return items;
 }

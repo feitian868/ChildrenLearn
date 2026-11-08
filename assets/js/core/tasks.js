@@ -19,7 +19,7 @@ import {
   passLineFor,
   taskCountFor
 } from '../data/curriculum.js';
-import { CHINESE_BANK, chineseGenerated } from '../data/knowledge-chinese.js';
+import { CHINESE_BANK, chineseGenerated, chinesePool } from '../data/knowledge-chinese.js';
 import { ENGLISH_BANK, englishGenerated } from '../data/knowledge-english.js';
 import { SCIENCE_BANK, scienceGenerated } from '../data/knowledge-science.js';
 import { mathPool } from '../data/knowledge-math.js';
@@ -98,6 +98,10 @@ function getPool(subject, grade, rng, dayKey = '', weakSet = null) {
     // includeSpec：规格题（默认 pending-review）随年级进池，
     // 是否可抽仍由下方 visiblePool + questionReview(approved) 决定。
     return rankWeak([...mathPool(grade, rng, { includeSpec: true }), ...logic], weakSet);
+  }
+  if (subject === 'chinese') {
+    // P3：语文规格题同样随年级进池，可见性仍由 pending-review / approved 门禁决定。
+    return rankWeak([...chinesePool(grade, rng, { includeSpec: true }), ...logic], weakSet);
   }
   const cacheKey = `${subject}:${grade}`;
   if (!poolCache.has(cacheKey)) {
