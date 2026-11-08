@@ -61,8 +61,7 @@ export const COURSE_META = {
   term: '',
   books: COURSE_BOOKS,
   draft: true,
-  note: 'P2 已建数学 12 册；P3 已建语文 12 册；P4 已建英语 12 册（新起点 1~2 / PEP 3~6，内容默认待审）；'
-    + 'P5 已建科学 12 册（人教/鄂教，内容默认待审）。'
+  note: '数学、语文、英语、科学各 12 册（1~6 年级上下册）均已建成，教材题已按四批放行。'
 };
 
 /* ------------------------- 合并已建册 ------------------------- */
@@ -160,10 +159,13 @@ export function courseScope(course, subject) {
   const currentId = resolveUnitId(course.currentUnitId);
   const current = COURSE_UNITS.find((u) => u.id === currentId);
   if (!current) return null;
+  // 只在本册同一学科内收敛，避免语文/英语/科学的单元混进数学范围
+  const sameSubject = (u) => String(u.volumeKey || '').startsWith(`${subject}:`);
+  if (!sameSubject(current)) return null;
   const learned = new Set((course.learnedUnits || []).map(resolveUnitId));
   const allowed = new Set(
     COURSE_UNITS
-      .filter((u) => u.order <= current.order || learned.has(u.id))
+      .filter((u) => sameSubject(u) && (u.order <= current.order || learned.has(u.id)))
       .map((u) => u.id)
   );
   return {

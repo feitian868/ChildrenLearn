@@ -1297,7 +1297,8 @@ function renderCourse(data) {
 
   const unitSel = el('select', { style: inputStyle });
   unitSel.append(el('option', { value: '', text: '未设置（不限定单元）' }));
-  COURSE_UNITS.forEach((u) => {
+  // 课程收敛目前只对数学生效，下拉只列数学单元，避免选到语文/英语/科学
+  COURSE_UNITS.filter((u) => String(u.volumeKey || '').startsWith('math:')).forEach((u) => {
     unitSel.append(el('option', {
       value: u.id,
       text: `${u.order}. ${u.name}（${u.metaGrade}年级${u.metaTerm}）`
@@ -1349,17 +1350,22 @@ function renderCourse(data) {
 
   return el('div', { class: 'card parent', style: 'margin-top:16px' }, [
     el('div', { class: 'parent-head' }, [
-      el('h3', { text: '课程设置 · 数学（阶段 A 骨架）' }),
-      el('span', { class: 'src', text: '骨架 · 待核对' })
+      el('h3', { text: '课程设置 · 数学' }),
+      el('span', { class: 'src', text: '按课本单元出题' })
     ]),
     el('p', { class: 'parent-hint', text: COURSE_META.note }),
-    el('p', { class: 'parent-hint', text: '当前仅支持三年级数学；语文/英语/科学尚未建课程表，配置后仍用全年级题池。' }),
+    el('p', {
+      class: 'parent-hint',
+      text: '用法：选好版本、册次和「当前正在学的单元」后保存，数学就按「当前单元 + 已学单元」出教材题；不选单元则用全年级题池。当天已开始做题时，新范围从第二天生效。'
+    }),
     el('label', { style: labelStyle, text: '教材版本（以课本封面为准）' }),
     versionSel,
+    el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '题库目前按人教版建设；选其他版本只记录用书信息，暂不切换题目。' }),
     el('label', { style: labelStyle, text: '册次' }),
     termSel,
     el('label', { style: labelStyle, text: '当前单元' }),
     unitSel,
+    el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '单元收敛目前只对数学生效；语文、英语、科学仍按全年级题池抽题。' }),
     el('div', { style: { marginTop: '12px' } }, [saveBtn]),
     el('p', { class: 'parent-hint', style: { marginTop: '10px' }, text: statusText })
   ]);
