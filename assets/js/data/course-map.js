@@ -27,6 +27,7 @@ import { VOLUME as MATH_G6_UP } from './course/volumes/math-g6-up.js';
 import { VOLUME as MATH_G6_DOWN } from './course/volumes/math-g6-down.js';
 import { CHINESE_VOLUMES } from './course/specs-chinese.js';
 import { ENGLISH_VOLUMES } from './course/specs-english.js';
+import { SCIENCE_VOLUMES } from './course/specs-science.js';
 import { sourceOf, EDITION_ID } from './course/edition-profile.js';
 import { buildAliasMap } from './course/id-spec.js';
 
@@ -36,7 +37,7 @@ export const MATH_VOLUMES = [
   MATH_G5_UP, MATH_G5_DOWN, MATH_G6_UP, MATH_G6_DOWN
 ];
 
-export const ALL_VOLUMES = [...MATH_VOLUMES, ...CHINESE_VOLUMES, ...ENGLISH_VOLUMES];
+export const ALL_VOLUMES = [...MATH_VOLUMES, ...CHINESE_VOLUMES, ...ENGLISH_VOLUMES, ...SCIENCE_VOLUMES];
 
 export const COURSE_SUBJECT = 'math';
 
@@ -60,8 +61,8 @@ export const COURSE_META = {
   term: '',
   books: COURSE_BOOKS,
   draft: true,
-  note: 'P2 已建数学 12 册；P3 已建语文 12 册；P4 已建英语 12 册（新起点 1~2 / PEP 3~6，内容默认待审）。'
-    + '科学 12 册仍只登记目录，待 P5 建包。'
+  note: 'P2 已建数学 12 册；P3 已建语文 12 册；P4 已建英语 12 册（新起点 1~2 / PEP 3~6，内容默认待审）；'
+    + 'P5 已建科学 12 册（人教/鄂教，内容默认待审）。'
 };
 
 /* ------------------------- 合并已建册 ------------------------- */

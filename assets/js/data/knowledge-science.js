@@ -8,6 +8,7 @@
  */
 
 import { shuffle, hashString, pick, sample } from '../core/rng.js';
+import { specPoolOfGrade } from './course/specs-science.js';
 
 const s = (id, grade, level, topic, type, prompt, options, answer, explain, source, extra = {}) => ({
   id: `sc-${id}`,
@@ -518,8 +519,16 @@ export const SCIENCE_BANK = SCIENCE_RAW.map((q) => {
   return q.source === source ? q : { ...q, source };
 });
 
-export function sciencePool(grade) {
-  return SCIENCE_BANK.filter((item) => item.grade === grade);
+/**
+ * 科学题池
+ * @param {number} grade 1~6
+ * @param {() => number} rng 日期种子随机数
+ * @param {{includeSpec?: boolean, simulateApproved?: boolean}} options
+ */
+export function sciencePool(grade, rng = () => Math.random(), { includeSpec = false, simulateApproved = false } = {}) {
+  const base = SCIENCE_BANK.filter((item) => item.grade === grade);
+  if (!includeSpec) return base;
+  return [...base, ...scienceGenerated(grade, rng), ...specPoolOfGrade(grade, rng, { simulateApproved })];
 }
 
 /* ============================================================

@@ -9,6 +9,7 @@
  *   D. 跨科不串：语/英/科题库进数学课程表必须全部返回 null
  *   E. 英语两套 sub-track 不合并（1~2 新起点 / 3~6 PEP）
  *   F. courseScope 兼容 v4 短 id 与 v5 规范 id
+ *   G. 科学 12 册：出处前缀 / 跨年级错挂 / 跨科不串（P5）
  */
 import { loadBuiltVolumes, listVolumes } from '../assets/js/data/course/index.js';
 import { sourceOf, SUBJECT_PROFILES } from '../assets/js/data/course/edition-profile.js';
@@ -17,6 +18,7 @@ import { mathPool } from '../assets/js/data/knowledge-math.js';
 import { CHINESE_BANK } from '../assets/js/data/knowledge-chinese.js';
 import { specPoolOfGrade as zhSpecPoolOfGrade } from '../assets/js/data/course/specs-chinese.js';
 import { specPoolOfGrade as enSpecPoolOfGrade, ENGLISH_VOLUMES } from '../assets/js/data/course/specs-english.js';
+import { specPoolOfGrade as sciSpecPoolOfGrade, SCIENCE_VOLUMES } from '../assets/js/data/course/specs-science.js';
 import { ENGLISH_BANK } from '../assets/js/data/knowledge-english.js';
 import { SCIENCE_BANK } from '../assets/js/data/knowledge-science.js';
 import { mulberry32, hashString } from '../assets/js/core/rng.js';
@@ -117,6 +119,27 @@ for (let grade = 1; grade <= 6; grade += 1) {
 }
 assert(enMismatch === 0, `英语跨年级 / 跨册 / 跨科错挂 = ${enMismatch}（可挂接 ${enAnnotated} 道）`);
 
+// 科学规格题（人教/鄂教 12 册）同口径
+const SCI_PARSE = /人教\/鄂教科学(\d)年级(上|下)册/;
+let sciAnnotated = 0;
+let sciMismatch = 0;
+for (let grade = 1; grade <= 6; grade += 1) {
+  const pool = sciSpecPoolOfGrade(grade, mulberry32(hashString(`edition-sci:${grade}`)));
+  pool.forEach((q) => {
+    const info = annotateQuestion(q);
+    if (!info) { sciMismatch += 1; return; }
+    sciAnnotated += 1;
+    const m = SCI_PARSE.exec(q.source || '');
+    if (!m || Number(m[1]) !== info.grade || m[2] !== info.term.slice(0, 1)) {
+      sciMismatch += 1;
+      console.log(`  ✗ ${q.id} source=${q.source} → ${info.volumeKey}`);
+    }
+    if (q.grade !== info.grade || q.term !== info.term) sciMismatch += 1;
+    if (!info.volumeKey.startsWith('science:')) sciMismatch += 1;
+  });
+}
+assert(sciMismatch === 0, `科学跨年级 / 跨册 / 跨科错挂 = ${sciMismatch}（可挂接 ${sciAnnotated} 道）`);
+
 /* ================= D. 跨科不串 ================= */
 console.log('\n== D. 跨科不串（数学 / 语文 / 英语各挂各的）==');
 const mathAnnotated = mathPool(3, mulberry32(hashString('edition-check:cross:math')))
@@ -133,6 +156,11 @@ const enSpecs = enSpecPoolOfGrade(3, mulberry32(hashString('edition-check:cross:
 const enAttached = enSpecs.map((q) => ({ q, info: annotateQuestion(q) }));
 const enLeak = enAttached.filter((x) => !x.info || !x.info.volumeKey.startsWith('english:'));
 assert(enLeak.length === 0, `英语规格题只挂英语单元（样本 ${enSpecs.length} 道，越界 ${enLeak.length} 道）`);
+
+const sciSpecs = sciSpecPoolOfGrade(3, mulberry32(hashString('edition-check:cross:science')));
+const sciAttached = sciSpecs.map((q) => ({ q, info: annotateQuestion(q) }));
+const sciLeak = sciAttached.filter((x) => !x.info || !x.info.volumeKey.startsWith('science:'));
+assert(sciLeak.length === 0, `科学规格题只挂科学单元（样本 ${sciSpecs.length} 道，越界 ${sciLeak.length} 道）`);
 
 const zhBank = CHINESE_BANK.slice(0, 60).map((q) => ({ q, info: annotateQuestion(q) }));
 const bankLeak = zhBank.filter((x) => x.info && !x.info.volumeKey.startsWith('chinese:'));
@@ -174,6 +202,12 @@ for (const volume of ENGLISH_VOLUMES) {
   });
 }
 assert(crossTrack === 0, `英语题不跨年级挂载（越界 ${crossTrack} 道）`);
+
+/* ================= G. 科学 12 册 ================= */
+console.log('\n== G. 科学 12 册（P5）==');
+assert(SCIENCE_VOLUMES.length === 12, `已建科学实体 ${SCIENCE_VOLUMES.length} 册`);
+const sciProfileBad = SCIENCE_VOLUMES.filter((v) => v.subject !== 'science' || !sourceOf(v, v.units[0].name).startsWith('人教/鄂教科学'));
+assert(sciProfileBad.length === 0, `12 册实体科学科属 / profile 前缀一致（不符 ${sciProfileBad.length} 册）`);
 
 /* ================= F. courseScope 兼容两种 id ================= */
 console.log('\n== F. courseScope 兼容 legacy / canonical ==');

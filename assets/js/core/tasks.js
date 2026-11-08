@@ -21,7 +21,7 @@ import {
 } from '../data/curriculum.js';
 import { CHINESE_BANK, chineseGenerated, chinesePool } from '../data/knowledge-chinese.js';
 import { ENGLISH_BANK, englishGenerated, englishPool } from '../data/knowledge-english.js';
-import { SCIENCE_BANK, scienceGenerated } from '../data/knowledge-science.js';
+import { SCIENCE_BANK, scienceGenerated, sciencePool } from '../data/knowledge-science.js';
 import { mathPool } from '../data/knowledge-math.js';
 import { logicPool } from '../data/knowledge-logic.js';
 import {
@@ -106,6 +106,10 @@ function getPool(subject, grade, rng, dayKey = '', weakSet = null) {
   if (subject === 'english') {
     // P4：英语规格题（新起点 / PEP 两套 track）随年级进池，可见性仍由审核门禁决定。
     return rankWeak([...englishPool(grade, rng, { includeSpec: true }), ...logic], weakSet);
+  }
+  if (subject === 'science') {
+    // P5：科学规格题（人教/鄂教 12 册）随年级进池，可见性仍由 pending-review / approved 门禁决定。
+    return rankWeak([...sciencePool(grade, rng, { includeSpec: true }), ...logic], weakSet);
   }
   const cacheKey = `${subject}:${grade}`;
   if (!poolCache.has(cacheKey)) {
