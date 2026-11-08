@@ -608,12 +608,135 @@ for (const volume of MATH_VOLUMES) {
   }
 }
 
+/* ---------- 文字答案兜底：数字键盘无法作答，统一转四选项 ---------- */
+const TEXT_WRONGS = {
+  圆: ['正方形', '长方形', '三角形'],
+  不同: ['相同', '完全一样', '说不准'],
+  上面: ['正面', '侧面', '下面'],
+  形状: ['大小', '颜色', '位置'],
+  锐角: ['直角', '钝角', '平角'],
+  钝角: ['锐角', '直角', '平角'],
+  直角: ['锐角', '钝角', '平角'],
+  不变: ['变大', '变小', '不能确定'],
+  无关: ['有关', '成正比', '成反比'],
+  平移: ['旋转', '轴对称', '翻转'],
+  旋转: ['平移', '轴对称', '翻转'],
+  轴对称: ['平移', '旋转', '中心对称'],
+  厘米: ['米', '分米', '毫米'],
+  克: ['千克', '吨', '斤'],
+  平行: ['垂直', '相交', '重合'],
+  红球: ['蓝球', '黄球', '绿球'],
+  蓝球: ['红球', '黄球', '绿球'],
+  黄球: ['红球', '蓝球', '绿球'],
+  绿球: ['红球', '蓝球', '黄球'],
+  锐角三角形: ['直角三角形', '钝角三角形', '等边三角形'],
+  钝角三角形: ['锐角三角形', '直角三角形', '等边三角形'],
+  直角三角形: ['锐角三角形', '钝角三角形', '等边三角形'],
+  上升: ['下降', '不变', '先升后降'],
+  下降: ['上升', '不变', '先升后降'],
+  甲袋: ['乙袋', '一样大', '无法比较'],
+  乙袋: ['甲袋', '一样大', '无法比较'],
+  十位: ['个位', '百位', '千位'],
+  进位: ['退位', '对齐', '交换'],
+  甲: ['乙', '丙', '无法确定'],
+  乙: ['甲', '丙', '无法确定'],
+  丙: ['甲', '乙', '无法确定'],
+  语文: ['数学', '英语', '科学'],
+  数学: ['语文', '英语', '科学'],
+  英语: ['语文', '数学', '科学'],
+  没有移动: ['向左 1 格', '向右 1 格', '无法判断']
+};
+
+function buildTextChoice(rand, correct, wrongs) {
+  const options = [correct];
+  wrongs.forEach((w) => {
+    const t = String(w);
+    if (t !== correct && !options.includes(t)) options.push(t);
+  });
+  const list = shuffle(rand, options).slice(0, 4);
+  return { type: 'choice', options: list, answer: list.indexOf(correct) };
+}
+
+function toTextChoice(rand, answer, prompt) {
+  const text = String(answer).trim();
+  if (TEXT_WRONGS[text]) return buildTextChoice(rand, text, TEXT_WRONGS[text]);
+
+  let m = /^(\d+)\/(\d+)$/.exec(text);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return buildTextChoice(rand, text, [`${Math.max(1, a - 1)}/${b}`, `${a}/${b + 1}`, `${b}/${b}`]);
+  }
+  m = /^\((\d+),(\d+)\)$/.exec(text);
+  if (m) {
+    const c = Number(m[1]);
+    const r = Number(m[2]);
+    return buildTextChoice(rand, text, [`(${c},${r + 1})`, `(${c + 1},${r})`, `(${r},${c})`]);
+  }
+  m = /^第 (\d+) 列第 (\d+) 行$/.exec(text);
+  if (m) {
+    const c = Number(m[1]);
+    const r = Number(m[2]);
+    return buildTextChoice(rand, text, [`第 ${c} 列第 ${r + 1} 行`, `第 ${c + 1} 列第 ${r} 行`, `第 ${r} 列第 ${c} 行`]);
+  }
+  m = /^满 (\d+) 盘，剩 (\d+) 个$/.exec(text);
+  if (m) {
+    const q = Number(m[1]);
+    const rem = Number(m[2]);
+    return buildTextChoice(rand, text, [`满 ${q} 盘，剩 ${rem + 1} 个`, `满 ${Math.max(0, q - 1)} 盘，剩 ${rem} 个`, `满 ${q + 1} 盘，剩 ${rem} 个`]);
+  }
+  m = /^(\d+) 个十和 (\d+) 个一$/.exec(text);
+  if (m) {
+    const t = Number(m[1]);
+    const o = Number(m[2]);
+    return buildTextChoice(rand, text, [`${t} 个十和 ${o + 1} 个一`, `${t + 1} 个十和 ${o} 个一`, `${o} 个十和 ${t} 个一`]);
+  }
+  m = /^(向[左右上下]) (\d+) 格$/.exec(text);
+  if (m) {
+    const dir = m[1];
+    const n = Number(m[2]);
+    const other = dir === '向左' ? '向右' : dir === '向右' ? '向左' : dir === '向上' ? '向下' : '向上';
+    return buildTextChoice(rand, text, [`${other} ${n} 格`, `${dir} ${n + 1} 格`, '没有移动']);
+  }
+  m = /^(\d+)x = (\d+)$/.exec(text);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return buildTextChoice(rand, text, [`x = ${b}`, `${a} + x = ${b}`, `${a}x = ${a}`]);
+  }
+  m = /^(\d+):(\d+)$/.exec(text);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return buildTextChoice(rand, text, [`${a}:${b + 1}`, `${b}:${a}`, `${a + 1}:${b}`]);
+  }
+  m = /^(\d+) (千克|克|米|厘米|分米|毫米)$/.exec(text);
+  if (m) {
+    const pairs = [...String(prompt).matchAll(/(\d+) (千克|克|米|厘米|分米|毫米)/g)]
+      .map((x) => `${x[1]} ${x[2]}`)
+      .filter((x) => x !== text);
+    const same = String(prompt).includes('长') ? '一样长' : '一样重';
+    return buildTextChoice(rand, text, [...pairs, same, '无法比较']);
+  }
+  return null;
+}
+
 function makeQuestion(volume, unit, lesson, kid, specNo, domainSpec, rand) {
-  const made = domainSpec.make(rand, { params: kid.specParams || {} });
-  if (!made || made.answer === undefined || made.answer === null) return null;
+  const raw = domainSpec.make(rand, { params: kid.specParams || {} });
+  if (!raw || raw.answer === undefined || raw.answer === null) return null;
+  const rawAnswer = raw.answer;
+  let made = raw;
+  if (!made.type && typeof rawAnswer === 'string') {
+    if (rawAnswer === '对' || rawAnswer === '不对') {
+      made = { ...made, type: 'judge', answer: rawAnswer === '对' };
+    } else if (!Number.isFinite(Number(rawAnswer))) {
+      const conv = toTextChoice(rand, rawAnswer, made.prompt);
+      if (conv) made = { ...made, ...conv };
+    }
+  }
   const specId = specIdOf(kid.id, specNo);
   return {
-    id: `${specId}-${hashString(`${made.prompt}|${made.answer}`)}`,
+    id: `${specId}-${hashString(`${made.prompt}|${rawAnswer}`)}`,
     subject: 'math',
     grade: volume.grade,
     level: domainSpec.level,

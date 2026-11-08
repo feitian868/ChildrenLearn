@@ -85,7 +85,7 @@ export const SYLLABLES = [
   { s: 'dà', i: 'd', f: 'a', t: 4, whole: false, three: false },
   { s: 'dēng', i: 'd', f: 'eng', t: 1, whole: false, three: false },
   { s: 'dōng', i: 'd', f: 'ong', t: 1, whole: false, three: false },
-  { s: 'ér', i: '', f: 'er', t: 2, whole: true, three: false },
+  { s: 'ér', i: '', f: 'er', t: 2, whole: false, three: false },
   { s: 'fēng', i: 'f', f: 'eng', t: 1, whole: false, three: false },
   { s: 'gāo', i: 'g', f: 'ao', t: 1, whole: false, three: false },
   { s: 'guā', i: 'g', f: 'ua', t: 1, whole: false, three: true },
@@ -196,7 +196,7 @@ export const WORD_POOL = [
   { w: '月亮', zi: '月', syn: '月儿', ant: '太阳', m: '夜晚看到的天体', c: '事物' },
   { w: '花朵', zi: '花', syn: '花儿', ant: '枝叶', m: '植物开的花', c: '事物' },
   { w: '小鸟', zi: '鸟', syn: '鸟儿', ant: '走兽', m: '会飞的动物', c: '事物' },
-  { w: '书包', zi: '书', syn: '包', ant: '文具', m: '装书的包', c: '事物' },
+  { w: '书包', zi: '书', syn: '背包', ant: '文具', m: '装书的包', c: '事物' },
   { w: '铅笔', zi: '铅', syn: '笔', ant: '橡皮', m: '写字的工具', c: '事物' },
   { w: '教室', zi: '教', syn: '课堂', ant: '操场', m: '上课的地方', c: '事物' }
 ];
@@ -215,12 +215,12 @@ export const MEASURE_POOL = [
 
 export const COLLOC_POOL = [
   { t: '天空', a: '蓝' }, { t: '小草', a: '绿' }, { t: '花朵', a: '鲜艳' }, { t: '眼睛', a: '明亮' },
-  { t: '教室', a: '干净' }, { t: '声音', a: '洪亮' }, { t: '阳光', a: '温暖' }, { t: '小路', a: '安静' },
+  { t: '教室', a: '干净' }, { t: '嗓音', a: '洪亮' }, { t: '阳光', a: '温暖' }, { t: '小路', a: '幽静' },
   { t: '大海', a: '广阔' }, { t: '雪花', a: '洁白' }, { t: '柳枝', a: '细长' }, { t: '山峰', a: '高耸' },
   { t: '衣裳', a: '整洁' }, { t: '同学', a: '热心' }, { t: '房间', a: '明亮' }, { t: '草地', a: '柔软' },
   { t: '河水', a: '清澈' }, { t: '树叶', a: '茂密' }, { t: '小鸟', a: '活泼' }, { t: '老师', a: '和蔼' },
   { t: '天空', a: '辽阔' }, { t: '园子', a: '热闹' }, { t: '书桌', a: '整洁' }, { t: '花园', a: '美丽' },
-  { t: '队伍', a: '整齐' }, { t: '歌声', a: '动听' }, { t: '雨点', a: '细密' }, { t: '街道', a: '宽阔' },
+  { t: '队伍', a: '整齐' }, { t: '歌声', a: '动听' }, { t: '花纹', a: '细密' }, { t: '街道', a: '宽阔' },
   { t: '故事', a: '有趣' }, { t: '味道', a: '香甜' }
 ];
 

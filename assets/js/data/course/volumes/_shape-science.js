@@ -96,7 +96,7 @@ export const unitSc = (id, rawName, order, grade, term, aspects) => {
       id: kidId,
       name: `${meta.label}·${meta.kids[seg - 1] || meta.kids[0]}`,
       prerequisites: [],
-      difficulty: meta.difficulty,
+      difficulty: grade <= 2 ? Math.min(2, meta.difficulty) : meta.difficulty,
       objectives: meta.objectives,
       typicalErrors: meta.typicalErrors,
       specDomain: family,

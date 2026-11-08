@@ -38,7 +38,7 @@ export const VOLUME = volume(3, '下册', [
     know('ma-u93-k2', '路线与位置', 1, 'shape-parallel', null,
       ['能用方向描述行走路线', '能判断两地的相对位置'],
       ['路线方向说反', '相对位置参照物弄错']),
-    know('ma-u93-k3', '方向与顺序', 1, 'g1-order', null,
+    know('ma-u93-k3', '方向与顺序', 1, 'position', { specOffset: 4 },
       ['能按顺序记录经过的地点', '会判断第几个与前后位置'],
       ['顺序数错', '把起点算成第一个'])
   ]),
@@ -49,7 +49,7 @@ export const VOLUME = volume(3, '下册', [
     know('ma-u94-k2', '统计图读数', 1, 'statistics-chart', null,
       ['会看条形统计图回答问题', '能根据数据提出简单问题'],
       ['看错统计图刻度', '把数据直接相加不判断题意']),
-    know('ma-u94-k3', '数据比较与分析', 1, 'g1-compare-q', null,
+    know('ma-u94-k3', '数据比较与分析', 1, 'statistics', null,
       ['能比较两组数据的多少', '会用减法求相差数'],
       ['比较时用加法', '相差数算成两个数的和'])
   ]),
@@ -101,7 +101,7 @@ export const VOLUME = volume(3, '下册', [
     know('ma-u99-k1', '三年级下册综合', 2, 'mixed-review', null,
       ['综合运用除法、乘法与面积', '会解决两步实际问题'],
       ['读题漏条件', '单位写错']),
-    know('ma-u99-k2', '实际问题与数量关系', 2, 'g1-story', null,
+    know('ma-u99-k2', '实际问题与数量关系', 2, 'g3-addsub-word', {},
       ['能提取数量关系并列式', '会说明每一步求的是什么'],
       ['列式漏掉一步', '小括号使用不当']),
     know('ma-u99-k3', '因数与倍数初步', 2, 'factor-multiple', null,

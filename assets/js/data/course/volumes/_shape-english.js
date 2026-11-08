@@ -71,7 +71,7 @@ export const unitEn = (id, name, order, grade, term, family) => {
       id: kidId,
       name: `${meta.label}·${kidName}`,
       prerequisites: [],
-      difficulty: meta.difficulty,
+      difficulty: grade <= 2 ? Math.min(2, meta.difficulty) : meta.difficulty,
       objectives: meta.objectives,
       typicalErrors: meta.typicalErrors,
       specDomain: family,

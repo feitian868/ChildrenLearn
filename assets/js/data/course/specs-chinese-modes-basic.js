@@ -34,6 +34,15 @@ const soundWrongs = (rand, correct) => {
   return shuffle(rand, list.filter((p) => p !== correct)).slice(0, 3);
 };
 
+/** 去声调：逐字符映射，保留 ü；避免「wǎn → wn」这类非法拼音 */
+const TONE_MAP = {
+  ā: 'a', á: 'a', ǎ: 'a', à: 'a', ē: 'e', é: 'e', ě: 'e', è: 'e',
+  ī: 'i', í: 'i', ǐ: 'i', ì: 'i', ō: 'o', ó: 'o', ǒ: 'o', ò: 'o',
+  ū: 'u', ú: 'u', ǔ: 'u', ù: 'u', ǖ: 'ü', ǘ: 'ü', ǚ: 'ü', ǜ: 'ü'
+};
+const toneFree = (s) => s.replace(/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/g, (c) => TONE_MAP[c] || c);
+const hasTone = (s) => /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/.test(s);
+
 /* ============================================================
    zh-sound · 字音（12 外壳）
    ============================================================ */
@@ -100,11 +109,8 @@ export const ZH_SOUND_MODES = [
   {
     ask: 'zh-sound-spell', make(rand, ctx) {
       const it = pick(rand, SOUND_POOL);
-      const bad = [
-        it.p.replace(/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/g, ''),
-        it.p.replace(it.i, pick(rand, ['zh', 'ch', 'sh']).slice(0, it.i.length) || it.i),
-        `${it.i}${it.f}`
-      ].filter((x) => x && x !== it.p);
+      const otherInitial = pick(rand, ['b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'zh', 'ch', 'sh', 'r', 'z', 'c', 's'].filter((x) => x !== it.i));
+      const bad = [toneFree(it.p), `${it.i}${it.f}`, `${otherInitial}${it.f}`].filter((x) => x && x !== it.p);
       return { prompt: withTag(ctx.tag, `下面哪个是“${it.z}”的正确拼音？`), ...choiceOf(rand, it.p, [...bad, ...soundWrongs(rand, it.p)]), explain: `“${it.z}”的正确拼音是 ${it.p}。` };
     }
   },
@@ -160,7 +166,7 @@ export const ZH_PINYIN_MODES = [
   },
   {
     ask: 'zh-pinyin-blend', make(rand, ctx) {
-      const it = pick(rand, SYLLABLES.filter((x) => x.i && x.f));
+      const it = pick(rand, SYLLABLES.filter((x) => x.i && x.f && !x.whole));
       const wrongs = SYLLABLES.map((x) => x.s).filter((s) => s !== it.s);
       return { prompt: withTag(ctx.tag, `“${it.i}”和“${it.f}”拼成什么？`), ...choiceOf(rand, it.s, wrongs), explain: `${it.i} 和 ${it.f} 拼成 ${it.s}。` };
     }
@@ -173,9 +179,11 @@ export const ZH_PINYIN_MODES = [
   },
   {
     ask: 'zh-pinyin-write', make(rand, ctx) {
-      const it = pick(rand, SYLLABLES);
-      const bad = [it.s.replace('ü', 'u'), it.s.replace('ü', 'v'), it.s.replace(/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/g, '')].filter((x) => x !== it.s);
-      return { prompt: withTag(ctx.tag, `音节“${it.s.replace(/[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/g, '')}”写作下面哪个？`), ...choiceOf(rand, it.s, [...bad, ...SYLLABLES.map((x) => x.s)]), explain: `正确写法是 ${it.s}。` };
+      const it = pick(rand, SYLLABLES.filter((x) => hasTone(x.s)));
+      const plain = toneFree(it.s);
+      const bad = [it.s.replace('ü', 'u'), it.s.replace('ü', 'v'), plain.replace('ü', 'u')].filter((x) => x !== plain);
+      const others = SYLLABLES.filter((x) => toneFree(x.s) !== plain).map((x) => toneFree(x.s));
+      return { prompt: withTag(ctx.tag, `音节“${it.s}”去掉声调后写作下面哪个？`), ...choiceOf(rand, plain, [...bad, ...others]), explain: `“${it.s}”去掉声调写作 ${plain}。` };
     }
   },
   {
@@ -219,7 +227,7 @@ export const ZH_PINYIN_MODES = [
   },
   {
     ask: 'zh-pinyin-kinds', make(rand, ctx) {
-      const it = pick(rand, SYLLABLES.filter((x) => x.i && x.f));
+      const it = pick(rand, SYLLABLES.filter((x) => x.i && x.f && !x.whole));
       return { prompt: withTag(ctx.tag, `音节“${it.s}”是两拼音节还是三拼音节？`), ...choiceOf(rand, it.three ? '三拼音节' : '两拼音节', ['两拼音节', '三拼音节', '整体认读音节'], 3), explain: `${it.s} 是${it.three ? '三拼音节' : '两拼音节'}。` };
     }
   }

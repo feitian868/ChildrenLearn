@@ -101,7 +101,7 @@ const g2Angle = [
     const kind = r(rand, 0, 4);
     if (kind === 0) return { prompt: `比直角小的角叫（ ）`, answer: '锐角', explain: `比直角小的角叫锐角。` };
     if (kind === 1) return { prompt: `比直角大的角叫（ ）`, answer: '钝角', explain: `比直角大的角叫钝角。` };
-    if (kind === 2) return { prompt: `大小正好等于直角的角叫（ ）`, answer: '直角', explain: `大小正好等于直角的角叫直角。` };
+    if (kind === 2) return { prompt: `大小正好是 90° 的角叫（ ）`, answer: '直角', explain: `大小正好是 90° 的角叫直角。` };
     if (kind === 3) return { prompt: `把一个角的两条边都延长，这个角的大小（ ）`, answer: '不变', explain: `角的大小只与两边张开的程度有关，延长边不改变角的大小。` };
     return { prompt: `角的大小与边的方向（ ）`, answer: '无关', explain: `角的大小由两边张开的程度决定，与边的方向无关。` };
   } },
@@ -111,6 +111,23 @@ const g2Angle = [
       return { ...pickG2(rand, '无关', ['有关', '说不清', '越长越大']), prompt: `角的大小与边的长短（ ）`, explain: `角的大小与边的长短无关，只与两边张开的程度有关。` };
     }
     return { ...pickG2(rand, '有关', ['无关', '说不清', '越长越小']), prompt: `角的大小与两边张开的程度（ ）`, explain: `角的大小与两边张开的程度有关。` };
+  } },
+  { askPattern: 'meaning-translate', level: 2, make(rand) {
+    const n = r(rand, 2, 4);
+    return { prompt: `${n} 个直角合起来是多少度？`, answer: n * 90, unit: '°', explain: `${n} × 90° = ${n * 90}°${n === 2 ? '，就是 1 个平角' : n === 4 ? '，就是 1 个周角' : ''}。` };
+  } },
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const a = r(rand, 10, 70);
+    const b = r(rand, a + 20, Math.min(a + 80, 170));
+    return { prompt: `角的一边对准量角器的 ${a}° 刻度线，另一边对准 ${b}° 刻度线，这个角是多少度？`, answer: b - a, unit: '°', explain: `${b}° - ${a}° = ${b - a}°，就是这个角的大小。` };
+  } },
+  { askPattern: 'product-recall', level: 2, make(rand) {
+    const m = r(rand, 2, 8);
+    return { prompt: `分针从数字 12 走到数字 ${m}，转过了多少度？`, answer: m * 30, unit: '°', explain: `一大格是 30°，走 ${m} 大格就是 ${m} × 30° = ${m * 30}°。` };
+  } },
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const a = r(rand, 10, 80);
+    return { prompt: `一个 ${a}° 的角比直角小多少度？`, answer: 90 - a, unit: '°', explain: `直角是 90°，90° - ${a}° = ${90 - a}°。` };
   } }
 ];
 
@@ -384,7 +401,7 @@ const g2Observe = [
     return { prompt: `一个圆柱有几个面？`, answer: 3, unit: '个', explain: `圆柱有 3 个面（上下两个底面和 1 个侧面）。` };
   } },
   { askPattern: 'meaning-translate', level: 2, make(rand) {
-    return { prompt: `圆柱的上下两个底面是什么形状？`, answer: '圆', explain: `圆柱的上下两个底面都是圆。` };
+    return { prompt: `一个立体图形有两个完全相同的底面，它的底面是什么图形？`, answer: '圆', explain: `圆柱的上下两个底面都是圆。` };
   } },
   { askPattern: 'compare-operate', level: 2, make(rand) {
     return { prompt: `长方体和正方体都有几个面？`, answer: 6, unit: '个', explain: `长方体和正方体都有 6 个面。` };

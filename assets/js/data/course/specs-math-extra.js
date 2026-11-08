@@ -10,7 +10,7 @@
  * 供给证据由 verify/sim_math_p2.mjs 的 R1/R2 输出。
  */
 
-import { randInt } from '../../core/rng.js';
+import { randInt, pick } from '../../core/rng.js';
 
 const r = (rand, a, b) => randInt(rand, a, b);
 const fmt = (n) => String(Math.round(Number(n) * 100) / 100);
@@ -513,8 +513,7 @@ const fractionCalc = [
 
 const ratioScale = [
   { askPattern: 'product-recall', level: 1, make(rand) {
-    const a = r(rand, 1, 3);
-    const b = r(rand, 2, 5);
+    const [a, b] = pick(rand, [[1, 2], [1, 3], [1, 4], [1, 5], [2, 3], [2, 5], [3, 4], [3, 5], [4, 5]]);
     const m = r(rand, 2, 6);
     return { prompt: `把 ${a * m} : ${b * m} 化成最简比是多少？`, answer: `${a}:${b}`, explain: `前后项同时除以 ${m}，得到 ${a}:${b}。` };
   } },
@@ -683,6 +682,128 @@ const calendar = [
   } }
 ];
 
+/* 集合（重叠问题）：三组语义不同外壳 ×3，供 G3 三个 kid 用 specOffset 1/4/7 分段使用 */
+const logicOverlap = [
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    return { prompt: `参加合唱队的有 ${a} 人，参加舞蹈队的有 ${b} 人，两队都参加的有 ${c} 人，至少参加一队的有多少人？`, answer: a + b - c, unit: '人', explain: `${a} + ${b} = ${a + b}，把都参加的 ${c} 人重复算了一次，再减去：${a + b - c}（人）。` };
+  } },
+  { askPattern: 'inverse-recall', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    const t = a + b - c;
+    return { prompt: `至少参加一队的有 ${t} 人，其中参加合唱队的有 ${a} 人，两队都参加的有 ${c} 人，只参加舞蹈队的有多少人？`, answer: t - a, unit: '人', explain: `至少参加一队的 ${t} 人里去掉参加合唱队的 ${a} 人，剩下 ${t - a} 人只参加舞蹈队。` };
+  } },
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    return { prompt: `参加合唱队的有 ${a} 人，两队都参加的有 ${c} 人，只参加合唱队的有多少人？`, answer: a - c, unit: '人', explain: `从 ${a} 人里去掉两队都参加的 ${c} 人，只剩 ${a - c} 人。` };
+  } },
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    return { prompt: `爱吃苹果的有 ${a} 人，爱吃梨的有 ${b} 人，两种都爱吃的有 ${c} 人，一共调查了多少人？`, answer: a + b - c, unit: '人', explain: `${a} + ${b} - ${c} = ${a + b - c}（人），都吃的人被算了两遍，要减掉一次。` };
+  } },
+  { askPattern: 'inverse-recall', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    const within = a + b - c;
+    const n = within + r(rand, 2, 8);
+    return { prompt: `班级有 ${n} 人，喜欢数学的有 ${a} 人，喜欢语文的有 ${b} 人，两科都喜欢的有 ${c} 人，两科都不喜欢的有多少人？`, answer: n - within, unit: '人', explain: `至少喜欢一科的有 ${a} + ${b} - ${c} = ${within} 人，${n} - ${within} = ${n - within}（人）两科都不喜欢。` };
+  } },
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    return { prompt: `喜欢数学的有 ${a} 人，喜欢语文的有 ${b} 人，两科都喜欢的有 ${c} 人，只喜欢一科的有多少人？`, answer: a + b - 2 * c, unit: '人', explain: `两科人数相加是 ${a + b}，两科都喜欢的 ${c} 人被算了两次，减去 2 次：${a + b - 2 * c}（人）。` };
+  } },
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    const within = a + b - c;
+    const n = within + r(rand, 2, 8);
+    return { prompt: `一组报名的有 ${a} 人，二组报名的有 ${b} 人，两组都报名的有 ${c} 人，全班 ${n} 人，两个组都没报的有多少人？`, answer: n - within, unit: '人', explain: `至少报一个组的有 ${within} 人，${n} - ${within} = ${n - within}（人）两个组都没报。` };
+  } },
+  { askPattern: 'inverse-recall', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    return { prompt: `参加跑步的有 ${a} 人，两项都参加的有 ${c} 人，只参加跑步的有多少人？`, answer: a - c, unit: '人', explain: `${a} - ${c} = ${a - c}（人）只参加跑步。` };
+  } },
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const c = r(rand, 2, 8);
+    const a = c + r(rand, 4, 15);
+    const b = c + r(rand, 4, 15);
+    return { prompt: `得到红花的有 ${a} 人，得到星星的有 ${b} 人，两样都得到的有 ${c} 人，至少得到一样的有多少人？`, answer: a + b - c, unit: '人', explain: `${a} + ${b} - ${c} = ${a + b - c}（人）。` };
+  } }
+];
+
+/* 倍的关系：求倍数 / 求几倍量 / 情境比较 */
+const timesRelation = [
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const b = r(rand, 2, 9);
+    const k = r(rand, 2, 9);
+    return { prompt: `${b * k} 是 ${b} 的几倍？`, answer: k, explain: `${b * k} ÷ ${b} = ${k}，所以是 ${k} 倍。` };
+  } },
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const b = r(rand, 3, 12);
+    const k = r(rand, 2, 9);
+    return { prompt: `二年级有 ${b} 人参加合唱，三年级参加的人数是二年级的 ${k} 倍，三年级有多少人参加？`, answer: b * k, unit: '人', explain: `${b} × ${k} = ${b * k}（人）。` };
+  } },
+  { askPattern: 'apply-solve', level: 2, make(rand) {
+    const b = r(rand, 2, 9);
+    const k = r(rand, 3, 9);
+    return { prompt: `果园里有 ${b} 棵梨树，苹果树的棵数是梨树的 ${k} 倍，苹果树比梨树多多少棵？`, answer: b * k - b, unit: '棵', explain: `苹果树 ${b} × ${k} = ${b * k} 棵，比梨树多 ${b * k} - ${b} = ${b * k - b} 棵。` };
+  } },
+  { askPattern: 'inverse-recall', level: 2, make(rand) {
+    const b = r(rand, 2, 9);
+    const k = r(rand, 2, 8);
+    const m = r(rand, 1, 9);
+    return { prompt: `比 ${b} 的 ${k} 倍多 ${m} 的数是多少？`, answer: b * k + m, explain: `先算 ${b} × ${k} = ${b * k}，再加 ${m}，得 ${b * k + m}。` };
+  } }
+];
+
+/* 2、5、3 的倍数特征：三个外壳题面都带变量，避免同册内去重后为空 */
+const multipleFeatures = [
+  { askPattern: 'meaning-translate', level: 2, make(rand) {
+    const n = r(rand, 101, 999);
+    const sum = [...String(n)].reduce((s, d) => s + Number(d), 0);
+    return { prompt: `${n} 的各位数字之和是多少？`, answer: sum, explain: `把各位数字相加：${[...String(n)].join(' + ')} = ${sum}，可以用它判断 ${n} 是不是 3 的倍数。` };
+  } },
+  { askPattern: 'inverse-recall', level: 2, make(rand) {
+    const tail = pick(rand, [0, 2, 4, 6, 8]);
+    return { prompt: `个位数字为 ${tail} 的数，一定是（ ）的倍数。`, answer: '2', explain: '个位是 0、2、4、6、8 的数都是 2 的倍数。' };
+  } },
+  { askPattern: 'compare-operate', level: 2, make(rand) {
+    const ok = r(rand, 0, 1) === 0;
+    const base = r(rand, 20, 90) * 5;
+    const n = ok ? base : base + 1;
+    return { prompt: `${n} 是 5 的倍数吗？`, answer: ok ? '对' : '不对', explain: `5 的倍数个位是 0 或 5，${n} 的个位是 ${String(n).slice(-1)}，所以${ok ? '是' : '不是'}。` };
+  } }
+];
+
+/* 找次品（天平）：三个外壳题面都带变量 */
+const findDefective = [
+  { askPattern: 'apply-solve', level: 3, make(rand) {
+    const list = [[3, 1], [8, 2], [9, 2], [12, 3], [20, 3], [27, 3]];
+    const [n, times] = pick(rand, list);
+    return { prompt: `有 ${n} 个零件，其中 1 个是次品（轻一些），用天平至少称几次一定能找出次品？`, answer: times, unit: '次', explain: `把零件尽量平均分成 3 份，${n} 个至少要称 ${times} 次。` };
+  } },
+  { askPattern: 'inverse-recall', level: 3, make(rand) {
+    const k = r(rand, 1, 3);
+    return { prompt: `用天平称 ${k} 次，最多能从多少个零件中找出 1 个次品？`, answer: 3 ** k, unit: '个', explain: `每称一次把范围缩小到三分之一，${k} 次最多可从 3 的 ${k} 次方 = ${3 ** k} 个中找出。` };
+  } },
+  { askPattern: 'compare-operate', level: 3, make(rand) {
+    const n = pick(rand, [6, 9, 12, 15, 18, 21, 24, 27]);
+    return { prompt: `${n} 个零件里有 1 个次品，用天平称，第一次应该把这 ${n} 个尽量平均分成几份？`, answer: 3, unit: '份', explain: `把 ${n} 个尽量平均分成 3 份，称一次就能把范围缩小到三分之一。` };
+  } }
+];
+
 export const EXTRA_DOMAINS = {
   'g1-count': countObject,
   'g1-order': numberOrder,
@@ -714,5 +835,9 @@ export const EXTRA_DOMAINS = {
   'ratio-scale': ratioScale,
   'geometry-cylinder': geometryCylinder,
   'statistics-prob': statisticsProb,
-  'logic-pigeon': logicPigeon
+  'logic-pigeon': logicPigeon,
+  'logic-overlap': logicOverlap,
+  'times-relation': timesRelation,
+  'multiple-features': multipleFeatures,
+  'find-defective': findDefective
 };

@@ -15,19 +15,86 @@ const SEASONS = ['春', '夏', '秋', '冬'];
 const DYNASTIES = ['唐', '宋', '清', '元'];
 
 /* ---------- 句子：组合素材与规则 ---------- */
-const MODAL_VERB = ['吃', '拿', '读', '写', '画', '收好'];
-const OBJ = ['苹果', '书包', '课本', '铅笔', '画纸', '玩具'];
+/* 动宾搭配表：只生成「动词 + 宾语」合法的组合，避免“读了书包”这类语病 */
+const VERB_OBJ = [
+  ['吃', '苹果'], ['吃', '香蕉'], ['读', '课文'], ['读', '课本'],
+  ['写', '作业'], ['写', '生字'], ['拿', '书包'], ['拿', '铅笔'],
+  ['整理', '书包'], ['收好', '玩具'], ['擦', '黑板'], ['关', '窗户'],
+  ['搬', '桌子'], ['扫', '教室'], ['洗', '衣服'], ['浇', '花']
+];
+/* 地点 + 动作 + 形容词搭配：同一个地点只取语义相容的词，避免“在花园里打扫教室” */
+const PLACE_VERBS = [
+  { p: '教室里', v: ['读书', '写字', '听讲'], adj: ['干净', '安静', '明亮'], bad: ['钓鱼', '游泳', '放风筝'] },
+  { p: '操场上', v: ['跑步', '做操', '做游戏'], adj: ['干净', '热闹'], bad: ['做笔记', '听讲', '整理书包'] },
+  { p: '公园里', v: ['画画', '唱歌', '散步'], adj: ['美丽', '热闹', '安静'], bad: ['听讲', '做笔记', '整理书包'] },
+  { p: '家里', v: ['扫地', '浇花', '整理书包'], adj: ['干净', '安静', '热闹'], bad: ['做操', '放风筝', '钓鱼'] },
+  { p: '图书馆里', v: ['看书', '读书', '做笔记'], adj: ['安静', '干净', '明亮'], bad: ['跑步', '游泳', '做操'] },
+  { p: '小河边', v: ['钓鱼', '散步', '看风景'], adj: ['美丽', '安静'], bad: ['听讲', '做笔记', '整理书包'] },
+  { p: '花园里', v: ['浇花', '赏花', '唱歌'], adj: ['美丽', '热闹'], bad: ['听讲', '做笔记', '做操'] },
+  { p: '院子里', v: ['扫地', '浇花', '做游戏'], adj: ['干净', '安静', '热闹'], bad: ['听讲', '做笔记', '游泳'] }
+];
+/* 关联词例句生成器：每类关系用「主语 + 规范搭配」组合，既有变化又不产生语病 */
+const CONJ_BUILDERS = [
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}生病了`, b: `${s}没来上学`, pair: '因为……所以……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}认真复习`, b: `${s}取得了好成绩`, pair: '因为……所以……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: '下雨了', b: `${s}不去公园`, pair: '因为……所以……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}跑得快`, b: `${s}得了第一名`, pair: '因为……所以……' }; },
+  (rand) => {
+    const s = pick(rand, SN.subj);
+    const v = pick(rand, ['坚持跑步', '认真学习', '按时到校', '帮助同学']);
+    return { a: `${s}很累`, b: `${s}仍然${v}`, pair: '虽然……但是……' };
+  },
+  (rand) => {
+    const s = pick(rand, SN.subj);
+    const v = pick(rand, ['坚持跑步', '认真学习', '按时到校', '帮助同学']);
+    return { a: `${s}年纪小`, b: `${s}仍然${v}`, pair: '虽然……但是……' };
+  },
+  (rand) => {
+    const s = pick(rand, SN.subj);
+    const v = pick(rand, ['坚持跑步', '认真学习', '按时到校', '帮助同学']);
+    return { a: `${s}遇到困难`, b: `${s}仍然${v}`, pair: '虽然……但是……' };
+  },
+  (rand) => {
+    const s = pick(rand, SN.subj);
+    const v = pick(rand, ['坚持跑步', '认真学习', '按时到校', '帮助同学']);
+    return { a: `${s}很忙`, b: `${s}仍然${v}`, pair: '虽然……但是……' };
+  },
+  (rand) => { const s = pick(rand, SN.subj); return { a: '明天下雨', b: `${s}就不去公园`, pair: '如果……就……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}早点完成作业`, b: `${s}就能看动画片`, pair: '如果……就……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}坚持锻炼`, b: `${s}的身体就会更好`, pair: '如果……就……' }; },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}认真听讲`, b: `${s}就能学会新知识`, pair: '如果……就……' }; },
+  (rand) => {
+    const s = pick(rand, SN.subj);
+    const [v1, v2] = pick(rand, [['唱歌', '跳舞'], ['画画', '弹琴'], ['跳绳', '游泳'], ['下棋', '打球'], ['读书', '写字'], ['扫地', '浇花']]);
+    return { a: `${s}会${v1}`, b: `${s}还会${v2}`, pair: '不但……而且……' };
+  },
+  (rand) => { const s = pick(rand, SN.subj); return { a: `${s}学习好`, b: `${s}乐于助人`, pair: '不但……而且……' }; }
+];
+const METAPHORS = [
+  ['弯弯的月亮', '小船'], ['圆圆的太阳', '火球'], ['白白的云朵', '棉花'], ['亮亮的星星', '眼睛'],
+  ['绿绿的荷叶', '小伞'], ['细细的雨丝', '牛毛'], ['红红的苹果', '小灯笼'], ['长长的小河', '丝带'],
+  ['圆圆的西瓜', '皮球'], ['高高的白杨', '卫士'], ['弯弯的柳条', '长发'], ['小小的露珠', '珍珠'],
+  ['红红的枫叶', '手掌'], ['白白的雪花', '鹅毛'], ['圆圆的蘑菇', '小伞'], ['青青的草地', '绿毯'],
+  ['亮亮的露珠', '宝石'], ['弯弯的小路', '彩带'], ['白白的棉花', '雪球'], ['圆圆的月亮', '玉盘']
+];
+const PERSONIFY = ['小鸟在枝头唱歌。', '花朵在风中点头。', '小溪在山间奔跑。', '云朵在天上散步。',
+  '柳条在河边跳舞。', '星星在夜空眨眼睛。', '小草在雨中洗澡。', '太阳从云里探出头。',
+  '蜜蜂在花丛里唱歌。', '蝴蝶在草地上跳舞。', '风儿在树林里散步。', '雨点在屋顶上敲鼓。',
+  '青蛙在荷叶上唱歌。', '松鼠在树枝上聊天。', '月亮在夜空中微笑。', '蒲公英在风中旅行。',
+  '向日葵朝着太阳招手。', '露珠在叶尖上打滚。', '燕子在空中跳舞。', '小溪在山谷里唱歌。'];
+const EXAGGERATE = ['嗓门大得能把屋顶掀翻', '跑得快得像一阵风', '饿得能吃下一头牛', '高兴得一蹦三尺高'];
 
 const sentOf = (rand) => {
   const t = pick(rand, SN.thing);
+  const pv = pick(rand, PLACE_VERBS);
   return {
     s: pick(rand, SN.subj),
     s2: pick(rand, SN.subj),
-    v: pick(rand, SN.verb),
-    v2: pick(rand, SN.verb),
-    v3: pick(rand, SN.verb),
-    p: pick(rand, SN.place),
+    pv,
+    v: pick(rand, pv.v),
+    p: pv.p,
     a: pick(rand, SN.adj),
+    a2: pick(rand, pv.adj),
     t,
     t2: pick(rand, SN.thing.filter((x) => x !== t))
   };
@@ -36,7 +103,7 @@ const sentOf = (rand) => {
 const PUNCT_MODES = [
   { p: '。', make: (x) => `${x.s}在${x.p}${x.v}` },
   { p: '？', make: (x) => `${x.s}在${x.p}${x.v}吗` },
-  { p: '！', make: (x) => `${x.p}真${x.a}啊` }
+  { p: '！', make: (x) => `${x.p}真${x.a2}啊` }
 ];
 
 /* ============================================================
@@ -67,53 +134,60 @@ export const ZH_SENTENCE_MODES = [
   {
     ask: 'zh-sentence-complete', make(rand, ctx) {
       const x = sentOf(rand);
-      return { prompt: withTag(ctx.tag, `“${x.s}在${x.p}（　）。”括号里填什么最合适？`), ...choiceOf(rand, x.v, SN.verb.filter((v) => v !== x.v)), explain: `填“${x.v}”后句子通顺：${x.s}在${x.p}${x.v}。` };
+      const pv = x.pv;
+      const v = x.v;
+      return { prompt: withTag(ctx.tag, `“${x.s}在${pv.p}（　）。”括号里填什么最合适？`), ...choiceOf(rand, v, pv.bad), explain: `填“${v}”后句子通顺：${x.s}在${pv.p}${v}。` };
     }
   },
   {
     ask: 'zh-sentence-rhetoric', make(rand, ctx) {
       const x = sentOf(rand);
       const kind = randInt(rand, 1, 4);
+      const threeVerbs = shuffle(rand, SN.verb);
+      const metaphor = pick(rand, METAPHORS);
       const text = kind === 1
-        ? `${x.a}的${x.t}像${x.t2}一样。`
+        ? `${metaphor[0]}像${metaphor[1]}一样。`
         : kind === 2
-          ? `${x.t}在${x.p}说话了。`
+          ? pick(rand, PERSONIFY)
           : kind === 3
-            ? `有的${x.v}，有的${x.v2}，有的${x.v3}。`
-            : `${x.s}的嗓门大得能把屋顶掀翻。`;
+            ? `有的在${threeVerbs[0]}，有的在${threeVerbs[1]}，有的在${threeVerbs[2]}。`
+            : `${x.s}${pick(rand, EXAGGERATE)}。`;
       const name = ['比喻', '拟人', '排比', '夸张'][kind - 1];
       return { prompt: withTag(ctx.tag, `“${text}”用了哪种修辞手法？`), ...choiceOf(rand, name, ['比喻', '拟人', '排比', '夸张'].filter((n) => n !== name)), explain: `这句话用了${name}。` };
     }
   },
   {
     ask: 'zh-sentence-bad', make(rand, ctx) {
-      const x = sentOf(rand);
       const kind = randInt(rand, 1, 3);
-      const text = kind === 1 ? `在${x.p}${x.v}。` : kind === 2 ? `${x.s}大约${randInt(rand, 6, 12)}岁左右。` : `${x.v}在${x.p}${x.s}。`;
-      const name = ['缺少主语', '重复啰嗦', '词序颠倒'][kind - 1];
+      let text;
+      let name;
+      if (kind === 1) {
+        const [v, o] = pick(rand, VERB_OBJ);
+        text = `${v}了${o}。`;
+        name = '缺少主语';
+      } else if (kind === 2) {
+        text = `${pick(rand, ['小明', '小红', '小华', '东东', '文文', '丁丁'])}大约 ${randInt(rand, 6, 12)} 岁左右。`;
+        name = '重复啰嗦';
+      } else {
+        const pv = pick(rand, PLACE_VERBS);
+        const v = pick(rand, pv.v);
+        text = `${v}在${pv.p}${pick(rand, SN.subj)}。`;
+        name = '词序颠倒';
+      }
       return { prompt: withTag(ctx.tag, `“${text}”这句话的问题是？`), ...choiceOf(rand, name, ['缺少主语', '重复啰嗦', '词序颠倒', '没有毛病'].filter((n) => n !== name)), explain: `这句话的问题是${name}。` };
     }
   },
   {
     ask: 'zh-sentence-conj', make(rand, ctx) {
-      const x = sentOf(rand);
-      const kind = randInt(rand, 1, 4);
-      const pair = ['因为……所以……', '虽然……但是……', '如果……就……', '不但……而且……'][kind - 1];
-      const text = kind === 1
-        ? `（　）${x.s}${x.v}，（　）${x.s2}也${x.v2}。`
-        : kind === 2
-          ? `（　）${x.a}，（　）${x.s}仍然${x.v}。`
-          : kind === 3
-            ? `（　）明天${x.v}，我们（　）不去${x.p}。`
-            : `${x.s}（　）会${x.v}，（　）会${x.v2}。`;
-      return { prompt: withTag(ctx.tag, `“${text}”应填哪组关联词？`), ...choiceOf(rand, pair, ['因为……所以……', '虽然……但是……', '如果……就……', '不但……而且……'].filter((p) => p !== pair)), explain: `这里应填“${pair}”。` };
+      const it = pick(rand, CONJ_BUILDERS)(rand);
+      const pairs = ['因为……所以……', '虽然……但是……', '如果……就……', '不但……而且……'];
+      return { prompt: withTag(ctx.tag, `“（　）${it.a}，（　）${it.b}。”应填哪组关联词？`), ...choiceOf(rand, it.pair, pairs.filter((p) => p !== it.pair)), explain: `这里应填“${it.pair}”。` };
     }
   },
   {
     ask: 'zh-sentence-ba', make(rand, ctx) {
       const s = pick(rand, SN.subj);
-      const o = pick(rand, OBJ);
-      const v = pick(rand, MODAL_VERB);
+      const [v, o] = pick(rand, VERB_OBJ);
       const base = `${s}${v}了${o}。`;
       const right = `${s}把${o}${v}了。`;
       return { prompt: withTag(ctx.tag, `把“${base}”改成“把”字句，正确的是？`), ...choiceOf(rand, right, [`${o}把${s}${v}了。`, `${s}${v}把${o}了。`, `${s}被${o}${v}了。`]), explain: `“把”字句：${right}` };
@@ -122,8 +196,7 @@ export const ZH_SENTENCE_MODES = [
   {
     ask: 'zh-sentence-bei', make(rand, ctx) {
       const s = pick(rand, SN.subj);
-      const o = pick(rand, OBJ);
-      const v = pick(rand, MODAL_VERB);
+      const [v, o] = pick(rand, VERB_OBJ);
       const base = `${s}${v}了${o}。`;
       const right = `${o}被${s}${v}了。`;
       return { prompt: withTag(ctx.tag, `把“${base}”改成“被”字句，正确的是？`), ...choiceOf(rand, right, [`${s}被${o}${v}了。`, `${o}把${s}${v}了。`, `${o}${v}了${s}。`]), explain: `“被”字句：${right}` };
@@ -131,36 +204,42 @@ export const ZH_SENTENCE_MODES = [
   },
   {
     ask: 'zh-sentence-expand', make(rand, ctx) {
-      const x = sentOf(rand);
-      const base = `${x.s}${x.v}。`;
-      const right = `${x.s}在${x.p}认真地${x.v}。`;
-      return { prompt: withTag(ctx.tag, `把“${base}”扩写，下面哪句更具体？`), ...choiceOf(rand, right, [base, `${x.s}在${x.p}。`, `${x.v}。`]), explain: `加了地点和样子：${right}` };
+      const s = pick(rand, SN.subj);
+      const pv = pick(rand, PLACE_VERBS);
+      const v = pick(rand, pv.v);
+      const base = `${s}${v}。`;
+      const right = `${s}在${pv.p}${v}。`;
+      return { prompt: withTag(ctx.tag, `把“${s}${v}”扩写，下面哪句更具体？`), ...choiceOf(rand, right, [base, `${s}在${pv.p}。`, `${s}。`]), explain: `加上地点后更具体：${right}` };
     }
   },
   {
     ask: 'zh-sentence-shrink', make(rand, ctx) {
-      const x = sentOf(rand);
-      const long = `${x.s}在${x.p}认真地${x.v}。`;
-      const right = `${x.s}${x.v}。`;
-      return { prompt: withTag(ctx.tag, `把“${long}”缩写成最简洁的句子，正确的是？`), ...choiceOf(rand, right, [`${x.s}在${x.p}。`, `${x.p}${x.v}。`, `${x.s}认真地。`]), explain: `保留谁和做什么：${right}` };
+      const s = pick(rand, SN.subj);
+      const pv = pick(rand, PLACE_VERBS);
+      const v = pick(rand, pv.v);
+      const long = `${s}在${pv.p}${v}。`;
+      const right = `${s}${v}。`;
+      return { prompt: withTag(ctx.tag, `把“${s}在${pv.p}${v}”缩写成最简洁的句子，正确的是？`), ...choiceOf(rand, right, [`${s}在${pv.p}。`, `${pv.p}${v}。`, `${s}。`]), explain: `保留谁和做什么：${right}` };
     }
   },
   {
     ask: 'zh-sentence-kind', make(rand, ctx) {
       const x = sentOf(rand);
       const kind = randInt(rand, 1, 4);
-      const text = kind === 1 ? `${x.s}在${x.p}${x.v}。` : kind === 2 ? `${x.s}在${x.p}${x.v}吗？` : kind === 3 ? `${x.p}真${x.a}！` : `请${x.s}${x.v}。`;
+      const pv = pick(rand, PLACE_VERBS);
+      const pv2 = pick(rand, pv.v);
+      const text = kind === 1 ? `${x.s}在${pv.p}${pv2}。` : kind === 2 ? `${x.s}在${pv.p}${pv2}吗？` : kind === 3 ? `${pv.p}真${pick(rand, pv.adj)}！` : '请把窗户关上。';
       const name = ['陈述句', '疑问句', '感叹句', '祈使句'][kind - 1];
       return { prompt: withTag(ctx.tag, `“${text}”是什么句式？`), ...choiceOf(rand, name, ['陈述句', '疑问句', '感叹句', '祈使句'].filter((n) => n !== name)), explain: `这是${name}。` };
     }
   },
   {
     ask: 'zh-sentence-conj-judge', make(rand, ctx) {
-      const x = sentOf(rand);
+      const it = pick(rand, CONJ_BUILDERS)(rand);
       const truth = rand() < 0.5;
-      const pair = truth ? '因为……所以……' : '虽然……但是……';
-      const clause = x.s + x.v;
-      return { prompt: withTag(ctx.tag, `“${clause}”用“${pair}”连接合适吗？`), type: 'judge', answer: truth, explain: truth ? `“${pair}”适合表示因果。` : `“${pair}”表示转折，不适合这里的因果。` };
+      const pairs = ['因为……所以……', '虽然……但是……', '如果……就……', '不但……而且……'];
+      const shown = truth ? it.pair : pick(rand, pairs.filter((p) => p !== it.pair));
+      return { prompt: withTag(ctx.tag, `“${it.a}，${it.b}。”用“${shown}”连接合适吗？`), type: 'judge', answer: truth, explain: truth ? `“${shown}”适合连接这两个分句。` : `这里应填“${it.pair}”，不是“${shown}”。` };
     }
   }
 ];
@@ -250,38 +329,52 @@ export const ZH_POEM_MODES = [
 /* ============================================================
    zh-reading · 阅读（12 外壳，故事按组合规则生成）
    ============================================================ */
+/* 事情、品质、主题成套出现，避免“捡到钱包 → 关心集体”这类错配 */
+const STORY_PAIRS = [
+  { p: '校园里', a: '捡到一个钱包交给老师', t: '诚实守信', theme: '拾金不昧的事' },
+  { p: '操场上', a: '帮助摔倒的同学', t: '乐于助人', theme: '主动帮助同学的事' },
+  { p: '公园里', a: '把受伤的小鸟送到救助站', t: '爱护小动物', theme: '爱护小鸟的事' },
+  { p: '教室前', a: '扶起被风吹倒的花盆', t: '关心集体', theme: '爱护公物的事' },
+  { p: '公交车上', a: '把座位让给老人', t: '乐于助人', theme: '给老人让座的事' },
+  { p: '教室里', a: '主动打扫卫生', t: '勤劳能干', theme: '主动打扫卫生的事' },
+  { p: '教室里', a: '给同学讲解难题', t: '乐于助人', theme: '帮助同学的事' },
+  { p: '图书馆里', a: '为班级整理图书', t: '关心集体', theme: '整理图书的事' }
+];
+const METHOD_ITEMS = [
+  { text: '课桌的高度大约是 70 厘米。', name: '列数字' },
+  { text: '大象比一只小狗重得多。', name: '作比较' },
+  { text: '白白的云朵像一朵朵棉花。', name: '打比方' },
+  { text: '文具，例如铅笔、橡皮，都是学习用品。', name: '举例子' }
+];
+
 const storyOf = (rand) => ({
   n: pick(rand, SN.rn),
   c: pick(rand, SN.rc),
-  p: pick(rand, SN.rp),
-  a: pick(rand, SN.ra),
-  o: pick(rand, SN.ro),
-  t: pick(rand, SN.rt),
-  t2: pick(rand, SN.rt)
+  ...pick(rand, STORY_PAIRS)
 });
 
-const storyBody = (x) => `${x.c}，${x.n}在${x.p}${x.a}。大家都向他学习。`;
+const storyBody = (x) => `${x.c}，${x.n}在${x.p}${x.a}。大家都竖起了大拇指。`;
 
 export const ZH_READING_MODES = [
   {
     ask: 'zh-reading-detail', make(rand, ctx) {
       const x = storyOf(rand);
       const body = storyBody(x);
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”${x.n}在哪里${x.a}？`), ...choiceOf(rand, x.p, SN.rp.filter((p) => p !== x.p)), explain: `${x.n}在${x.p}${x.a}。` };
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”这件事发生在哪里？`), ...choiceOf(rand, x.p, SN.rp.filter((p) => p !== x.p)), explain: `${x.n}在${x.p}${x.a}。` };
     }
   },
   {
     ask: 'zh-reading-infer', make(rand, ctx) {
       const x = storyOf(rand);
       const body = storyBody(x);
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”从这件事可以看出${x.n}是个怎样的孩子？`), ...choiceOf(rand, x.t, SN.rt.filter((t) => t !== x.t)), explain: `他${x.a}，说明他${x.t}。` };
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”从这件事可以看出${x.n}是个怎样的孩子？`), ...choiceOf(rand, x.t, SN.rt.filter((t) => t !== x.t)), explain: `${x.n}${x.a}，说明${x.n}${x.t}。` };
     }
   },
   {
     ask: 'zh-reading-main', make(rand, ctx) {
       const x = storyOf(rand);
       const body = storyBody(x);
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”这段话主要写了什么？`), ...choiceOf(rand, '主动帮助别人的事', ['在公园里玩耍的事', '认真学习的事', '和别人争吵的事']), explain: `这段话主要写${x.n}${x.a}，是主动帮助别人的事。` };
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”这段话主要写了什么？`), ...choiceOf(rand, x.theme, ['在公园里玩耍的事', '认真学习的事', '和别人争吵的事']), explain: `这段话主要写${x.n}${x.a}，是${x.theme}。` };
     }
   },
   {
@@ -293,7 +386,9 @@ export const ZH_READING_MODES = [
   },
   {
     ask: 'zh-reading-scene', make(rand, ctx) {
-      const x = storyOf(rand);
+      const outdoor = STORY_PAIRS.filter((v) => ['校园里', '操场上', '公园里', '教室前'].includes(v.p));
+      const base = storyOf(rand);
+      const x = { ...base, ...pick(rand, outdoor) };
       const body = `${x.c}，${x.p}的景色十分美丽，${x.n}在这里${x.a}。`;
       return { prompt: withTag(ctx.tag, `读句子：“${body}”写“${x.p}的景色十分美丽”有什么作用？`), ...choiceOf(rand, '为事情发生提供美好的环境', ['说明天气很好', '为了凑字数', '告诉读者地点很远', '说明没有人在场']), explain: `环境描写烘托了美好的氛围，为事情发生做铺垫。` };
     }
@@ -301,22 +396,19 @@ export const ZH_READING_MODES = [
   {
     ask: 'zh-reading-transition', make(rand, ctx) {
       const x = storyOf(rand);
-      return { prompt: withTag(ctx.tag, `“${x.c}，${x.n}在${x.p}${x.a}。大家都向他学习。____”横线上补哪一句最合适？`), ...choiceOf(rand, '可是，接下来发生了一件意外的事。', ['今天的天气很好。', '大家都向他学习。', '从此以后他再也没有出门。']), explain: `“可是，接下来发生了一件意外的事。”承接上文、引出下文，是过渡句。` };
+      return { prompt: withTag(ctx.tag, `“${x.c}，${x.n}在${x.p}${x.a}。大家都竖起了大拇指。____”横线上补哪一句最合适？`), ...choiceOf(rand, '可是，接下来发生了一件意外的事。', ['今天的天气很好。', '这件事就这样结束了。', '从此以后这里再也没有人来。']), explain: `“可是，接下来发生了一件意外的事。”承接上文、引出下文，是过渡句。` };
     }
   },
   {
     ask: 'zh-reading-method', make(rand, ctx) {
-      const x = storyOf(rand);
-      const kind = randInt(rand, 1, 4);
-      const text = kind === 1 ? `${x.o}的长度大约是${randInt(rand, 20, 80)}厘米。` : kind === 2 ? `${x.o}比一支铅笔长一些。` : kind === 3 ? `${x.o}像一条小船。` : `${x.o}，例如${x.n}用的那种。`;
-      const name = ['列数字', '作比较', '打比方', '举例子'][kind - 1];
-      return { prompt: withTag(ctx.tag, `“${text}”用了哪种说明方法？`), ...choiceOf(rand, name, ['列数字', '作比较', '打比方', '举例子'].filter((n) => n !== name)), explain: `这句话用了${name}。` };
+      const it = pick(rand, METHOD_ITEMS);
+      return { prompt: withTag(ctx.tag, `“${it.text}”用了哪种说明方法？`), ...choiceOf(rand, it.name, ['列数字', '作比较', '打比方', '举例子'].filter((n) => n !== it.name)), explain: `这句话用了${it.name}。` };
     }
   },
   {
     ask: 'zh-reading-order', make(rand, ctx) {
       const x = storyOf(rand);
-      const body = `${x.c}，${x.n}在${x.p}${x.a}。过了一会儿，他又帮助了一位同学。`;
+      const body = `${x.c}，${x.n}在${x.p}${x.a}。过了一会儿，${x.n}才离开。`;
       return { prompt: withTag(ctx.tag, `读句子：“${body}”这段话是按什么顺序写的？`), ...choiceOf(rand, '事情发展的顺序', ['由远及近的空间顺序', '从整体到部分的顺序', '总—分—总顺序']), explain: `“${x.c}”“过了一会儿”是时间推进，按事情发展的顺序写。` };
     }
   },
@@ -324,28 +416,29 @@ export const ZH_READING_MODES = [
     ask: 'zh-reading-paragraph', make(rand, ctx) {
       const x = storyOf(rand);
       const body = storyBody(x);
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”这一段的主要意思是？`), ...choiceOf(rand, '主动帮助别人', ['在公园里玩耍', '认真学习', '和别人争吵']), explain: `这一段写${x.n}${x.a}，主要意思是主动帮助别人。` };
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”这一段的主要意思是？`), ...choiceOf(rand, x.theme, ['在公园里玩耍', '认真学习', '和别人争吵']), explain: `这一段写${x.n}${x.a}，主要意思是${x.theme}。` };
     }
   },
   {
     ask: 'zh-reading-pronoun', make(rand, ctx) {
       const x = storyOf(rand);
-      const body = `${x.n}在${x.p}${x.a}，大家都夸他${x.t}。`;
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”句中的“他”指谁？`), ...choiceOf(rand, x.n, SN.rn.filter((n) => n !== x.n)), explain: `“他”指的是${x.n}。` };
+      const name = pick(rand, SN.rn.filter((n) => !['小丽', '小美'].includes(n)));
+      const body = `${name}在${x.p}${x.a}，大家都夸他${x.t}。`;
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”句中的“他”指谁？`), ...choiceOf(rand, name, SN.rn.filter((n) => n !== name)), explain: `“他”指的是${name}。` };
     }
   },
   {
     ask: 'zh-reading-express', make(rand, ctx) {
       const x = storyOf(rand);
-      const body = `${x.c}，${x.n}在${x.p}${x.a}。这件事让我明白，帮助别人，自己也快乐。`;
+      const body = `${x.c}，${x.n}在${x.p}${x.a}。这件事让我明白，${x.t}是一种可贵的品质。`;
       return { prompt: withTag(ctx.tag, `读句子：“${body}”这段话的表达方法是？`), ...choiceOf(rand, '先写事，再写感想', ['只写景', '只写人物外貌', '先写感想，再写事']), explain: `先叙述事情，最后写明白的道理，这是先写事再写感想。` };
     }
   },
   {
     ask: 'zh-reading-open', make(rand, ctx) {
       const x = storyOf(rand);
-      const body = `${x.n}看到同学有困难，主动${x.a}。`;
-      return { prompt: withTag(ctx.tag, `读句子：“${body}”你认为${x.n}的做法值得学习吗？`), ...choiceOf(rand, '值得，因为帮助别人是美德', ['不值得，因为太麻烦', '值得，因为能得到奖励', '不值得，因为会被嘲笑']), explain: `主动${x.a}是助人为乐的表现，值得学习。` };
+      const body = `${x.n}${x.a}。`;
+      return { prompt: withTag(ctx.tag, `读句子：“${body}”你认为${x.n}的做法值得学习吗？`), ...choiceOf(rand, `值得，因为这是${x.t}的表现`, ['不值得，因为太麻烦', '值得，因为能得到奖励', '不值得，因为会被嘲笑']), explain: `${x.a}是${x.t}的表现，值得学习。` };
     }
   }
 ];
@@ -518,7 +611,9 @@ export const ZH_IDIOM_MODES = [
   {
     ask: 'zh-idiom-length', make(rand, ctx) {
       const it = pick(rand, IDIOM_POOL);
-      return { prompt: withTag(ctx.tag, `“${it.d}”是几个字的成语？`), ...choiceOf(rand, `${it.d.length}个字`, ['三个字', '四个字', '五个字', '六个字'].filter((x) => x !== `${it.d.length}个字`)), explain: `“${it.d}”是${it.d.length}个字的成语。` };
+      const CN_NUM = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+      const label = `${CN_NUM[it.d.length]}个字`;
+      return { prompt: withTag(ctx.tag, `“${it.d}”是几个字的成语？`), ...choiceOf(rand, label, ['三个字', '四个字', '五个字', '六个字'].filter((x) => x !== label)), explain: `“${it.d}”是${label}的成语。` };
     }
   },
   {

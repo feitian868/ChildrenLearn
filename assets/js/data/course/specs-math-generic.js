@@ -661,7 +661,8 @@ const statistics = [
         if (b === avg) b = b === 20 ? 19 : b + 1;
         return { prompt: `两个数的平均数是 ${avg}，其中一个数是 ${b}，另一个数是（ ）`, answer: 2 * avg - b, explain: `总和 ${2 * avg}，另一个数 ${2 * avg} - ${b} = ${2 * avg - b}。` };
       }
-      return { ...pickOptions(rand, '看统计图', ['随便猜', '只比颜色'], 3), prompt: '要知道哪一组最多，应该怎么看统计图？', explain: '看条形/折线的高度或长度比较数据。' };
+      const a = randInt(rand, 3, 20); const b = randInt(rand, 3, 20); const c = randInt(rand, 3, 20);
+      return { prompt: `统计表中三组数据为 ${a}、${b}、${c}，最大的一组比最小的一组多多少？`, answer: Math.max(a, b, c) - Math.min(a, b, c), explain: `${Math.max(a, b, c)} - ${Math.min(a, b, c)} = ${Math.max(a, b, c) - Math.min(a, b, c)}。` };
     }
   },
   {
@@ -673,9 +674,10 @@ const statistics = [
         const correct = red > blue ? '红球' : red < blue ? '蓝球' : '一样大';
         return { ...pickOptions(rand, correct, ['红球', '蓝球', '一样大'].filter((x) => x !== correct), 3), prompt: `袋里有 ${red} 个红球、${blue} 个蓝球，任意摸一个，摸到哪种球的可能性大？`, explain: `${red} 与 ${blue} 比较，${correct}的可能性${correct === '一样大' ? '一样' : '大'}。` };
       }
-      const total = randInt(rand, 3, 9);
-      const part = randInt(rand, 1, total - 1);
-      return { prompt: `总共 ${total} 人，其中 ${part} 人喜欢跳绳，喜欢跳绳的占总数的（ ）`, answer: frac(part, total), explain: `${part} ÷ ${total} = ${frac(part, total)}。` };
+      const total = randInt(rand, 10, 20);
+      const part = randInt(rand, Math.floor(total / 2) + 1, total - 1);
+      const rest = total - part;
+      return { prompt: `总共 ${total} 人，其中 ${part} 人喜欢跳绳，其余喜欢踢球。喜欢跳绳的比喜欢踢球的多多少人？`, answer: part - rest, unit: '人', explain: `${part} - ${rest} = ${part - rest}（人）。` };
     }
   },
   {
@@ -855,12 +857,28 @@ const logic = [
     askPattern: 'inverse-recall', level: 2,
     make(rand, ctx) {
       const kind = (ctx.params || {}).kind || 'planting';
-      if (kind === 'planting') {
-        const gap = randInt(rand, 2, 5); const trees = randInt(rand, 3, 12);
-        return { prompt: `路边每隔 ${gap} 米种一棵树，两端都种，共 ${trees} 棵，这条路长多少米？`, answer: (trees - 1) * gap, unit: '米', explain: `${trees} 棵之间有 ${trees - 1} 段，总长 ${(trees - 1) * gap} 米。` };
+      if (kind === 'chicken-rabbit') {
+        const chickens = randInt(rand, 2, 12); const rabbits = randInt(rand, 2, 12);
+        return { prompt: `鸡兔同笼，共 ${chickens + rabbits} 个头、${chickens * 2 + rabbits * 4} 只脚，鸡有几只？`, answer: chickens, explain: `假设全是兔，脚多 ${(chickens + rabbits) * 4 - (chickens * 2 + rabbits * 4)} 只，每只鸡少 2 只脚，鸡有 ${chickens} 只。` };
       }
-      const n = randInt(rand, 2, 6);
-      return { prompt: `第 n 个图形需要 ${2 * n + 1} 根小棒，第 ${n + 1} 个需要几根？`, answer: 2 * (n + 1) + 1, explain: `2 × ${n + 1} + 1 = ${2 * (n + 1) + 1} 根。` };
+      if (kind === 'pigeonhole') {
+        const n = randInt(rand, 3, 9);
+        return { prompt: `把 ${2 * n} 个苹果放进 ${n} 个抽屉，总有一个抽屉至少放几个？`, answer: 2, explain: `${2 * n} ÷ ${n} = 2，平均放也有 2 个，所以至少有一个抽屉放 2 个。` };
+      }
+      if (kind === 'optimize') {
+        const n = randInt(rand, 3, 6);
+        return { prompt: `每次最多烙 2 张饼，两面都要烙，${n} 张饼至少要烙几次？`, answer: n, unit: '次', explain: `${n} 张饼共 ${2 * n} 个面，每次烙 2 个面，至少要烙 ${2 * n} ÷ 2 = ${n} 次。` };
+      }
+      if (kind === 'find-defective') {
+        const k = randInt(rand, 2, 3);
+        return { prompt: `用天平称 ${k} 次，最多能从几个零件中找出 1 个较轻的次品？`, answer: 3 ** k, unit: '个', explain: `每次都把零件分成三份，称 ${k} 次最多能区分 ${3 ** k} 个零件。` };
+      }
+      if (kind === 'number-shape') {
+        const n = randInt(rand, 3, 9);
+        return { prompt: `第 ${n} 个图形用了 ${2 * n + 1} 根小棒，第 ${n - 1} 个图形用几根？`, answer: 2 * n - 1, explain: `每个图形比前一个多 2 根，${2 * n + 1} - 2 = ${2 * n - 1} 根。` };
+      }
+      const gap = randInt(rand, 2, 5); const trees = randInt(rand, 3, 12);
+      return { prompt: `路边每隔 ${gap} 米种一棵树，两端都种，共 ${trees} 棵，这条路长多少米？`, answer: (trees - 1) * gap, unit: '米', explain: `${trees} 棵之间有 ${trees - 1} 段，总长 ${(trees - 1) * gap} 米。` };
     }
   },
   {
@@ -868,9 +886,11 @@ const logic = [
     make(rand, ctx) {
       const kind = (ctx.params || {}).kind || 'planting';
       if (kind === 'chicken-rabbit') {
-        return { ...pickOptions(rand, '假设法', ['随便猜', '只数头'], 3), prompt: '解决鸡兔同笼最常用的方法是（ ）', explain: '用假设法：假设全是鸡或全是兔，再按脚数差调整。' };
+        const heads = randInt(rand, 8, 20); const legs = randInt(rand, 6, 14);
+        return { ...pickOptions(rand, '假设法', ['随便猜', '只数头'], 3), prompt: `笼子里有若干只鸡和兔，共 ${heads} 个头、${heads * 2 + legs * 2} 只脚。解决这类问题最常用的方法是（ ）`, explain: '用假设法：假设全是鸡或全是兔，再按脚数差调整。' };
       }
-      return { ...pickOptions(rand, '先找规律再算', ['直接数', '不用算'], 3), prompt: '解决数学广角问题的一般思路是（ ）', explain: '先观察规律，再用规律计算。' };
+      const topic = pick(rand, ['鸡兔同笼', '植树问题', '找次品', '烙饼问题', '数与形']);
+      return { ...pickOptions(rand, '先找规律再算', ['直接数', '不用算'], 3), prompt: `解决「${topic}」这类数学广角问题，一般思路是（ ）`, explain: '先观察规律，再用规律计算。' };
     }
   },
   {
@@ -1032,6 +1052,32 @@ const opLaws = [
       const a = randInt(rand, 2, 20); const b = randInt(rand, 2, 20); const c = randInt(rand, 2, 9);
       return { prompt: `${a} × ${c} + ${b} × ${c} 用乘法分配律简算，结果是（ ）`, answer: (a + b) * c, explain: `（${a} + ${b}）× ${c} = ${(a + b) * c}。` };
     }
+  },
+  {
+    askPattern: 'product-recall', level: 1,
+    make(rand) {
+      const a = randInt(rand, 5, 90);
+      let b = randInt(rand, 5, 90);
+      if (b === a) b = a === 90 ? 89 : a + 1;
+      return { prompt: `${a} + ${b} = ${b} + （ ）`, answer: a, explain: '加法交换律：两个数相加，交换位置和不变。' };
+    }
+  },
+  {
+    askPattern: 'inverse-recall', level: 1,
+    make(rand) {
+      const a = randInt(rand, 5, 60); const b = randInt(rand, 5, 60);
+      let c = randInt(rand, 5, 60);
+      if (c === a) c = a === 60 ? 59 : a + 1;
+      return { prompt: `(${a} + ${b}) + ${c} = ${a} + (${b} + （ ）)`, answer: c, explain: '加法结合律：先加前两个或先加后两个，和不变。' };
+    }
+  },
+  {
+    askPattern: 'apply-solve', level: 2,
+    make(rand) {
+      const a = randInt(rand, 12, 60); const b = randInt(rand, 12, 40);
+      const c2 = 100 - a;
+      return { prompt: `${a} + ${b} + ${c2} 用加法结合律简算，结果是（ ）`, answer: a + b + c2, explain: `先把 ${a} 和 ${c2} 凑成 100，再加 ${b}，得 ${a + b + c2}。` };
+    }
   }
 ];
 
@@ -1069,9 +1115,10 @@ const symmetry = [
     make(rand, ctx) {
       const kind = (ctx.params || {}).kind || 'axis';
       if (kind === 'rotation') {
-        return { ...pickOptions(rand, '90°', ['180°', '45°', '360°'], 4), prompt: '图形旋转一周是（ ）', explain: '旋转一周是 360°，四分之一周是 90°。' };
+        const n = randInt(rand, 1, 4); const m = randInt(rand, 1, 4);
+        return { prompt: `图形先旋转 ${n} 个直角，再旋转 ${m} 个直角，一共转了多少度？`, answer: 90 * (n + m), unit: '°', explain: `${n} + ${m} = ${n + m} 个直角，${n + m} × 90° = ${90 * (n + m)}°。` };
       }
-      return { ...pickOptions(rand, '1 条', ['2 条', '4 条', '0 条'], 4), prompt: '长方形有几条对称轴？', explain: '长方形有 2 条对称轴。' };
+      return { ...pickOptions(rand, '2 条', ['1 条', '4 条', '0 条'], 4), prompt: '长方形有几条对称轴？', explain: '长方形有 2 条对称轴。' };
     }
   },
   {
@@ -1079,7 +1126,8 @@ const symmetry = [
     make(rand, ctx) {
       const kind = (ctx.params || {}).kind || 'axis';
       if (kind === 'rotation') {
-        return { prompt: '钟表分针从 12 走到 3，转过了（ ）°', answer: 90, unit: '°', explain: '分针走 3 大格，每格 30°，共 90°。' };
+        const m = randInt(rand, 5, 30);
+        return { prompt: `钟面上分针走了 ${m} 分钟，一共转过了多少度？`, answer: 6 * m, unit: '°', explain: `分针每分钟转 6°，${m} × 6° = ${6 * m}°。` };
       }
       return { ...pickOptions(rand, '平移', ['旋转', '对称', '放大'], 4), prompt: '图形沿直线移动、形状方向都不变，这是（ ）', explain: '沿直线移动且方向不变是平移。' };
     }

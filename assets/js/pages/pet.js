@@ -27,6 +27,7 @@ import {
 import { SPECIES, SCENES } from '../data/pet-assets.js';
 import { PET_FOODS, PET_DECOS, PET_SCENES, SPECIES_TRAITS, foodModifierFor } from '../data/pet-shop.js';
 import { shopState, redeemItem } from '../core/shop.js';
+import { allSubjectsDone, dayProgress } from '../core/tasks.js';
 
 const app = document.getElementById('pet-app');
 let currentTab = 'feed';
@@ -180,6 +181,12 @@ render();
 
 function render() {
   clearBehaviorTimers();
+  const day = store.getToday();
+  if (!day || !allSubjectsDone(day)) {
+    clear(app);
+    app.append(renderLocked(day ? dayProgress(day) : { total: 0, done: 0 }));
+    return;
+  }
   const pet = stateOf();
   clear(app);
   if (!pet) {
@@ -194,6 +201,29 @@ function render() {
       if (trait) setTimeout(() => say(trait.voices.hi), 500);
     }
   }
+}
+
+/** 今日任务未全部完成时锁住宠物乐园 */
+function renderLocked(progress) {
+  const left = Math.max(0, (progress.total || 0) - (progress.done || 0));
+  const wrap = el('div', { style: 'max-width: 520px; margin: 12vh auto; padding: 28px 24px; text-align: center; background: #fff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.08);' });
+  wrap.append(
+    el('div', { text: '🔒', style: 'font-size: 56px; line-height: 1;' }),
+    el('h2', { text: '宠物乐园还没开放', style: 'margin: 14px 0 8px; font-size: 22px;' }),
+    el('p', {
+      text: progress.total
+        ? `今天还有 ${left} 个任务没有完成，完成全部任务后就能来玩啦。`
+        : '今天的任务还没有生成，先回任务台开始学习吧。',
+      style: 'margin: 0 0 20px; color: #667; line-height: 1.8;'
+    }),
+    el('button', {
+      class: 'btn',
+      type: 'button',
+      text: '回到任务台',
+      onclick: () => { location.href = 'index.html'; }
+    })
+  );
+  return wrap;
 }
 
 /* ============================================================
