@@ -210,7 +210,7 @@ const SHAPE_PROPS = {
     { correct: '六边形', wrong: ['五边形', '三角形', '长方形'], prompt: '哪种图形有六条边？', why: '六边形有六条边。' }
   ],
   solid: [
-    { correct: '球', wrong: ['正方体', '长方体', '圆柱'], prompt: '哪种立体图形放到斜面上会滚动？', why: '球的表面是曲面，会滚动。' },
+    { correct: '球', wrong: ['正方体', '长方体', '圆柱'], prompt: '哪种立体图形没有平平的面，放在桌上能向各个方向滚动？', why: '球没有平平的面，向各个方向都能滚动。' },
     { correct: '圆柱', wrong: ['正方体', '长方体', '球'], prompt: '哪种立体图形上下两个面都是圆？', why: '圆柱上下两个面都是圆。' },
     { correct: '正方体', wrong: ['长方体', '圆柱', '球'], prompt: '哪种立体图形的每个面都是正方形？', why: '正方体每个面都是正方形。' },
     { correct: '三棱柱', wrong: ['正方体', '圆柱', '球'], prompt: '哪种立体图形有五个面？', why: '三棱柱有五个面。' }
@@ -1118,7 +1118,8 @@ const symmetry = [
         const n = randInt(rand, 1, 4); const m = randInt(rand, 1, 4);
         return { prompt: `图形先旋转 ${n} 个直角，再旋转 ${m} 个直角，一共转了多少度？`, answer: 90 * (n + m), unit: '°', explain: `${n} + ${m} = ${n + m} 个直角，${n + m} × 90° = ${90 * (n + m)}°。` };
       }
-      return { ...pickOptions(rand, '2 条', ['1 条', '4 条', '0 条'], 4), prompt: '长方形有几条对称轴？', explain: '长方形有 2 条对称轴。' };
+      const shape = pick(rand, ['长方形', '正方形', '等腰三角形', '圆']);
+      return { ...pickOptions(rand, '对称轴', ['对称点', '对称中心', '对角线'], 4), prompt: `${shape}沿一条直线对折，两边能完全重合，这条直线叫它的（ ）`, explain: `对折后两边完全重合的直线叫对称轴，${shape}也有这样的对称轴。` };
     }
   },
   {
@@ -1129,7 +1130,8 @@ const symmetry = [
         const m = randInt(rand, 5, 30);
         return { prompt: `钟面上分针走了 ${m} 分钟，一共转过了多少度？`, answer: 6 * m, unit: '°', explain: `分针每分钟转 6°，${m} × 6° = ${6 * m}°。` };
       }
-      return { ...pickOptions(rand, '平移', ['旋转', '对称', '放大'], 4), prompt: '图形沿直线移动、形状方向都不变，这是（ ）', explain: '沿直线移动且方向不变是平移。' };
+      const step = randInt(rand, 3, 15);
+      return { ...pickOptions(rand, '平移', ['旋转', '对称', '放大'], 4), prompt: `一个图形沿直线移动了 ${step} 格，形状和方向都不变，这种运动叫（ ）`, explain: `沿直线移动且方向不变是平移，移动 ${step} 格也不改变形状。` };
     }
   },
   {
