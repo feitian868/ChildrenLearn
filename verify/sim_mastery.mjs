@@ -8,7 +8,7 @@
  *   ③ 能回答「这周掌握了什么、哪个知识点需要复习」
  *   ④ 成长页所需的每个知识点掌握度变化（曲线数据，含「5 条 vs 18 个」口径）
  *   ⑤ 跨 100 天掌握度仍连续（dailyHistory 已裁剪也不失忆）
- *   另外：每周 10 题小测的新旧口径 / 范围校验、状态迁移公式、ma-u01 收敛场景的内容缺口。
+ *   另外：每周四科各 10 题小测的新旧口径 / 范围校验、状态迁移公式、ma-u01 收敛场景的内容缺口。
  */
 const RealDate = Date;
 const START = new RealDate('2026-11-06T12:00:00+08:00').getTime();
@@ -338,6 +338,34 @@ assert('小测新旧知识点混合', oldN > 0 && newN > 0, `旧 ${oldN} / 新 $
 assert('小测为 10 题', quiz.items.length === 10, `${quiz.items.length} 题`);
 assert('小测只用当前/已学单元（不提前考未学）', outside.length === 0,
   outside.length ? `${outside.length} 道在范围外` : '0 道越界');
+
+/* 四科周测：每科各 10 题，四科合计 40 题，结果按科分开存 */
+console.log('\n=== 四科周测（各 10 题）===');
+const QUIZ_SUBJECTS = ['math', 'chinese', 'english', 'science'];
+const perSubject = {};
+for (const s of QUIZ_SUBJECTS) {
+  const q = mastery.buildWeeklyQuiz(finalData, 3, lastDate, s);
+  perSubject[s] = q.items;
+  console.log(`  ${s}: ${q.items.length} 题，带知识点 ${q.items.filter((x) => x.kid).length} 道`);
+  assert(`周测·${s} 为 10 题`, q.items.length === 10, `${q.items.length} 题`);
+  assert(`周测·${s} 每题都带知识点`, q.items.every((x) => x.kid), `${q.items.filter((x) => !x.kid).length} 道缺知识点`);
+}
+store.update((d) => {
+  for (const s of QUIZ_SUBJECTS) {
+    mastery.saveQuizResult(d, {
+      weekKey: quiz.weekKey,
+      date: lastDate,
+      subject: s,
+      total: perSubject[s].length,
+      correct: perSubject[s].length - (s === 'english' ? 2 : 0),
+      items: perSubject[s]
+    });
+  }
+});
+const agg = mastery.latestQuiz(store.load());
+console.log(`  合并结果：${agg.correct}/${agg.total}，分科 ${JSON.stringify(agg.bySubject)}`);
+assert('四科周测合并为 40 题', agg.total === 40, `${agg.total} 题`);
+assert('周测结果按学科给出明细', Object.keys(agg.bySubject).length === 4, JSON.stringify(Object.keys(agg.bySubject)));
 
 /* ------------------------- ⑤ 100 天掌握度连续 ------------------------- */
 console.log('\n=== ⑤ 跨 100 天掌握度是否连续（dailyHistory 已裁剪）===');

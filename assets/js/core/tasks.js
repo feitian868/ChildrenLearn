@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * tasks.js —— 每日任务生成
  * 同一天、同一年级生成的任务固定（刷新不会变），跨天自动换新。
  * 每科 2~3 项，每项 4 题，且至少包含 1 道 level 2 题。
@@ -26,6 +26,7 @@ import { mathPool } from '../data/knowledge-math.js';
 import { logicPool } from '../data/knowledge-logic.js';
 import {
   annotateQuestion,
+  courseFor,
   courseScope
 } from '../data/course-map.js';
 // 阶段 B：掌握度 / 间隔复习 / 薄弱知识点加权（只影响排序，不改题量与常数）
@@ -431,7 +432,7 @@ export function buildDay(key, grade, data) {
     const rng = mulberry32(hashString(`${key}:${grade}:${subject}`));
     const rawPool = visiblePool(getPool(subject, grade, rng, key, weakSet), approved, approvedBatches);
     // 抽题范围收敛：当前单元 + 已学单元；未配置教材时 scope 为 null，保持全年级题池
-    const scope = courseScope(data?.settings?.course, subject);
+    const scope = courseScope(courseFor(data?.settings, subject), subject);
     let pool = rawPool;
     let scopeInfo = null;
     let allowShort = false; // 启用课程收敛后，题量不足允许当天少于配额（不拿未学单元凑数）
@@ -463,6 +464,8 @@ export function buildDay(key, grade, data) {
         plannedCount = Math.min(count, Math.max(1, Math.floor(textbook.length / 2)));
         const needed = count * QUESTIONS_PER_TASK;
         scopeInfo = {
+          mode: scope.mode || 'unit',
+          bookName: scope.bookName || '',
           currentUnitId: scope.currentUnitId,
           currentUnitName: scope.currentUnitName,
           allowedUnits: [...allowed],

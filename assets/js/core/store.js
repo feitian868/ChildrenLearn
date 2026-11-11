@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * store.js —— localStorage 的唯一读写入口（多用户版）
  *
  * 键位规划：
@@ -122,14 +122,49 @@ function defaultData(grade = 3) {
     settings: {
       sound: true,
       parentUnlocked: false,
-      // 课程结构（阶段 A）：教材版本/册次/当前单元均为空，等家长按课本封面确认后填写
+      // 课程结构：教材版本/册次/当前单元均为空，等家长按课本封面确认后填写
+      // 数学沿用 course（存量字段，不迁移）；其余三科放 courseBySubject
       course: {
         subject: 'math',
+        mode: 'unit',
         version: '',
         grade: null,
         term: '',
+        bookKey: '',
         currentUnitId: null,
         learnedUnits: []
+      },
+      courseBySubject: {
+        chinese: {
+          subject: 'chinese',
+          mode: 'book',
+          version: '',
+          grade: null,
+          term: '',
+          bookKey: '',
+          currentUnitId: null,
+          learnedUnits: []
+        },
+        english: {
+          subject: 'english',
+          mode: 'unit',
+          version: '',
+          grade: null,
+          term: '',
+          bookKey: '',
+          currentUnitId: null,
+          learnedUnits: []
+        },
+        science: {
+          subject: 'science',
+          mode: 'unit',
+          version: '',
+          grade: null,
+          term: '',
+          bookKey: '',
+          currentUnitId: null,
+          learnedUnits: []
+        }
       }
     }
   };
@@ -450,6 +485,21 @@ function normalize(raw) {
         learnedUnits: Array.isArray((raw.settings || {}).course?.learnedUnits)
           ? raw.settings.course.learnedUnits
           : []
+      },
+      // 三科各自兜底，避免旧存档缺字段或只存了其中一科时被整体覆盖
+      courseBySubject: {
+        chinese: {
+          ...base.settings.courseBySubject.chinese,
+          ...((raw.settings || {}).courseBySubject || {}).chinese || {}
+        },
+        english: {
+          ...base.settings.courseBySubject.english,
+          ...((raw.settings || {}).courseBySubject || {}).english || {}
+        },
+        science: {
+          ...base.settings.courseBySubject.science,
+          ...((raw.settings || {}).courseBySubject || {}).science || {}
+        }
       }
     }
   };

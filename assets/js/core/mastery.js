@@ -11,8 +11,25 @@
 
 import * as store from './store.js';
 import { hashString, mulberry32, shuffle, sig24 } from './rng.js';
-import { COURSE_UNITS, annotateQuestion, courseScope, resolveUnitId } from '../data/course-map.js';
+import {
+  COURSE_UNITS,
+  annotateQuestion,
+  courseFor,
+  courseScope,
+  resolveUnitId
+} from '../data/course-map.js';
 import { mathPool } from '../data/knowledge-math.js';
+import { chinesePool } from '../data/knowledge-chinese.js';
+import { englishPool } from '../data/knowledge-english.js';
+import { sciencePool } from '../data/knowledge-science.js';
+
+/** 各科题池（小测按科各出 10 题，只从现有题池抽，不生成新题） */
+const QUIZ_POOLS = {
+  math: mathPool,
+  chinese: chinesePool,
+  english: englishPool,
+  science: sciencePool
+};
 
 /** 错题回来节奏：第 1/3/7/15/30 天（数组下标即阶段） */
 export const REVIEW_INTERVALS = [1, 3, 7, 15, 30];
@@ -20,7 +37,7 @@ export const REVIEW_INTERVALS = [1, 3, 7, 15, 30];
 // B′ 硬约束：只裁 masteryTrend（90→45 天，存储紧凑化）；
 // mastery.keys / reviewQueue / quizzes 一律不裁——它们是「跨 100 天不失忆」的载体。
 const TREND_KEEP = 45;   // 掌握度曲线保留天数；与 store.js 的 TREND_KEEP 一致
-const QUIZ_SIZE = 10;    // 每周小测固定 10 题
+const QUIZ_SIZE = 10;    // 每周小测每科固定 10 题（四科共 40 题）
 const QUIZ_KEEP = 12;    // 小测结果保留最近 12 周
 const GAP_KEEP = 40;     // 内容缺口台账最多保留条数
 const QUIZ_TYPES = ['choice', 'judge', 'input']; // 小测不出连线/排序，保证「只答一次」链路简单
@@ -580,18 +597,17 @@ export function compactMastery(data, { today = store.todayKey(), idleDays = 120,
  */
 function actionFor(data, need) {
   if (!need.length) return null;
-  const scope = courseScope(data?.settings?.course, 'math');
-  // 已配置数学单元：建议只能落在「当前单元 + 已学单元」内的数学知识点。
-  // 旧写法 `!u || scope.allowed.has(u)` 会让语文/英语知识点无条件通过，
-  // 家长配的是数学单元却收到「练英语情景对话」的建议——这就是越界，已修。
-  // 范围内没有薄弱点时宁可不给建议（action=null），也不跨科/跨单元推荐。
-  const inScope = scope
-    ? need.filter((kid) => {
-      const u = unitOfKid(kid);
-      return u !== null && scope.allowed.has(u);
-    })
-    : need;
-  const target = inScope[0];
+  // 按薄弱点自己所属的学科取范围：配了哪一科就只在该科范围内推荐。
+  // 数学已配范围、而薄弱点属于「未配置的其他学科」时视为跨科越界，不推荐；
+  // 数学本身未配置（scope=null）时不受限，historical 错题本身就是学过的内容。
+  const mathScope = courseScope(courseFor(data?.settings, 'math'), 'math');
+  const target = need.find((kid) => {
+    const subject = subjectOfKid(kid);
+    const scope = courseScope(courseFor(data?.settings, subject), subject);
+    if (!scope) return mathScope === null;
+    const u = unitOfKid(kid);
+    return u !== null && scope.allowed.has(u);
+  }) || null;
   if (!target) return null;
   return {
     kid: target,
@@ -699,12 +715,12 @@ function uniqByPrompt(list) {
 }
 
 /**
- * 生成每周小测：10 题、新旧知识点混合、只从现有数学题池里选（不生成新题）。
- * 当前单元设置了范围时，小测也只用「当前单元 + 已学单元」，不提前考未学内容。
+ * 生成每周小测：每科 10 题、新旧知识点混合、只从该科现有题池里选（不生成新题）。
+ * 该科设置了范围时，小测也只用范围内的单元（数学=当前单元+已学单元，语文=整册）。
  */
-export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey()) {
-  const scope = courseScope(data?.settings?.course, 'math');
-  const rng = mulberry32(hashString(`${dayKey}:${grade}:math:quiz`));
+export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey(), subject = 'math') {
+  const scope = courseScope(courseFor(data?.settings, subject), subject);
+  const rng = mulberry32(hashString(`${dayKey}:${grade}:${subject}:quiz`));
   // 阶段 C：待审题未 approved 不进小测，与每日任务同一过滤口径（v5 批次级 + v4 逐题兼容）
   const approved = new Set(
     Object.entries(data?.questionReview || {})
@@ -716,7 +732,12 @@ export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey()) {
       .filter(([, v]) => v === 'approved')
       .map(([k]) => k)
   );
-  const pool = mathPool(grade, mulberry32(hashString(`${dayKey}:${grade}:math:quizpool`)))
+  const poolFn = QUIZ_POOLS[subject] || mathPool;
+  const buildPool = (sc) => poolFn(
+    grade,
+    mulberry32(hashString(`${dayKey}:${grade}:${subject}:quizpool`)),
+    { includeSpec: true }
+  )
     .filter((q) => (
       q.status !== 'pending-review'
       || approved.has(q.id)
@@ -733,10 +754,14 @@ export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey()) {
     .filter((q) => (
       q.kid
       && QUIZ_TYPES.includes(q.type)
-      && (!scope || (q.unitId && scope.allowed.has(q.unitId)))
+      && (!sc || (q.unitId && sc.allowed.has(q.unitId)))
     ));
 
-  const unique = uniqByPrompt(pool);
+  // 册次与孩子当前年级不一致时，范围内会抽不到题：回退全年级题池，避免小测空白
+  let scoped = buildPool(scope);
+  if (scope && scoped.length === 0) scoped = buildPool(null);
+
+  const unique = uniqByPrompt(scoped);
   const m = ensureMastery(data);
   const mastered = new Set(
     Object.entries(m.keys)
@@ -767,39 +792,57 @@ export function buildWeeklyQuiz(data, grade, dayKey = store.todayKey()) {
   return {
     weekKey: `W${weekStartKey(dayKey)}`,
     date: dayKey,
+    subject,
     items
   };
 }
 
-/** 小测结果单独存：按周一条，只留最近 12 周；items 用数组压缩，不重复题目正文 */
-export function saveQuizResult(data, { weekKey, date, total, correct, items }) {
+/**
+ * 小测结果单独存：每科每周一条（key = 周 + 学科），只留最近 12 周；
+ * items 用数组压缩，不重复题目正文。旧数据（无学科的单条）继续兼容读。
+ */
+export function saveQuizResult(data, { weekKey, date, total, correct, items, subject = 'math' }) {
   const quizzes = data.quizzes || (data.quizzes = {});
-  quizzes[weekKey] = {
+  const key = `${weekKey}:${subject}`;
+  quizzes[key] = {
     date,
+    subject,
     total,
     correct,
     items: items.map((it) => [it.kid, it.ok ? 1 : 0, it.kind === 'old' ? 1 : 0])
   };
-  const keys = Object.keys(quizzes).sort();
-  if (keys.length > QUIZ_KEEP) {
-    keys.slice(0, keys.length - QUIZ_KEEP).forEach((k) => { delete quizzes[k]; });
+  const weeks = [...new Set(Object.keys(quizzes).map((k) => k.split(':')[0]))].sort();
+  if (weeks.length > QUIZ_KEEP) {
+    const drop = new Set(weeks.slice(0, weeks.length - QUIZ_KEEP));
+    Object.keys(quizzes).forEach((k) => { if (drop.has(k.split(':')[0])) delete quizzes[k]; });
   }
-  return quizzes[weekKey];
+  return quizzes[key];
 }
 
+/** 最近一周的小测：四科合并成一条（total/correct 求和），并按学科给出明细 */
 export function latestQuiz(data) {
   const quizzes = data.quizzes || {};
-  const keys = Object.keys(quizzes).sort();
+  const keys = Object.keys(quizzes);
   if (!keys.length) return null;
-  const key = keys[keys.length - 1];
-  const q = quizzes[key];
+  const weeks = [...new Set(keys.map((k) => k.split(':')[0]))].sort();
+  const week = weeks[weeks.length - 1];
+  const rows = keys
+    .filter((k) => k.split(':')[0] === week)
+    .map((k) => ({ subject: quizzes[k].subject || 'math', ...quizzes[k] }));
+  const total = rows.reduce((s, r) => s + (r.total || 0), 0);
+  const correct = rows.reduce((s, r) => s + (r.correct || 0), 0);
+  const items = rows.flatMap((r) => r.items || []);
   return {
-    weekKey: key,
-    date: q.date,
-    total: q.total,
-    correct: q.correct,
-    oldCount: (q.items || []).filter((x) => x[2]).length,
-    newCount: (q.items || []).filter((x) => !x[2]).length
+    weekKey: week,
+    date: rows.map((r) => r.date).sort().pop(),
+    total,
+    correct,
+    oldCount: items.filter((x) => x[2]).length,
+    newCount: items.filter((x) => !x[2]).length,
+    bySubject: Object.fromEntries(rows.map((r) => [
+      r.subject,
+      { total: r.total || 0, correct: r.correct || 0 }
+    ]))
   };
 }
 

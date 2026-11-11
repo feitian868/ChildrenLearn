@@ -1,4 +1,4 @@
-﻿/**
+﻿﻿/**
  * game-kit.js —— 四种题型渲染 + 首答正确统计 + 达标回写工作台
  * 游戏页只负责传入科目，其余全部由这里完成。
  */
@@ -79,26 +79,26 @@ export function mountGame(subject) {
   clear(app);
 
   const params = new URLSearchParams(location.search);
-  const quizMode = params.get('quiz') === '1' && subject === 'math';
+  const quizMode = params.get('quiz') === '1';
   const taskId = params.get('task');
   let task = null;
   let weeklyQuiz = null;
 
   if (quizMode) {
-    // 每周 10 题小测：只从现有数学题池抽题，不生成新题；结果单独存，不加积分
+    // 每周 10 题小测（四科各一场）：只从本科现有题池抽题，不生成新题；结果按科单独存，不加积分
     const data = store.load();
-    weeklyQuiz = buildWeeklyQuiz(data, data.grade, store.todayKey());
+    weeklyQuiz = buildWeeklyQuiz(data, data.grade, store.todayKey(), subject);
     if (!weeklyQuiz.items.length) {
-      emptyView(app, '本周小测暂时没有可用的题目，先完成今天的数学任务吧。');
+      emptyView(app, `本周${store.SUBJECT_META[subject].name}小测暂时没有可用的题目，先完成今天的任务吧。`);
       return;
     }
     task = {
-      id: `quiz-${weeklyQuiz.weekKey}`,
+      id: `quiz-${weeklyQuiz.weekKey}-${subject}`,
       subject,
       subjectName: store.SUBJECT_META[subject].name,
       icon: store.SUBJECT_META[subject].icon,
       grade: data.grade,
-      title: '本周小测 · 新旧知识点混合',
+      title: `本周小测 · ${store.SUBJECT_META[subject].name} · 新旧知识点混合`,
       questions: weeklyQuiz.items,
       level2: weeklyQuiz.items.filter((q) => q.level === 2).length,
       done: false,
@@ -680,6 +680,7 @@ export function mountGame(subject) {
         saveQuizResult(d, {
           weekKey: weeklyQuiz.weekKey,
           date: weeklyQuiz.date,
+          subject,
           total,
           correct: first,
           items

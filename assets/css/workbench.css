@@ -571,6 +571,28 @@
   .dev-tools-row { grid-template-columns: 1fr; }
 }
 
+/* ---------- 工作台：课程设置（四科页签） ---------- */
+.course-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 2px; }
+.course-tabs .chip {
+  cursor: pointer;
+  border: 1px solid #e2e8f4;
+  background: #f7f9fe;
+  color: #5a6784;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.course-tabs .chip:hover { background: #eef3ff; }
+.course-tabs .chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 700;
+}
+.course-panel { padding-top: 2px; }
+
 /* ---------- 成长记录独立页 ---------- */
 .gp {
   width: min(980px, 100%);

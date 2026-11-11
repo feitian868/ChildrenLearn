@@ -103,6 +103,42 @@ export function volumeKeyOfUnit(unitId) {
   return VOLUME_BY_UNIT.get(resolveUnitId(unitId)) || '';
 }
 
+/** 某科某一册的全部单元（整册收敛用） */
+export function unitsOfBook(volumeKey) {
+  return COURSE_UNITS.filter((u) => u.volumeKey === volumeKey);
+}
+
+/** 某科的可选册次（按年级、上下册排序），供课程设置的下拉使用 */
+export function booksOfSubject(subject) {
+  const seen = new Set();
+  const list = [];
+  for (const u of COURSE_UNITS) {
+    if (!String(u.volumeKey || '').startsWith(`${subject}:`)) continue;
+    if (seen.has(u.volumeKey)) continue;
+    seen.add(u.volumeKey);
+    list.push({
+      key: u.volumeKey,
+      grade: u.grade,
+      term: u.term,
+      edition: u.edition,
+      firstUnitId: u.id,
+      unitCount: COURSE_UNITS.filter((x) => x.volumeKey === u.volumeKey).length
+    });
+  }
+  return list.sort((a, b) => (a.grade - b.grade) || (a.term === b.term ? 0 : a.term === '上册' ? -1 : 1));
+}
+
+/**
+ * 取某一科的课程配置。
+ * 数学沿用 settings.course（v4 存量字段，不迁移）；
+ * 语文/英语/科学存在 settings.courseBySubject[subject]。
+ */
+export function courseFor(settings, subject) {
+  if (!settings) return null;
+  if (subject === 'math') return settings.course || null;
+  return (settings.courseBySubject || {})[subject] || null;
+}
+
 /* ------------------------- 题目 → 课程结构 映射 ------------------------- */
 
 const INDEX = new Map();
@@ -155,13 +191,28 @@ export function sourceOfQuestion(q) {
  * 范围只包含「当前单元 + 已学单元」，不存在向后扩围的分支。
  */
 export function courseScope(course, subject) {
-  if (!course || course.subject !== subject || !course.currentUnitId) return null;
+  if (!course || !course.currentUnitId) return null;
+  if (course.subject && course.subject !== subject) return null;
   const currentId = resolveUnitId(course.currentUnitId);
   const current = COURSE_UNITS.find((u) => u.id === currentId);
   if (!current) return null;
   // 只在本册同一学科内收敛，避免语文/英语/科学的单元混进数学范围
   const sameSubject = (u) => String(u.volumeKey || '').startsWith(`${subject}:`);
   if (!sameSubject(current)) return null;
+  // 整册模式（语文）：范围 = 当前所在一册的全部单元
+  if (course.mode === 'book') {
+    return {
+      mode: 'book',
+      currentUnitId: current.id,
+      currentUnitName: current.name,
+      currentOrder: current.order,
+      bookKey: current.volumeKey,
+      bookName: `${current.grade}年级${current.term}`,
+      grade: current.grade,
+      term: current.term,
+      allowed: new Set(unitsOfBook(current.volumeKey).map((u) => u.id))
+    };
+  }
   const learned = new Set((course.learnedUnits || []).map(resolveUnitId));
   const allowed = new Set(
     COURSE_UNITS
@@ -169,9 +220,12 @@ export function courseScope(course, subject) {
       .map((u) => u.id)
   );
   return {
+    mode: 'unit',
     currentUnitId: current.id,
     currentUnitName: current.name,
     currentOrder: current.order,
+    grade: current.grade,
+    term: current.term,
     allowed
   };
 }

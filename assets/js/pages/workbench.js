@@ -37,7 +37,15 @@ import {
   unlockAudio
 } from '../core/audio.js';
 import { el, clear, dialog, longPress, toast } from '../core/ui.js';
-import { COURSE_UNITS, COURSE_META, COURSE_VERSIONS } from '../data/course-map.js';
+import {
+  COURSE_UNITS,
+  COURSE_META,
+  COURSE_VERSIONS,
+  booksOfSubject,
+  courseFor,
+  unitsOfBook,
+  volumeKeyOfUnit
+} from '../data/course-map.js';
 import { pendingReviewBank } from '../data/knowledge-math.js';
 
 const app = document.getElementById('app');
@@ -523,8 +531,20 @@ function renderMastery(data) {
   const mastered = keys.filter((r) => r.status === 'mastered').length;
   const learning = keys.length - mastered;
 
-  const quizLink = el('a', { class: 'btn btn-primary', href: 'math.html?quiz=1', text: '本周小测（10 题）' });
-  quizLink.addEventListener('click', () => unlockAudio());
+  // 周测按四科各 10 题分开进行，点哪一科就进哪一科的小测
+  const quizLinks = store.SUBJECTS.map((s) => {
+    const a = el('a', {
+      class: 'btn btn-ghost',
+      href: `${store.SUBJECT_META[s].page}?quiz=1`,
+      text: `${store.SUBJECT_META[s].name} 10 题`
+    });
+    a.addEventListener('click', () => unlockAudio());
+    return a;
+  });
+  const quizLabel = el('span', {
+    style: 'font-size:12.5px;font-weight:700;color:#6b7794;margin-right:2px',
+    text: '本周小测：'
+  });
 
   const resetBtn = el('button', { class: 'btn btn-ghost', type: 'button', text: '重置掌握度' });
   resetBtn.addEventListener('click', () => {
@@ -555,7 +575,12 @@ function renderMastery(data) {
     chip(`学习中 ${learning} 个`),
     chip(`7 天内待复习 ${report.dueNext7} 道`)
   ];
-  if (quiz) chips.push(chip(`最近小测 ${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} · 新 ${quiz.newCount}）`));
+  if (quiz) {
+    chips.push(chip(`最近小测 ${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} · 新 ${quiz.newCount}）`));
+    Object.entries(quiz.bySubject || {}).forEach(([s, v]) => {
+      chips.push(chip(`${store.SUBJECT_META[s]?.name || s} ${v.correct}/${v.total}`));
+    });
+  }
 
   return el('div', { class: 'card mastery-entry' }, [
     el('div', { class: 'mastery-head' }, [
@@ -563,7 +588,7 @@ function renderMastery(data) {
       el('p', { class: 'mastery-note', text: report.sentence }),
       el('div', { class: 'mastery-chips' }, chips)
     ]),
-    el('div', { class: 'mastery-actions' }, [quizLink, resetBtn]),
+    el('div', { class: 'mastery-actions' }, [quizLabel, ...quizLinks, resetBtn]),
     el('details', { class: 'dev-tools' }, [
       el('summary', { text: '数据维护' }),
       el('p', {
@@ -1261,65 +1286,106 @@ function pickImportFile() {
   input.click();
 }
 
-/* ------------------------- 课程设置（阶段 A 骨架） ------------------------- */
+/* ------------------------- 课程设置（四科，按课本出题） ------------------------- */
 
-function renderCourse(data) {
-  const course = data.settings?.course || {};
+// 记住上次查看的学科页签（保存后 refresh、进出小测页都不会跳回数学）
+const COURSE_TAB_KEY = 'pq_course_tab';
+let courseTab = (() => {
+  try { return localStorage.getItem(COURSE_TAB_KEY) || 'math'; } catch (err) { return 'math'; }
+})();
+const setCourseTab = (s) => {
+  courseTab = s;
+  try { localStorage.setItem(COURSE_TAB_KEY, s); } catch (err) { /* 隐私模式忽略 */ }
+};
+
+function renderCoursePanel(data, subject) {
+  const meta = store.SUBJECT_META[subject];
   const todayDay = data.days?.[store.todayKey()];
-  const status = todayDay?.courseScope?.math;
+  const status = todayDay?.courseScope?.[subject];
   // 实际抽到的教材/拓展题数（可抽池 ≠ 实际出题，状态行必须按实际数说）
-  const mathTasks = (todayDay?.tasks || []).filter((t) => t.subject === 'math');
-  const pickedQs = mathTasks.flatMap((t) => t.questions);
+  const subjectTasks = (todayDay?.tasks || []).filter((t) => t.subject === subject);
+  const pickedQs = subjectTasks.flatMap((t) => t.questions);
   const textbookPicked = status?.textbookPicked
     ?? pickedQs.filter((q) => q.courseTrack === 'textbook').length;
   const extensionPicked = status?.extensionPicked
     ?? pickedQs.filter((q) => q.courseTrack === 'extension').length;
-  const quota = status?.quota ?? mathTasks.length * QUESTIONS_PER_TASK;
+  const quota = status?.quota ?? subjectTasks.length * QUESTIONS_PER_TASK;
+  const cfg = courseFor(data.settings, subject) || {};
+  const bookMode = subject === 'chinese'; // 语文按整册收敛，其余按单元
+  // 册次必须与孩子当前年级一致，否则当天不生效（小测也会回退全年级题池）
+  const gradeMismatch = Boolean(cfg.grade && data.grade && cfg.grade !== data.grade);
   const inputStyle = 'width:100%;padding:8px 10px;border:1px solid #dfe5f2;border-radius:10px;font:inherit;background:#fff';
   const labelStyle = 'display:block;font-size:12px;font-weight:700;color:#6b7794;margin:10px 0 4px';
+  const label = (text) => el('label', { style: labelStyle, text });
 
-  const versionSel = el('select', { style: inputStyle });
-  versionSel.append(el('option', { value: '', text: '未设置（按课本封面选择）' }));
-  COURSE_VERSIONS.forEach((v) => {
-    versionSel.append(el('option', { value: v, text: v }));
-  });
-  // 兼容旧值：存档里已有、但不在选项里的版本名，动态补一个，避免显示成空白
-  if (course.version && !COURSE_VERSIONS.includes(course.version)) {
-    versionSel.append(el('option', { value: course.version, text: course.version }));
+  let versionSel = null;
+  if (subject === 'math') {
+    versionSel = el('select', { style: inputStyle });
+    versionSel.append(el('option', { value: '', text: '未设置（按课本封面选择）' }));
+    COURSE_VERSIONS.forEach((v) => {
+      versionSel.append(el('option', { value: v, text: v }));
+    });
+    // 兼容旧值：存档里已有、但不在选项里的版本名，动态补一个，避免显示成空白
+    if (cfg.version && !COURSE_VERSIONS.includes(cfg.version)) {
+      versionSel.append(el('option', { value: cfg.version, text: cfg.version }));
+    }
+    versionSel.value = cfg.version || '';
   }
-  versionSel.value = course.version || '';
 
-  const termSel = el('select', { style: inputStyle });
-  [['', '未设置'], ['上册', '上册'], ['下册', '下册']].forEach(([v, t]) => {
-    termSel.append(el('option', { value: v, text: t }));
-  });
-  termSel.value = course.term || '';
-
-  const unitSel = el('select', { style: inputStyle });
-  unitSel.append(el('option', { value: '', text: '未设置（不限定单元）' }));
-  // 课程收敛目前只对数学生效，下拉只列数学单元，避免选到语文/英语/科学
-  COURSE_UNITS.filter((u) => String(u.volumeKey || '').startsWith('math:')).forEach((u) => {
-    unitSel.append(el('option', {
-      value: u.id,
-      text: `${u.order}. ${u.name}（${u.metaGrade}年级${u.metaTerm}）`
+  const bookSel = el('select', { style: inputStyle });
+  bookSel.append(el('option', { value: '', text: '未设置（不限定，按全年级题池）' }));
+  booksOfSubject(subject).forEach((b) => {
+    bookSel.append(el('option', {
+      value: b.key,
+      text: `${b.grade}年级${b.term} · ${b.unitCount} 个单元`
     }));
   });
-  unitSel.value = course.currentUnitId || '';
+  const currentBook = cfg.bookKey || (cfg.currentUnitId ? volumeKeyOfUnit(cfg.currentUnitId) : '');
+  bookSel.value = currentBook;
+
+  const unitSel = el('select', { style: inputStyle });
+  const fillUnits = () => {
+    clear(unitSel);
+    unitSel.append(el('option', { value: '', text: '未设置（不收敛单元）' }));
+    const key = bookSel.value;
+    if (!key) return;
+    unitsOfBook(key).forEach((u) => {
+      unitSel.append(el('option', {
+        value: u.id,
+        text: `${u.order}. ${u.name}（${u.metaGrade ?? u.grade}年级${u.metaTerm ?? u.term}）`
+      }));
+    });
+    unitSel.value = cfg.currentUnitId && volumeKeyOfUnit(cfg.currentUnitId) === key
+      ? cfg.currentUnitId
+      : '';
+  };
+  fillUnits();
+  bookSel.addEventListener('change', fillUnits);
 
   const saveBtn = el('button', { class: 'btn btn-primary', type: 'button', text: '保存课程设置' });
   saveBtn.addEventListener('click', () => {
     sfxClick();
-    const version = versionSel.value;
-    const term = termSel.value;
-    const unitId = unitSel.value || null;
+    const bookKey = bookSel.value;
+    // 整册模式用「这一册的第一个单元」代表范围，便于解析年级；单元模式必须明确选中单元才收敛
+    const unitId = bookMode
+      ? (bookKey ? (unitsOfBook(bookKey)[0]?.id || null) : null)
+      : (unitSel.value || null);
     store.update((d) => {
-      const c = d.settings.course || (d.settings.course = {});
-      c.subject = 'math';
-      c.version = version;
-      c.term = term;
+      let c;
+      if (subject === 'math') {
+        c = d.settings.course || (d.settings.course = {});
+      } else {
+        const by = d.settings.courseBySubject || (d.settings.courseBySubject = {});
+        c = by[subject] || (by[subject] = {});
+      }
+      c.subject = subject;
+      c.mode = bookMode ? 'book' : 'unit';
+      c.version = versionSel ? versionSel.value : (c.version || '人教版');
+      c.bookKey = bookKey;
+      c.term = bookKey ? (bookKey.split(':')[2] || '') : '';
       c.currentUnitId = unitId;
       const unit = COURSE_UNITS.find((u) => u.id === unitId);
-      if (unit) c.grade = unit.metaGrade;
+      if (unit) c.grade = unit.metaGrade ?? unit.grade;
     });
     // 今天的任务已按旧范围生成：未开始做才重建；已有做题记录则明天生效，不抹掉进度
     const today = store.load().days?.[store.todayKey()];
@@ -1328,46 +1394,84 @@ function renderCourse(data) {
       toast('课程设置已保存；今天已有做题记录，不重排，新范围从明天生效', 'ok');
     } else {
       regenerateToday(store.load().grade);
-      toast(unitId
-        ? '课程设置已保存，今天的数学题已按「当前单元 + 已学单元」重排'
-        : '课程设置已保存，今天数学题恢复全年级题池', 'ok');
+      toast(!unitId
+        ? `课程设置已保存，今天${meta.name}恢复全年级题池`
+        : bookMode
+          ? `课程设置已保存，今天${meta.name}已按所选整册重排`
+          : `课程设置已保存，今天${meta.name}已按「当前单元 + 已学单元」重排`, 'ok');
     }
     refresh();
   });
 
-  const statusText = !course.currentUnitId
-    ? '未配置当前单元：数学仍使用全年级题池（不会误收敛）'
+  const statusText = gradeMismatch
+    ? `所选册次是 ${cfg.grade} 年级，与孩子当前年级（${data.grade} 年级）不一致：本日仍用全年级题池，请改选 ${data.grade} 年级的册次。`
+    : !cfg.currentUnitId
+    ? `未配置：${meta.name}使用全年级题池（不会误收敛）`
     : status
-      ? `已收敛：当前单元「${status.currentUnitName}」及之前的 ${status.allowedUnits?.length ?? 1} 个已学单元可抽教材题；`
+      ? (status.mode === 'book'
+        ? `已收敛到「${status.bookName || '所选册'}」整册（${status.allowedUnits?.length ?? 0} 个单元）；`
+        : `已收敛：当前单元「${status.currentUnitName}」及之前的 ${status.allowedUnits?.length ?? 1} 个已学单元可抽教材题；`)
         + `教材题可抽 ${status.textbookAvailable ?? 0} 道 → 实际抽到 ${textbookPicked} 道教材 + ${extensionPicked} 道拓展`
-        + `（当天配额 ${quota} 道；逻辑题作为拓展题占位，每项最多 2 道）`
+        + `（当天配额 ${quota} 道）`
         + (status.taskCount < (status.desiredTaskCount ?? status.taskCount)
-          ? `；因教材题不足，今日数学减为 ${status.taskCount} 项（原 ${status.desiredTaskCount} 项），不提前给未学单元`
+          ? `；因教材题不足，今日${meta.name}减为 ${status.taskCount} 项（原 ${status.desiredTaskCount} 项），不提前给未学单元`
           : status.shortage
             ? `；教材池不足以铺满 ${status.desiredTaskCount * QUESTIONS_PER_TASK} 道，但不提前给未学单元`
             : '')
-      : '已配置课程单元，今天的题尚未重建（保存后会自动重建）';
+      : '已配置，今天的题尚未重建（保存后会自动重建）';
 
+  const nodes = [
+    versionSel ? label('教材版本（仅记录用书，暂不切换题库）') : null,
+    versionSel,
+    label('册次'),
+    bookSel,
+    bookMode
+      ? el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '语文按整册收敛：所选这一册的全部单元都会出题，不提前给别的册。' })
+      : label('当前单元（学到哪一课选哪一课）'),
+    bookMode ? null : unitSel,
+    bookMode
+      ? null
+      : el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '下拉只列所选这一册的单元；不选单元则只记录用书，不收敛。' }),
+    el('div', { style: { marginTop: '12px' } }, [saveBtn]),
+    el('p', { class: 'parent-hint', style: { marginTop: '10px' }, text: statusText })
+  ].filter(Boolean);
+  return el('div', { class: 'course-panel' }, nodes);
+}
+
+function renderCourse(data) {
+  let active = courseTab;
+  const tabs = el('div', { class: 'course-tabs' });
+  const body = el('div', { class: 'course-body' });
+  const draw = () => {
+    clear(body);
+    body.append(renderCoursePanel(data, active));
+  };
+  store.SUBJECTS.forEach((s) => {
+    const b = el('button', { class: 'chip', type: 'button', text: `${store.SUBJECT_META[s].icon} ${store.SUBJECT_META[s].name}` });
+    if (s === active) b.classList.add('is-active');
+    b.addEventListener('click', () => {
+      active = s;
+      setCourseTab(s);
+      Array.from(tabs.children).forEach((c, i) => {
+        c.classList.toggle('is-active', store.SUBJECTS[i] === s);
+      });
+      draw();
+    });
+    tabs.append(b);
+  });
+  draw();
   return el('div', { class: 'card parent', style: 'margin-top:16px' }, [
     el('div', { class: 'parent-head' }, [
-      el('h3', { text: '课程设置 · 数学' }),
-      el('span', { class: 'src', text: '按课本单元出题' })
+      el('h3', { text: '课程设置 · 按课本出题' }),
+      el('span', { class: 'src', text: '四科可分别设置' })
     ]),
     el('p', { class: 'parent-hint', text: COURSE_META.note }),
     el('p', {
       class: 'parent-hint',
-      text: '用法：选好版本、册次和「当前正在学的单元」后保存，数学就按「当前单元 + 已学单元」出教材题；不选单元则用全年级题池。当天已开始做题时，新范围从第二天生效。'
+      text: '用法：每科各选「册次」，再选「当前单元」（语文只选册，按整册出题）；保存后该科按课本范围出教材题，不选则用全年级题池。当天已开始做题时，新范围从第二天生效。'
     }),
-    el('label', { style: labelStyle, text: '教材版本（以课本封面为准）' }),
-    versionSel,
-    el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '题库目前按人教版建设；选其他版本只记录用书信息，暂不切换题目。' }),
-    el('label', { style: labelStyle, text: '册次' }),
-    termSel,
-    el('label', { style: labelStyle, text: '当前单元' }),
-    unitSel,
-    el('p', { class: 'parent-hint', style: { marginTop: '6px' }, text: '单元收敛目前只对数学生效；语文、英语、科学仍按全年级题池抽题。' }),
-    el('div', { style: { marginTop: '12px' } }, [saveBtn]),
-    el('p', { class: 'parent-hint', style: { marginTop: '10px' }, text: statusText })
+    tabs,
+    body
   ]);
 }
 
