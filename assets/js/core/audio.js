@@ -236,8 +236,10 @@ if (speechReady) {
 
 /**
  * 选语音：只用本机可用的语音。
- * 本机没有英文语音时，en-US 只剩 Google 在线语音，在受限网络下会卡住且完全没声音，
- * 因此优先本地同语言语音，退而用任意本地语音（用中文语音读英文单词，至少有声音）。
+ * 强制 localService——Chrome 的 Google US English 等是远程语音，受限网络下 utterance
+ * 会触发 start 事件但不出声，用户只听到按钮的 click 音效就没了；在线语音一律跳过。
+ * 中文同理，en-US/zh-CN 找不到本地语音时返回 null 让浏览器自己兜底，
+ * 至少能保证有声音（哪怕用中文语音硬读英文单词）。
  * prefer 用于宠物童声：按名字优先匹配小朋友/女声语音（如 Microsoft Yaoyao）。
  */
 const FEMALE_HINTS = ['yaoyao', 'huihui', 'xiaoxiao', 'xiaoyi', 'ting-ting', 'tingting',
@@ -248,9 +250,13 @@ function pickVoice(lang, prefer = []) {
   const all = voiceCache.length ? voiceCache : (window.speechSynthesis.getVoices() || []);
   if (!all.length) return null;
   const base = String(lang).toLowerCase().split('-')[0];
-  const same = all.filter((v) => v.lang && v.lang.toLowerCase().split('-')[0] === base);
-  const localSame = same.filter((v) => v.localService);
-  const pool = localSame.length ? localSame : same;
+  // 只挑本地语音：localService=true 才是系统自带、不依赖网络
+  const sameLocal = all.filter((v) =>
+    v.localService
+    && v.lang && v.lang.toLowerCase().split('-')[0] === base
+  );
+  const pool = sameLocal; // 不再 fallback 到 same（含在线），避免选到 Google 远程英语
+  if (!pool.length) return null;
   const nameOf = (v) => (v.name || '').toLowerCase();
 
   for (const hint of prefer) {
@@ -260,43 +266,47 @@ function pickVoice(lang, prefer = []) {
   const female = pool.find((v) => FEMALE_HINTS.some((h) => nameOf(v).includes(h)));
   if (female) return female;
   const notMale = pool.find((v) => !MALE_HINTS.some((h) => nameOf(v).includes(h)));
-  return pool[0] || notMale || all.find((v) => v.localService) || null;
+  return pool[0] || notMale || null;
 }
 
-/**
- * 真正调用 speak。
- * Chrome 在 cancel() 后立刻 speak() 会吞掉语音（只触发 start、不触发 end 甚至无声），
- * 因此必须隔开一小段再播。
- */
+// 存一份 utterance 引用避免 Chrome GC；用队列避免 cancel→speak 吞语音
+let _pendingUtter = null;
+let _pendingTimer = 0;
+
 function speakNow(text, { lang = 'zh-CN', rate = 1, pitch = 1.1, voice: preset } = {}) {
   const syn = window.speechSynthesis;
-  const start = () => {
-    try {
-      const utter = new SpeechSynthesisUtterance(text);
-      const voice = preset || pickVoice(lang);
-      if (voice) {
-        utter.voice = voice;
-        utter.lang = voice.lang;
-      } else {
-        utter.lang = lang;
-      }
-      utter.rate = rate;
-      utter.pitch = pitch;
-      syn.speak(utter);
-    } catch (err) {
-      console.warn('[audio] 朗读失败', err);
+  const pick = () => preset || pickVoice(lang);
+
+  // cancel() 之后 Chrome 会吞掉下一次 speak()，必须等当前朗读彻底结束再 speak
+  const trySpeak = () => {
+    const utter = new SpeechSynthesisUtterance(text);
+    const v = pick();
+    if (v) {
+      utter.voice = v;
+      utter.lang = v.lang;
+    } else {
+      utter.lang = lang;
     }
+    utter.rate = rate;
+    utter.pitch = pitch;
+    utter.onend = () => { _pendingUtter = null; };
+    utter.onerror = () => { _pendingUtter = null; };
+    _pendingUtter = utter;
+    syn.speak(utter);
   };
+
   if (syn.speaking || syn.pending) {
+    // 已在朗读 → 先 cancel，等系统彻底空闲再 speak（给 350ms 缓冲）
     try { syn.cancel(); } catch { /* 忽略 */ }
-    setTimeout(start, 150);
+    clearTimeout(_pendingTimer);
+    _pendingTimer = setTimeout(trySpeak, 350);
   } else {
-    start();
+    trySpeak();
   }
 }
 
 export function speak(text, lang = 'en-US') {
-  if (!speechReady || !text) return;
+  if (!speechReady || !enabled || !text) return;
   speakNow(text, { lang, rate: 0.85, pitch: 1.05 });
 }
 
