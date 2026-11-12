@@ -181,18 +181,21 @@ export function feed(foodId) {
   return { ok: true, fed: hunger, moodUp: mood, leveledUp: lvNow.level !== lvBefore, preference: mod.tag };
 }
 
-/** 抚摸（免费，无次数限制） */
+/** 抚摸（免费，次数不限；心情已经满格时不再给成长值，避免一直摸一直刷分） */
 export function touch() {
   const data = store.load();
   if (!data.pet) return { ok: false, reason: 'no-pet' };
 
-  data.pet.mood = clamp(data.pet.mood + 20, 0, 100);
-  data.pet.exp += EXP_TOUCH;
+  const moodBefore = data.pet.mood;
+  data.pet.mood = clamp(moodBefore + 20, 0, 100);
+  // 只有真正把心情摸上去才给成长值：心情满 100 时继续抚摸不再加分
+  const grew = data.pet.mood > moodBefore;
+  if (grew) data.pet.exp += EXP_TOUCH;
 
   const lvBefore = data.pet.level;
   data.pet.level = computeLevel(data.pet.exp).level;
   store.save(data);
-  return { ok: true, leveledUp: data.pet.level !== lvBefore };
+  return { ok: true, expGain: grew ? EXP_TOUCH : 0, leveledUp: data.pet.level !== lvBefore };
 }
 
 /** 玩耍（每日 1 次，心情大 +） */
