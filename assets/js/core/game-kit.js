@@ -9,7 +9,7 @@ import { getTaskById } from './tasks.js';
 import { completeTask, markCelebrated } from './score.js';
 import { applyTaskOutcome, buildWeeklyQuiz, saveQuizResult } from './mastery.js';
 import { celebrate, playerName } from './fx.js';
-import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
+import { sfxClick, sfxCorrect, sfxWrong, speak, speakCongrats, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
 import { shuffle } from './rng.js';
 import { pinyinize, needsPinyin } from '../data/pinyin-map.js';
@@ -34,12 +34,23 @@ const ACHIEVEMENTS = {
   science: ['观察小达人', '科学小实验家', '小小科学家']
 };
 
-const WRONG_HINTS = [
-  '没关系，再想一想～',
-  '差一点点，再试一次！',
-  '答错不扣分，慢慢来。',
-  '看看题目里的关键词，再选一次。'
+/* 答对/答错的中文语音反馈（跟随音效开关；同一时间只播最新一句） */
+const CORRECT_WORDS = '恭喜你，答对了！';
+const ENCOURAGE_WORDS = [
+  '没关系，再想一想，你一定可以的！',
+  '差一点点，答错不扣分，继续加油！',
+  '没关系，慢慢来，多试一次就会啦！',
+  '别灰心，勇敢的孩子不怕出错，再试一次！'
 ];
+let encourageIdx = 0;
+
+/** 播报一句鼓励语并返回同一句文本，保证「听到的」和「看到的」一致 */
+function encourageLine(delay = 160) {
+  const text = ENCOURAGE_WORDS[encourageIdx % ENCOURAGE_WORDS.length];
+  encourageIdx += 1;
+  speakCongrats(text, delay);
+  return text;
+}
 
 function achievementFor(subject, correct, total, grade = 3) {
   const list = ACHIEVEMENTS[subject] || ['学习小达人'];
@@ -184,21 +195,6 @@ export function mountGame(subject) {
     { key: 'guess',    text: '随便猜的',    emoji: '🎲' }
   ];
 
-  let wrongMessageCalled = 0;
-  function wrongMessage() {
-    const pool = [
-      '没关系，再想一想～',
-      '差一点点，再试一次！',
-      '答错不扣分，慢慢来。',
-      '看看题目里的关键词，再选一次。',
-      '换个角度试试，你可以的！',
-      '注意题目问的是什么，再来一次。'
-    ];
-    const msg = pool[wrongMessageCalled % pool.length];
-    wrongMessageCalled += 1;
-    return msg;
-  }
-
   /** 答错后：先弹错因选择（仅首答），再让孩子 retry */
   function showReasonPicker() {
     return new Promise((resolve) => {
@@ -250,9 +246,11 @@ export function mountGame(subject) {
     locked = true;
     markFirst(true);
     sfxCorrect();
-    // 小测不提示（不告诉孩子对错解析），只给颜色反馈后直接进入下一题
+    // 每答对一题都语音鼓励；小测不展示对错解析，但保留语音反馈
+    speakCongrats(CORRECT_WORDS, 200);
     if (!quizMode) hint?.show('答对啦！');
-    setTimeout(nextQuestion, quizMode ? 520 : 720);
+    // 等语音说完再翻下一题，避免下一题开始时把孩子的声音掐掉
+    setTimeout(nextQuestion, 1200);
   }
 
   async function wrongThenRetry(hint, extra) {
@@ -263,7 +261,8 @@ export function mountGame(subject) {
     sfxWrong();
     // 小测：不弹错因、不提示、不重做，只记为错并进入下一题
     if (quizMode) {
-      setTimeout(nextQuestion, 900);
+      encourageLine(160);
+      setTimeout(nextQuestion, 1200);
       return;
     }
     // 首答错因反思（replay 模式跳过）
@@ -276,7 +275,7 @@ export function mountGame(subject) {
         wrongReasons[index] = 'guess';
       }
     }
-    hint.show(wrongMessage());
+    hint.show(encourageLine());
     extra?.();
     locked = false;
   }
@@ -402,7 +401,7 @@ export function mountGame(subject) {
           missMarked = true;
           markFirst(false);
         }
-        hint.show(wrongMessage());
+        hint.show(encourageLine());
         [leftTile, rightTile].forEach((tile) => {
           tile.classList.add('is-wrong');
           setTimeout(() => tile.classList.remove('is-wrong'), 480);
@@ -501,7 +500,7 @@ export function mountGame(subject) {
         return;
       }
       slotRow.classList.add('is-wrong');
-      hint.show(wrongMessage());
+      hint.show(encourageLine());
       markFirst(false);
       sfxWrong();
       setTimeout(reset, 680);
@@ -839,7 +838,6 @@ export function mountGame(subject) {
       wrongReasons = new Array(task.questions.length).fill(null);
       index = 0;
       locked = false;
-      wrongMessageCalled = 0;
       showQuestion(0);
     });
 
