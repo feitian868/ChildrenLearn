@@ -558,6 +558,13 @@ rt {
   .calc-box { min-height: 76px; }
 }
 
+/* 窄屏：题号圆点换到第二行，避免把标题挤成一条窄缝 */
+@media (max-width: 520px) {
+  .game-top { flex-wrap: wrap; row-gap: 6px; }
+  .game-heading { flex: 1 1 auto; }
+  .dots { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-start; }
+}
+
 /* 极窄屏 */
 @media (max-width: 380px) {
   .game { padding: 8px 8px; }

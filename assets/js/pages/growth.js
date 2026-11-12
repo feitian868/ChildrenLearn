@@ -369,13 +369,17 @@ function renderMastery(data) {
     card.append(el('p', { class: 'gp-dia-tip', text: `📌 ${report.action.sentence}` }));
   }
   if (quiz) {
+    const bySubject = Object.entries(quiz.bySubject || {})
+      .map(([s, v]) => `${store.SUBJECT_META[s]?.name || s} ${v.correct}/${v.total}`)
+      .join(' · ');
     card.append(el('p', {
       class: 'gp-dia-tip',
-      text: `最近小测：${quiz.correct}/${quiz.total}，其中旧知识 ${quiz.oldCount} 题、新知识 ${quiz.newCount} 题。`
+      text: `最近小测：${quiz.correct}/${quiz.total}（旧 ${quiz.oldCount} 题 · 新 ${quiz.newCount} 题）`
+        + (bySubject ? `｜${bySubject}` : '')
     }));
   }
   if (svg) card.append(el('div', { html: svg }), legend);
-  else card.append(el('p', { class: 'gp-empty', text: '完成数学任务后，这里会出现每个知识点的掌握度曲线。' }));
+  else card.append(el('p', { class: 'gp-empty', text: '完成任务后，这里会出现每个知识点的掌握度曲线。' }));
   return card;
 }
 

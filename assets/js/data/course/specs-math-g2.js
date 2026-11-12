@@ -256,7 +256,7 @@ const g2Div2 = [
   { askPattern: 'compare-operate', level: 2, make(rand) {
     const a = r(rand, 2, 9);
     const b = r(rand, 2, 8);
-    return { prompt: `计算 ${a * b} ÷ ${a} 时，用哪句口诀？下面结果是多少？`, answer: b, explain: `用口诀「${a} ${b} 得 ${a * b}」，结果是 ${b}。` };
+    return { prompt: `${a * b} ÷ ${a} = （ ）`, answer: b, explain: `用口诀「${a} ${b} 得 ${a * b}」，所以 ${a * b} ÷ ${a} = ${b}。` };
   } }
 ];
 

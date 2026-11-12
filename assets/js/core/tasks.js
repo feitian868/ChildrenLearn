@@ -214,7 +214,16 @@ function adaptTarget(data, grade = 3) {
 
 
 export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE) {
-  const avail = pool.filter((item) => !used.has(item.id));
+  // 同一册里不同知识点可能挂同一批参数化题面，池内先按内容签名去重，
+  // 避免同一个孩子在一项任务里做到两道一模一样的题
+  const poolSigs = new Set();
+  const avail = pool.filter((item) => {
+    if (used.has(item.id)) return false;
+    const s = contentSig(item);
+    if (poolSigs.has(s)) return false;
+    poolSigs.add(s);
+    return true;
+  });
   // 知识点冷却起点：key 在 COOLDOWN_DAYS 内考过，本轮先让位给别的知识点
   const coolFrom = store.shiftDateKey(dayKey, -COOLDOWN_DAYS);
   const keyHot = (item) => {
@@ -350,11 +359,13 @@ function pickStretch(rng, pool, used, usedKeys, recent, dayKey, ownSigs, usedTem
   return { ...q, stretch: true };
 }
 
-/** 题目内容签名：题干 + 选项（排序后）+ 答案文本，跨年级判重用；与选项顺序无关 */
+/**
+ * 题目内容签名：只取题干。
+ * 同一句题干不论题型/选项/答案是什么，对孩子来说都是「同一道题」，
+ * 因此去重与 365 天回避都按题干口径（R1 口径与 templateKey 分离）。
+ */
 export function contentSig(q) {
-  // 题面口径：同一句题干（不论选项/答案如何排列）视为「已出现过」，
-  // 确保 365 天窗口内不重复出题面（R1 口径与 templateKey 分离）。
-  return `prompt|${q.type}|${String(q.prompt || '')}`;
+  return `prompt|${String(q.prompt || '')}`;
 }
 
 /**
@@ -372,6 +383,7 @@ function sigOf(q) {
  *   sigs: Map<sig24, 最近出现日期>   题面回避与「最久没做过」排序用
  *   keys: { [key]: 最近使用日期 }    知识点冷却用
  *   seenQuestion(q): boolean         给 mastery 复习变式加权用
+ *   markToday(qs): void              把当天已排的题面登记为「刚做过」，同日后续任务不再重复
  */
 function buildRecent(data) {
   const sigs = new Map();
@@ -382,12 +394,16 @@ function buildRecent(data) {
     arr.forEach((s) => sigs.set(s, date)); // 日期升序，后写的覆盖，留下最近日期
   });
   const keys = data?.recentKeys || {};
+  // 当天已排过的题面：同日多任务 / 同册不同知识点共用问法时，避免同一个孩子一天内做到两道一样的题
+  const today = new Set();
+  const todaySig = (q) => sigOf(q);
   return {
     sigs,
     keys,
-    seenAt: (q) => sigs.get(sigOf(q)) || '',
+    seenAt: (q) => (today.has(todaySig(q)) ? '~today' : (sigs.get(todaySig(q)) || '')),
     keyDate: (k) => keys[k] || '',
-    seenQuestion: (q) => sigs.has(sigOf(q))
+    seenQuestion: (q) => today.has(todaySig(q)) || sigs.has(todaySig(q)),
+    markToday: (questions) => questions.forEach((q) => today.add(todaySig(q)))
   };
 }
 
@@ -518,6 +534,8 @@ export function buildDay(key, grade, data) {
         attempts: 0
       });
     }
+    // 当天已排过的题面登记进 recent：同日后续任务（含其他科目）不再出同一道题
+    recent.markToday(tasks.filter((t) => t.subject === subject).flatMap((t) => t.questions));
     // 记录「实际抽到」的教材/拓展题数，供工作台如实显示（可抽池 ≠ 实际出题）
     if (scopeInfo) {
       const subjectTasks = tasks.filter((t) => t.subject === subject);

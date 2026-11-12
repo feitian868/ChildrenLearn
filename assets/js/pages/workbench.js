@@ -25,7 +25,8 @@ import {
   weeklyReport,
   latestQuiz,
   resetMastery,
-  migrateKnowledgeId
+  migrateKnowledgeId,
+  weekStartKey
 } from '../core/mastery.js';
 import { celebrate, playerName } from '../core/fx.js';
 import { openMinigame } from '../core/minigames.js';
@@ -531,13 +532,24 @@ function renderMastery(data) {
   const mastered = keys.filter((r) => r.status === 'mastered').length;
   const learning = keys.length - mastered;
 
+  // 本周已做过的学科标出成绩，未做的显示「10 题」，避免家长重复测
+  const weekKey = `W${weekStartKey(store.todayKey())}`;
+  const doneThisWeek = {};
+  Object.entries(data.quizzes || {}).forEach(([k, v]) => {
+    const [wk, subj] = k.split(':');
+    if (wk === weekKey) doneThisWeek[subj || 'math'] = v;
+  });
   // 周测按四科各 10 题分开进行，点哪一科就进哪一科的小测
   const quizLinks = store.SUBJECTS.map((s) => {
+    const done = doneThisWeek[s];
     const a = el('a', {
       class: 'btn btn-ghost',
       href: `${store.SUBJECT_META[s].page}?quiz=1`,
-      text: `${store.SUBJECT_META[s].name} 10 题`
+      text: done
+        ? `${store.SUBJECT_META[s].name} ✓ ${done.correct}/${done.total}`
+        : `${store.SUBJECT_META[s].name} 10 题`
     });
+    if (!done) a.style.borderColor = '#cbd8ee';
     a.addEventListener('click', () => unlockAudio());
     return a;
   });

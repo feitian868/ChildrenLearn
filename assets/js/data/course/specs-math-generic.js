@@ -656,9 +656,10 @@ const statistics = [
     make(rand, ctx) {
       const kind = (ctx.params || {}).kind || 'bar';
       if (kind === 'average') {
-        const avg = randInt(rand, 3, 20);
-        let b = randInt(rand, 3, 20);
-        if (b === avg) b = b === 20 ? 19 : b + 1;
+        const avg = randInt(rand, 6, 20);
+        // 另一个数必须为正：其中一个数要小于总和 2×avg
+        let b = randInt(rand, 3, 2 * avg - 2);
+        if (b === avg) b = b + 1;
         return { prompt: `两个数的平均数是 ${avg}，其中一个数是 ${b}，另一个数是（ ）`, answer: 2 * avg - b, explain: `总和 ${2 * avg}，另一个数 ${2 * avg} - ${b} = ${2 * avg - b}。` };
       }
       const a = randInt(rand, 3, 20); const b = randInt(rand, 3, 20); const c = randInt(rand, 3, 20);
@@ -1176,8 +1177,8 @@ const mixedReview = [
   {
     askPattern: 'apply-solve', level: 2,
     make(rand) {
-      const a = randInt(rand, 10, 60); const b = randInt(rand, 10, 60);
-      return { prompt: `小明有 ${a} 元，买书花了 ${b} 元，还剩多少元？`, answer: Math.max(0, a - b), unit: '元', explain: `${a} - ${Math.min(a, b)} = ${Math.max(0, a - b)} 元。` };
+      const a = randInt(rand, 30, 99); const b = randInt(rand, 10, a - 1);
+      return { prompt: `小明有 ${a} 元，买书花了 ${b} 元，还剩多少元？`, answer: a - b, unit: '元', explain: `${a} - ${b} = ${a - b}（元）。` };
     }
   },
   {
@@ -1191,7 +1192,7 @@ const mixedReview = [
     askPattern: 'apply-solve', level: 2,
     make(rand) {
       const b = randInt(rand, 2, 9); const c = randInt(rand, 2, 9); const a = randInt(rand, 1, 30);
-      return { prompt: `一箱牛奶有 ${b} 瓶，${c} 箱一共多少瓶？另外还有散装 ${a} 瓶，合计多少瓶？`, answer: b * c + a, unit: '瓶', explain: `${b} × ${c} = ${b * c}，再加 ${a}，共 ${b * c + a}（瓶）。` };
+      return { prompt: `一箱牛奶有 ${b} 瓶，${c} 箱，另外还有散装 ${a} 瓶，一共有多少瓶？`, answer: b * c + a, unit: '瓶', explain: `${b} × ${c} = ${b * c}，再加 ${a}，共 ${b * c + a}（瓶）。` };
     }
   },
   {

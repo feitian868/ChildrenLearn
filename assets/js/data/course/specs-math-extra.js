@@ -124,8 +124,8 @@ const addsubStory = [
 
 const addsubCompare = [
   { askPattern: 'compare-operate', level: 1, make(rand) {
-    const a = r(rand, 3, 9);
-    const d = r(rand, 1, 4);
+    const a = r(rand, 5, 9);
+    const d = r(rand, 1, a - 1);
     return { prompt: `小红有 ${a} 朵花，小丽比小红少 ${d} 朵，小丽有几朵？`, answer: a - d, unit: '朵', explain: `${a} 少 ${d} 就是 ${a - d}。` };
   } },
   { askPattern: 'compare-operate', level: 1, make(rand) {
@@ -636,8 +636,8 @@ const estimateApply = [
     return { prompt: `学校有 ${a} 名学生，又来了约 ${b} 名，大约一共多少人？`, answer: Math.round((a + b) / 100) * 100, unit: '人', explain: `把 ${a} 和 ${b} 估成整百：约 ${Math.round(a / 100) * 100} + ${Math.round(b / 100) * 100} = ${Math.round((a + b) / 100) * 100}。` };
   } },
   { askPattern: 'compare-operate', level: 2, make(rand) {
-    const a = r(rand, 300, 600);
-    const b = r(rand, 200, 400);
+    const a = r(rand, 400, 900);
+    const b = r(rand, 100, a - 100);
     return { prompt: `${a} - ${b} 的差大约是多少？（估成整百）`, answer: Math.round((a - b) / 100) * 100, explain: `估成整百：${Math.round(a / 100) * 100} - ${Math.round(b / 100) * 100} = ${Math.round((a - b) / 100) * 100}。` };
   } },
   { askPattern: 'meaning-translate', level: 1, make(rand) {

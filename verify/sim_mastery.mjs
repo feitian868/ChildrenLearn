@@ -367,6 +367,43 @@ console.log(`  合并结果：${agg.correct}/${agg.total}，分科 ${JSON.string
 assert('四科周测合并为 40 题', agg.total === 40, `${agg.total} 题`);
 assert('周测结果按学科给出明细', Object.keys(agg.bySubject).length === 4, JSON.stringify(Object.keys(agg.bySubject)));
 
+/* ------------------------- 小测结果进入诊断 ------------------------- */
+console.log('\n=== 小测结果是否进入诊断闭环 ===');
+const diag = JSON.parse(JSON.stringify(finalData));
+const diagQs = quiz.items;
+// 取两个知识点：一个全对（测累加）、一个全错（测进复习队列），
+// 按各自在小测里的出现次数精确核对增量
+const counts = {};
+diagQs.forEach((q) => { counts[q.kid] = (counts[q.kid] || 0) + 1; });
+const quizKids = Object.keys(counts);
+const rightKid = quizKids[0];
+const wrongKid = quizKids[1] || quizKids[0];
+// ok 知识点全对、另一个知识点全错：按出现次数精确核对增量
+const resFlags = diagQs.map((q) => q.kid !== wrongKid);
+const queueCount = (d) => Object.values(d.reviewQueue || {}).reduce((s, l) => s + (l || []).length, 0);
+// 用数值快照，不能保存对象引用（applyTaskOutcome 会原地改同一个记录对象）
+const beforeSeen = diag.mastery?.keys?.[rightKid]?.seen ?? 0;
+const beforeCorrect = diag.mastery?.keys?.[rightKid]?.correct ?? 0;
+const beforeQueue = queueCount(diag);
+const out = mastery.applyTaskOutcome(
+  diag,
+  { date: lastDate },
+  { id: 'quiz-diag', subject: 'math', questions: diagQs },
+  { questionResults: resFlags, wrongReasons: [] }
+);
+const afterSeen = diag.mastery?.keys?.[rightKid]?.seen ?? 0;
+const afterCorrect = diag.mastery?.keys?.[rightKid]?.correct ?? 0;
+const afterQueue = queueCount(diag);
+console.log(`  答题知识点 ${out?.kids?.length ?? 0} 次；答对 ${rightKid}: seen ${beforeSeen} → ${afterSeen}，correct ${beforeCorrect} → ${afterCorrect}`);
+console.log(`  答错 ${wrongKid}: 复习队列 ${beforeQueue} → ${afterQueue}`);
+assert('小测答对会累加掌握度', afterSeen === beforeSeen + counts[rightKid],
+  `seen ${beforeSeen} → ${afterSeen}（该知识点出现 ${counts[rightKid]} 次）`);
+assert('小测答对会累加正确数', afterCorrect === beforeCorrect + counts[rightKid],
+  `correct ${beforeCorrect} → ${afterCorrect}`);
+assert('小测答错会进复习队列', afterQueue > beforeQueue, `${beforeQueue} → ${afterQueue}`);
+assert('小测答错标记为待复习', diag.mastery?.keys?.[wrongKid]?.status === 'review',
+  diag.mastery?.keys?.[wrongKid]?.status || '无记录');
+
 /* ------------------------- ⑤ 100 天掌握度连续 ------------------------- */
 console.log('\n=== ⑤ 跨 100 天掌握度是否连续（dailyHistory 已裁剪）===');
 const rec = day1Kid ? finalData.mastery.keys[day1Kid] : null;

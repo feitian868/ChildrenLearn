@@ -7,7 +7,7 @@ import * as store from './store.js';
 import { GRADE_LABEL, LEVEL_LABEL, passLineFor, SUBJECT_TIP } from '../data/curriculum.js';
 import { getTaskById } from './tasks.js';
 import { completeTask, markCelebrated } from './score.js';
-import { buildWeeklyQuiz, saveQuizResult } from './mastery.js';
+import { applyTaskOutcome, buildWeeklyQuiz, saveQuizResult } from './mastery.js';
 import { celebrate, playerName } from './fx.js';
 import { sfxClick, sfxCorrect, sfxWrong, speak, unlockAudio } from './audio.js';
 import { el, clear } from './ui.js';
@@ -677,6 +677,9 @@ export function mountGame(subject) {
         ok: results[i] === 'correct'
       }));
       store.update((d) => {
+        // 只把「本周第一次」的小测计入诊断：重测可以刷分，但不会重复累加掌握度
+        const firstTime = !(d.quizzes || {})[`${weeklyQuiz.weekKey}:${subject}`]
+          && !(d.quizzes || {})[weeklyQuiz.weekKey];
         saveQuizResult(d, {
           weekKey: weeklyQuiz.weekKey,
           date: weeklyQuiz.date,
@@ -685,6 +688,15 @@ export function mountGame(subject) {
           correct: first,
           items
         });
+        if (firstTime) {
+          // 小测也进诊断闭环：错题按 1/3/7/15/30 序列进复习队列，正确题累加掌握度（不加积分）
+          applyTaskOutcome(
+            d,
+            { date: weeklyQuiz.date },
+            { id: task.id, subject, questions: task.questions },
+            { questionResults: results.map((r) => r === 'correct'), wrongReasons: [] }
+          );
+        }
       });
       renderQuizResult({ correct: first, total, items });
       return;
@@ -770,7 +782,10 @@ export function mountGame(subject) {
     const panel = el('div', { class: 'result' }, [
       el('div', { class: 'result-emoji', text: correct >= 8 ? '🎯' : '📘' }),
       el('h2', { text: '本周小测完成' }),
-      el('p', { text: `答对 ${correct}/${total}（${rate}%）。小测不加积分、也不能重做，只用来看这周真实掌握。` }),
+      el('p', { text: `答对 ${correct}/${total}（${rate}%）。小测不加积分；同一周重测只更新成绩，不会重复累计掌握度。` }),
+      correct < total
+        ? el('p', { text: `错题已排进复习队列，之后会按 1/3/7/15/30 天的节奏混进每日任务。` })
+        : null,
       el('div', { class: 'result-stats' }, [
         chip(`首答 ${correct}/${total}`, 'chip-line'),
         chip(`旧知识 ${oldOk}/${oldItems.length}`, 'chip-ok'),
