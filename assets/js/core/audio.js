@@ -246,18 +246,33 @@ const FEMALE_HINTS = ['yaoyao', 'huihui', 'xiaoxiao', 'xiaoyi', 'ting-ting', 'ti
   'meijia', 'mei-jia', 'sin-ji', 'hanhan', 'lili', 'female', 'girl', '女'];
 const MALE_HINTS = ['kangkang', 'david', 'yunxi', 'yunjian', 'li-mu', 'male', '男'];
 
+function allVoices() {
+  if (voiceCache.length) return voiceCache;
+  try { return window.speechSynthesis.getVoices() || []; } catch { return []; }
+}
+
+/**
+ * 逐级挑选语音，保证"只要有语音就一定选得出一个"：
+ *   1. 本机同语言（最理想，本地发音不出网）
+ *   2. 本机任意语言（如用中文语音读英文单词，至少能出声）
+ *   3. 在线同语言（Google / Edge 云端语音，需要网络）
+ *   4. 任意语音
+ */
 function pickVoice(lang, prefer = []) {
-  const all = voiceCache.length ? voiceCache : (window.speechSynthesis.getVoices() || []);
+  const all = allVoices();
   if (!all.length) return null;
-  const base = String(lang).toLowerCase().split('-')[0];
-  // 只挑本地语音：localService=true 才是系统自带、不依赖网络
-  const sameLocal = all.filter((v) =>
-    v.localService
-    && v.lang && v.lang.toLowerCase().split('-')[0] === base
-  );
-  const pool = sameLocal; // 不再 fallback 到 same（含在线），避免选到 Google 远程英语
-  if (!pool.length) return null;
   const nameOf = (v) => (v.name || '').toLowerCase();
+  const langOf = (v) => (v.lang || '').toLowerCase();
+  const base = String(lang).toLowerCase().split('-')[0];
+  const sameLang = (v) => langOf(v).split('-')[0] === base;
+  const localSame = all.filter((v) => v.localService && sameLang(v));
+  const localAny = all.filter((v) => v.localService);
+  const onlineSame = all.filter((v) => !v.localService && sameLang(v));
+  const pool = localSame.length ? localSame
+    : localAny.length ? localAny
+      : onlineSame.length ? onlineSame
+        : all;
+  if (!pool.length) return null;
 
   for (const hint of prefer) {
     const hit = pool.find((v) => nameOf(v).includes(hint));
@@ -269,18 +284,38 @@ function pickVoice(lang, prefer = []) {
   return pool[0] || notMale || null;
 }
 
+/** 语音列表在部分浏览器里是异步就绪的：空列表时等 voiceschanged（最多 800ms） */
+function whenVoicesReady() {
+  return new Promise((resolve) => {
+    if (!speechReady) { resolve(); return; }
+    if (allVoices().length) { resolve(); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      refreshVoices();
+      resolve();
+    };
+    try {
+      window.speechSynthesis.addEventListener('voiceschanged', finish, { once: true });
+    } catch { /* 忽略 */ }
+    setTimeout(finish, 800);
+  });
+}
+
 // 存一份 utterance 引用避免 Chrome GC；用队列避免 cancel→speak 吞语音
 let _pendingUtter = null;
 let _pendingTimer = 0;
 
 function speakNow(text, { lang = 'zh-CN', rate = 1, pitch = 1.1, voice: preset } = {}) {
   const syn = window.speechSynthesis;
-  const pick = () => preset || pickVoice(lang);
+  if (!syn) return;
+  // Chrome 偶发卡在 paused 状态，之后所有 speak() 都静音，先恢复再播
+  try { if (syn.paused) syn.resume(); } catch { /* 忽略 */ }
 
-  // cancel() 之后 Chrome 会吞掉下一次 speak()，必须等当前朗读彻底结束再 speak
-  const trySpeak = () => {
+  const trySpeak = (retried) => {
     const utter = new SpeechSynthesisUtterance(text);
-    const v = pick();
+    const v = preset || pickVoice(lang);
     if (v) {
       utter.voice = v;
       utter.lang = v.lang;
@@ -289,25 +324,56 @@ function speakNow(text, { lang = 'zh-CN', rate = 1, pitch = 1.1, voice: preset }
     }
     utter.rate = rate;
     utter.pitch = pitch;
-    utter.onend = () => { _pendingUtter = null; };
-    utter.onerror = () => { _pendingUtter = null; };
+    utter.volume = 1;
+
+    let started = false;
+    let finished = false;
+
+    utter.onstart = () => { started = true; };
+    utter.onend = () => { finished = true; _pendingUtter = null; };
+    utter.onerror = (e) => {
+      finished = true;
+      _pendingUtter = null;
+      const reason = (e && e.error) || '';
+      // interrupted / canceled 是主动打断，不算失败
+      if (reason && !/interrupt|cancel/i.test(reason)) {
+        console.warn('[audio] 朗读失败：', reason,
+          '| 语音：', v ? `${v.name} (${v.lang})` : '浏览器默认');
+      }
+    };
     _pendingUtter = utter;
+    try { syn.resume(); } catch { /* 忽略 */ }
     syn.speak(utter);
+
+    // 看门狗：1 秒内既没 start 也没结束 → 被浏览器吞了，取消后重试一次
+    setTimeout(() => {
+      if (started || finished || retried || !enabled) return;
+      try { syn.cancel(); } catch { /* 忽略 */ }
+      setTimeout(() => trySpeak(true), 150);
+    }, 1000);
   };
 
   if (syn.speaking || syn.pending) {
     // 已在朗读 → 先 cancel，等系统彻底空闲再 speak（给 350ms 缓冲）
     try { syn.cancel(); } catch { /* 忽略 */ }
     clearTimeout(_pendingTimer);
-    _pendingTimer = setTimeout(trySpeak, 350);
+    _pendingTimer = setTimeout(() => trySpeak(false), 350);
   } else {
-    trySpeak();
+    trySpeak(false);
   }
+}
+
+/** 等语音列表就绪再播，避免首次点击时 getVoices() 还是空数组导致静音 */
+function speakWhenReady(text, opts) {
+  whenVoicesReady().then(() => {
+    if (!enabled) return;
+    speakNow(text, opts);
+  });
 }
 
 export function speak(text, lang = 'en-US') {
   if (!speechReady || !enabled || !text) return;
-  speakNow(text, { lang, rate: 0.85, pitch: 1.05 });
+  speakWhenReady(text, { lang, rate: 0.85, pitch: 1.05 });
 }
 
 /* ------------------------- 祝贺语音 ------------------------- */
@@ -322,7 +388,10 @@ let congratsTimer = 0;
 export function speakCongrats(text, delay = 0) {
   if (!speechReady || !enabled || !text) return;
   clearTimeout(congratsTimer);
-  congratsTimer = setTimeout(() => speakNow(text, { lang: 'zh-CN', rate: 1, pitch: 1.15 }), delay);
+  congratsTimer = setTimeout(
+    () => speakWhenReady(text, { lang: 'zh-CN', rate: 1, pitch: 1.15 }),
+    delay
+  );
 }
 
 /** 只停止尚未开始的祝贺语音；已开始播放的不打断，避免点“继续”时把声音掐掉 */
@@ -352,16 +421,19 @@ export function speakPet(text, delay = 0) {
   if (!speechReady || !enabled || !text) return;
   clearTimeout(petSpeechTimer);
   petSpeechTimer = setTimeout(() => {
-    let voice = pickVoice('zh-CN', CHILD_VOICE_HINTS);
-    if (voice && !/^zh/i.test(voice.lang || '')) voice = null;
-    const isChildVoice = !!voice && /yaoyao|xiaoyi|xiaoxiao|child|kid|girl/i.test(voice.name || '');
     // 台词里的“~”多数语音引擎会念成“波浪号”或拖出怪音，朗读前统一去掉
     const line = String(text).replace(/[~～]/g, '');
-    speakNow(line, {
-      lang: 'zh-CN',
-      voice,
-      rate: isChildVoice ? 0.92 : 0.88,
-      pitch: isChildVoice ? 1.08 : 1.12,
+    whenVoicesReady().then(() => {
+      if (!enabled) return;
+      let voice = pickVoice('zh-CN', CHILD_VOICE_HINTS);
+      if (voice && !/^zh/i.test(voice.lang || '')) voice = null;
+      const isChildVoice = !!voice && /yaoyao|xiaoyi|xiaoxiao|child|kid|girl/i.test(voice.name || '');
+      speakNow(line, {
+        lang: 'zh-CN',
+        voice,
+        rate: isChildVoice ? 0.92 : 0.88,
+        pitch: isChildVoice ? 1.08 : 1.12,
+      });
     });
   }, delay);
 }
