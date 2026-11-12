@@ -235,18 +235,38 @@ function readUserStore() {
       .filter(Boolean);
 
     if (normalized.length) {
-      if (needWrite || normalized.length !== list.length || raw.indexOf('"name"') === -1) {
-        writeRaw(APP_USERS_KEY, JSON.stringify({ users: normalized }));
+      // 旧版遗留的"默认用户"自动改名为"小朋友"，避免线上看到内部命名
+      const renamed = normalized.map((u) => {
+        if (u.name === '默认用户') return { ...u, name: '小朋友' };
+        return u;
+      });
+      const currentRaw = readRaw(APP_CURRENT_KEY);
+      const currentFixed = currentRaw === '默认用户' ? '小朋友' : currentRaw;
+      const dirty = needWrite
+        || normalized.length !== list.length
+        || raw.indexOf('"name"') === -1
+        || renamed.some((u, i) => u.name !== normalized[i].name);
+      if (dirty) {
+        writeRaw(APP_USERS_KEY, JSON.stringify({ users: renamed }));
+        if (currentFixed !== currentRaw) writeRaw(APP_CURRENT_KEY, currentFixed);
+        // 数据键迁移：user_默认用户_dailyTaskData → user_小朋友_dailyTaskData，保留原有学习记录
+        if (renamed.some((u, i) => u.name !== normalized[i].name)) {
+          const oldKey = getUserKey('默认用户');
+          const newKey = getUserKey('小朋友');
+          const oldData = readRaw(oldKey);
+          if (oldData && !readRaw(newKey)) writeRaw(newKey, oldData);
+        }
       }
-      return normalized;
+      return renamed;
     }
     needWrite = true; // 数组全被过滤掉了，重建
   }
 
-  // 完全没有可用用户 → 初始化一个"默认用户"
-  const seed = [{ name: '默认用户', avatar: DEFAULT_AVATAR }];
+  // 完全没有可用用户 → 初始化一个"小朋友"作为种子
+  // 不用"默认用户"这种内部命名，避免线上发布后被真实用户看到
+  const seed = [{ name: '小朋友', avatar: DEFAULT_AVATAR }];
   writeRaw(APP_USERS_KEY, JSON.stringify({ users: seed }));
-  if (!readRaw(APP_CURRENT_KEY)) writeRaw(APP_CURRENT_KEY, '默认用户');
+  if (!readRaw(APP_CURRENT_KEY)) writeRaw(APP_CURRENT_KEY, '小朋友');
   return seed;
 }
 
