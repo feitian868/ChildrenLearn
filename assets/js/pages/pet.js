@@ -37,24 +37,39 @@ let _greeted = false;
    童声互动：头顶气泡 + 语音
    ============================================================ */
 
-// 物种台词缺失时的通用台词（保证任何宠物都有话说）
+// 物种台词缺失时的通用台词（保证任何宠物都有话说；同一场景多句随机挑）
 const FALLBACK_VOICES = {
-  pet: '真舒服啊~再摸摸我嘛~',
-  feed: '真好吃啊~谢谢~',
-  play: '好开心呀！再来一次嘛~',
-  clean: '洗得香香的，真舒服~',
-  dress: '哇，我好漂亮呀！',
-  undress: '咦，摘掉啦~',
-  scene: '新家真好看~',
-  limit: '今天玩累啦，明天再玩吧~',
-  hungry: '肚子饿啦，去商店换点吃的吧~',
+  pet: ['真舒服啊~再摸摸我嘛~', '被你摸摸，心情超好！', '你认真学习的样子最棒啦！'],
+  feed: ['真好吃啊~谢谢~', '吃饱啦，学习更有精神！'],
+  play: ['好开心呀！再来一次嘛~', '玩一会儿就回去学习吧，我等你！'],
+  clean: ['洗得香香的，真舒服~', '干干净净，心情也亮亮的！'],
+  dress: ['哇，我好漂亮呀！', '这身打扮你眼光真好！'],
+  undress: ['咦，摘掉啦~', '轻松多啦！'],
+  scene: ['新家真好看~', '谢谢你给我一个漂亮的家！'],
+  limit: ['今天玩累啦，明天再玩吧~', '我先睡啦，你也要早点休息哦！'],
+  hungry: ['肚子饿啦，去商店换点吃的吧~', '吃点东西才有力气玩呀~'],
+  cheer: ['你今天很努力，我看到了！', '遇到难题别怕，慢慢想就会啦！', '每天进步一点点，你就超棒啦！']
 };
+
+let _lastVoice = '';
+
+/** 从台词数组里随机挑一句，尽量不和上一句重复 */
+function pickLine(lines) {
+  if (!lines) return '';
+  if (!Array.isArray(lines)) return lines;
+  if (!lines.length) return '';
+  if (lines.length === 1) return lines[0];
+  const pool = lines.filter((line) => line !== _lastVoice);
+  const line = pool[Math.floor(Math.random() * pool.length)] || lines[0];
+  _lastVoice = line;
+  return line;
+}
 
 /** 取当前宠物的台词：优先物种专属，其次通用台词 */
 function voiceOf(key) {
   const pet = stateOf();
   const line = pet && SPECIES_TRAITS[pet.species]?.voices?.[key];
-  return line || FALLBACK_VOICES[key] || '';
+  return pickLine(line) || pickLine(FALLBACK_VOICES[key]) || '';
 }
 
 let _bubbleTimer = 0;
@@ -194,11 +209,10 @@ function render() {
   } else {
     app.append(renderArena(pet));
     scheduleIdleBehaviors(); // 大舞台渲染完后开启自发行为定时器
-    // 首次进入时让宠物用童声打招呼
+    // 首次进入时让宠物用童声打招呼，偶尔直接给一句鼓励
     if (!_greeted) {
       _greeted = true;
-      const trait = SPECIES_TRAITS[pet.species];
-      if (trait) setTimeout(() => say(trait.voices.hi), 500);
+      setTimeout(() => say(voiceOf(Math.random() < 0.4 ? 'cheer' : 'hi')), 500);
     }
   }
 }
