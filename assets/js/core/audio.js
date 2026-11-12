@@ -330,8 +330,10 @@ const CHILD_VOICE_HINTS = ['yaoyao', 'xiaoyi', 'xiaoxiao', 'ting-ting', 'tingtin
 
 /**
  * 宠物说童声台词（抚摸/喂养/玩耍/清洁/戴装饰等）
- * 若本机有小朋友语音（如 Microsoft Yaoyao）直接用，只轻微升调；
- * 没有童声时退回女声并把音高拉高，尽量接近奶音。跟随音效开关。
+ * 语速和音高都保持接近真人：语速略慢于正常（0.9）保证吐字清楚，
+ * 音高只轻微上调（1.1 左右），避免调太高导致发音变形、听不清。
+ * 必须用中文语音朗读；没装中文语音时交给系统按 zh-CN 兜底，
+ * 不能拿英文语音硬读中文（会读成完全错误的音）。
  * 连续点击时 cancel 掉上一句，只保留最新一句，避免声音叠加。
  * @param {string} text 台词
  * @param {number} [delay] 延迟毫秒，用来错开音效
@@ -340,13 +342,16 @@ export function speakPet(text, delay = 0) {
   if (!speechReady || !enabled || !text) return;
   clearTimeout(petSpeechTimer);
   petSpeechTimer = setTimeout(() => {
-    const voice = pickVoice('zh-CN', CHILD_VOICE_HINTS);
+    let voice = pickVoice('zh-CN', CHILD_VOICE_HINTS);
+    if (voice && !/^zh/i.test(voice.lang || '')) voice = null;
     const isChildVoice = !!voice && /yaoyao|xiaoyi|xiaoxiao|child|kid|girl/i.test(voice.name || '');
-    speakNow(text, {
+    // 台词里的“~”多数语音引擎会念成“波浪号”或拖出怪音，朗读前统一去掉
+    const line = String(text).replace(/[~～]/g, '');
+    speakNow(line, {
       lang: 'zh-CN',
       voice,
-      rate: isChildVoice ? 1.06 : 1.16,
-      pitch: isChildVoice ? 1.3 : 1.85,
+      rate: isChildVoice ? 0.92 : 0.88,
+      pitch: isChildVoice ? 1.08 : 1.12,
     });
   }, delay);
 }
