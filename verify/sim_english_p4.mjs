@@ -352,6 +352,17 @@ assert(twoWord.length >= 40, `第 3 级 2 词短语 ≥40 条（实际 ${twoWord
 assert(level3Two.length === twoWord.length, `2 词短语全部判为第 3 级（异常 ${twoWord.length - level3Two.length} 条）`);
 assert(levels[4] > 0 && levels[1] > 0 && levels[2] > 0, '四级词表 1/2/4 级均有供给');
 
+// 音标：词库每个单词都要有音标，避免新增单词后漏标
+const { WORD_IPA, ipaOf } = await import('../assets/js/data/english-ipa.js');
+const ipaMissing = WORD_BANK.filter((w) => !WORD_IPA[String(w.w).toLowerCase()]).map((w) => w.w);
+assert(ipaMissing.length === 0,
+  `词库 ${WORD_BANK.length} 个单词全部有音标${ipaMissing.length ? '（缺失：' + ipaMissing.join('、') + '）' : ''}`);
+const ipaBad = WORD_BANK.filter((w) => !/^\/[^/]+\/$/.test(ipaOf(w.w))).map((w) => w.w);
+assert(ipaBad.length === 0,
+  `音标格式统一为 /.../${ipaBad.length ? '（异常：' + ipaBad.join('、') + '）' : ''}`);
+const ipaDup = Object.entries(WORD_IPA).filter(([k, v]) => k !== k.toLowerCase() || !v.trim());
+assert(ipaDup.length === 0, `音标表键名小写且无空值（异常 ${ipaDup.length} 条）`);
+
 // 对话台词入 +1/+3/+7 队列
 const titleSet = new Set(DIALOGUE_BANK.map((d) => d.title));
 assert(titleSet.size === DIALOGUE_BANK.length, `对话标题唯一（${DIALOGUE_BANK.length} 组）`);

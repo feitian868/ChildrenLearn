@@ -13,6 +13,7 @@ import { hashString, mulberry32, shuffle } from '../core/rng.js';
 import { speak, unlockAudio, sfxClick, sfxCorrect, sfxWrong, sfxWin } from '../core/audio.js';
 import { el, clear, toast } from '../core/ui.js';
 import { WORD_BANK, SENTENCE_BANK, DIALOGUE_BANK } from '../data/speaking-content.js';
+import { ipaOf } from '../data/english-ipa.js';
 import { ENGLISH_BANK } from '../data/knowledge-english.js';
 import { levelOfItem, levelName, scheduleNext, dueEntries } from '../data/speaking-plan.js';
 
@@ -433,7 +434,13 @@ function renderWords() {
       el('span', { class: 'spk-idx', text: String(idx + 1) }),
       el('div', { class: 'spk-main' }, [
         el('div', { class: 'spk-text spk-word-zh', text: item.zh }),
-        el('div', { class: 'spk-zh', text: done ? item.word : `先听发音，再拼出这个单词（${item.word.length} 个字母）` }),
+        el('div', { class: 'spk-zh' }, done
+          ? [
+            el('span', { class: 'spk-word-done', text: item.word }),
+            ' ',
+            el('span', { class: 'spk-ipa-inline', text: ipaOf(item.word) })
+          ]
+          : `先听发音，再拼出这个单词（${item.word.length} 个字母）`),
         el('div', { class: 'spk-zh', text: `${levelName(item.level)}${item.reviewStep != null ? ' · 复习' : ''}` })
       ]),
       el('button', {
@@ -549,6 +556,8 @@ function practiceWord(item) {
   let phase = practiced.has(item.id) ? 'done' : 'show';
 
   const wordEl = el('div', { class: 'spk-m-word is-big', text: item.word });
+  const ipaText = ipaOf(item.word);
+  const ipaEl = el('div', { class: 'spk-m-ipa', text: ipaText });
   const zhEl = el('div', { class: 'spk-m-zh', text: item.zh });
   const input = el('input', {
     class: 'spk-input',
@@ -582,11 +591,14 @@ function practiceWord(item) {
     if (p === 'show') {
       wordEl.classList.remove('is-hidden');
       wordEl.textContent = item.word;
-      hint.textContent = '看看这个词，然后点「我记住了」开始拼写';
+      ipaEl.style.display = ipaText ? '' : 'none';
+      hint.textContent = '看看这个词和音标，然后点「我记住了」开始拼写';
       nextBtn.style.display = '';
     } else if (p === 'spell') {
       wordEl.classList.add('is-hidden');
       wordEl.textContent = '？ ？ ？';
+      // 拼写阶段收起音标，避免按音标反推字母
+      ipaEl.style.display = 'none';
       input.style.display = '';
       input.value = '';
       hint.textContent = `共 ${item.word.length} 个字母，首字母是 “${item.word[0]}”`;
@@ -595,6 +607,7 @@ function practiceWord(item) {
     } else if (p === 'done') {
       wordEl.classList.remove('is-hidden');
       wordEl.textContent = item.word;
+      ipaEl.style.display = ipaText ? '' : 'none';
       hint.textContent = '拼写正确。跟着示范多读几遍，读完点「练完这一项」记入复习队列。';
       if (readBtn) readBtn.style.display = '';
       doneBtn.style.display = '';
@@ -638,6 +651,7 @@ function practiceWord(item) {
     el('div', { class: 'spk-m-tag', text: '① 单词听读' }),
     zhEl,
     wordEl,
+    ipaEl,
     input,
     hint,
     el('div', { class: 'spk-m-ctrls' }, [listenBtn, nextBtn, checkBtn, readBtn, doneBtn, closeBtn]),
