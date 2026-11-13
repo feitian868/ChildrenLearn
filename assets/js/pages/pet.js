@@ -300,7 +300,7 @@ function renderArena(pet) {
 
   // 宠物：绝对定位 left 50%，带成长缩放，从底部往上涨
   const scale = pet.growthScale;
-  const petWrap = el('div', { class: `pet-wrap ${pet.moodClass}`, 'data-scale': scale, style: {
+  const petWrap = el('div', { class: `pet-wrap ${pet.moodClass}`, 'data-scale': scale, 'data-tier': String(pet.levelTier), style: {
     left: '50%', transform: `translateX(-50%) scale(${scale})`,
     transformOrigin: '50% 100%', transition: 'left 2.4s ease-in-out, transform .5s ease',
   } });
@@ -308,6 +308,9 @@ function renderArena(pet) {
   // 点宠物 = 抚摸
   petWrap.addEventListener('click', () => triggerTouch(sceneWrap, petWrap));
   sceneWrap.append(petWrap);
+
+  // 等级徽章：升级后档位变化，徽章样式随之升级（小变化看得见）
+  sceneWrap.append(renderLevelBadge(pet));
 
   // 快捷互动按钮（每个触发独立手势）
   const actionRow = el('div', { class: 'pet-quick-actions', style: {
@@ -349,6 +352,24 @@ function renderArena(pet) {
 
 // 一次性动画定时器（独立于 _behaviorTimers，因为互动后我们不想清）
 const _fxTimers = [];
+
+/** 升级播报：等级 + 本次实际拿到的奖励（奖励由 core 发放，这里只展示） */
+function announceLevelUp(rewards, delay = 0) {
+  setTimeout(() => {
+    sfxPetLevelUp();
+    sfxPetSparkle();
+    sfxPetHappy();
+    const list = Array.isArray(rewards) ? rewards : [];
+    const gifts = list.map((r) => r.text).filter(Boolean).join('；');
+    if (list.length) {
+      toast(`🎉 升到 Lv.${list[list.length - 1].level}！${gifts ? `获得 ${gifts}` : ''}`, 'ok');
+    } else {
+      toast('🎉 升级啦！', 'ok');
+    }
+    // 升级会换徽章档位、身体变大、自动戴上新装饰 → 动画播完重建一次舞台
+    setTimeout(() => render(), 1600);
+  }, delay);
+}
 
 /** 找到 petWrap 里的 svg.pet，切 act-* class 触发骨骼动画 */
 const ACT_CLASSES = ['act-pat', 'act-feed', 'act-play', 'act-clean'];
@@ -446,10 +467,7 @@ function triggerTouch(sceneWrap, petWrap) {
   if (Math.random() < 0.3) setTimeout(() => sfxPetChirp(), 900);
 
   if (r.leveledUp) {
-    setTimeout(() => {
-      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
-      toast('🎉 升级啦！', 'ok');
-    }, 600);
+    announceLevelUp(r.rewards, 600);
   }
 }
 
@@ -480,10 +498,7 @@ function triggerPlay(sceneWrap, petWrap) {
   setTimeout(() => sfxPetChirp(), 600);
 
   if (r.leveledUp) {
-    setTimeout(() => {
-      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
-      toast('🎉 升级啦！', 'ok');
-    }, 900);
+    announceLevelUp(r.rewards, 900);
   }
 }
 
@@ -520,10 +535,7 @@ function triggerClean(sceneWrap, petWrap) {
   say(voiceOf('clean'));
 
   if (r.leveledUp) {
-    setTimeout(() => {
-      sfxPetLevelUp(); sfxPetSparkle(); sfxPetHappy();
-      toast('🎉 升级啦！', 'ok');
-    }, 1400);
+    announceLevelUp(r.rewards, 1400);
   }
 }
 
@@ -621,20 +633,34 @@ function walkStep(arena, petWrap) {
 /* ============================================================
    进度条 + Bar
    ============================================================ */
+/** 舞台左上角的等级徽章：档位越高越亮，Lv.9+ 带星星 */
+function renderLevelBadge(pet) {
+  const stars = pet.level >= 9 ? '⭐⭐' : pet.level >= 6 ? '⭐' : '';
+  return el('div', {
+    class: 'pet-level-badge',
+    'data-tier': String(pet.levelTier),
+    text: `${stars}Lv.${pet.level}`,
+  });
+}
+
 function renderBars(pet) {
   const expNext = pet.levelNextAt - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
   const expCur  = pet.exp - (LEVEL_THRESHOLDS[pet.level - 1] ?? 0);
   const expPct = expNext > 0 ? Math.round((expCur / expNext) * 100) : 100;
   const wrap = el('div', { class: 'pet-status', style: { padding: '10px 16px', background: 'white', borderBottom: '1px solid #eee' } });
-  wrap.append(
+  const rows = [
     barRow('🍖', '饥饿', pet.hunger),
     barRow('💚', '心情', pet.mood),
     el('div', { style: { fontSize: '12px', color: 'var(--ink2)', marginTop: '4px', display: 'flex', justifyContent: 'space-between' } }, [
-      el('span', { text: `Lv.${pet.level} → Lv.${pet.level + 1}` }),
-      el('span', { text: `${expCur} / ${expNext} (${expPct}%)` }),
+      el('span', { text: pet.level >= 10 ? `Lv.10 已满级` : `Lv.${pet.level} → Lv.${pet.level + 1}` }),
+      el('span', { text: pet.level >= 10 ? '' : `${expCur} / ${expNext} (${expPct}%)` }),
     ]),
     el('div', { class: 'pet-level-bar' }, [el('div', { class: 'fill', style: { width: expPct + '%' } })]),
-  );
+  ];
+  if (pet.nextReward) {
+    rows.push(el('div', { class: 'pet-next-reward', text: `🎁 升到 Lv.${pet.level + 1} 可得：${pet.nextReward}` }));
+  }
+  wrap.append(...rows);
   return wrap;
 }
 
@@ -649,10 +675,13 @@ function syncStatus() {
   const pw = document.querySelector('.pet-wrap');
   if (pw) {
     pw.dataset.scale = String(pet.growthScale);
+    pw.dataset.tier = String(pet.levelTier);
     if (!pw.classList.contains('pet-walking')) {
       pw.style.transform = `translateX(-50%) scale(${pet.growthScale})`;
     }
   }
+  const badge = document.querySelector('.pet-level-badge');
+  if (badge) badge.replaceWith(renderLevelBadge(pet));
   const playBtn = document.querySelector('.pet-arena [data-act="play"]');
   if (playBtn) playBtn.textContent = '🎾 玩耍' + (pet.daily.played ? ' ✓' : '');
   const cleanBtn = document.querySelector('.pet-arena [data-act="clean"]');
@@ -725,12 +754,7 @@ function renderPanel(pet) {
               const pw = document.querySelector('.pet-wrap');
               if (arena && pw) triggerFeed(arena, pw, f.emoji, res.preference);
               syncStatus();
-              if (res.leveledUp) {
-                sfxPetLevelUp();
-                sfxPetSparkle();
-                setTimeout(() => sfxPetHappy(), 400);
-                toast(`🎉 ${pet.nickname}升到 Lv.${stateOf()?.level ?? pet.level + 1} 啦！`, 'ok');
-              }
+              if (res.leveledUp) announceLevelUp(res.rewards, 500);
               setTimeout(() => render(), 1400); // 动画播完再刷新
             }
           });

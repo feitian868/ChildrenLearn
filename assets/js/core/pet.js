@@ -26,6 +26,26 @@ import { SPECIES, DECO_SVG, SCENES, speciesOf } from '../data/pet-assets.js';
 /** 每级所需成长值（从 Lv.1 开始，升级需要 exp 达到阈值） */
 export const LEVEL_THRESHOLDS = [0, 20, 50, 100, 180, 280, 400, 550, 720, 900, 1100];
 
+/** 满级：Lv.10（1100 点用于把 Lv.10 的进度条填满） */
+export const MAX_LEVEL = 10;
+
+/**
+ * 升级奖励：每升一级自动发放（不用去商店买）。
+ *   food  → 进背包；deco/scene → 直接解锁；已拥有时折成小饼干 ×2
+ *   deco  若对应槽位还空着，会自动戴上，升级后立刻能看到外观变化
+ */
+export const LEVEL_REWARDS = {
+  2:  { label: '胡萝卜 ×2', food: [{ id: 'carrot', count: 2 }] },
+  3:  { label: '红围巾 + 小饼干 ×2', deco: ['scarf'], food: [{ id: 'cookie', count: 2 }] },
+  4:  { label: '小鱼干 ×2 + 鸡腿 ×1', food: [{ id: 'fish', count: 2 }, { id: 'drumstick', count: 1 }] },
+  5:  { label: '新乐园「温馨小窝」', scene: ['home'] },
+  6:  { label: '红色蝴蝶结 + 水果拼盘 ×1', deco: ['red-bow'], food: [{ id: 'fruits', count: 1 }] },
+  7:  { label: '圣诞帽 + 小饼干 ×3', deco: ['xmas-hat'], food: [{ id: 'cookie', count: 3 }] },
+  8:  { label: '新乐园「海边沙滩」', scene: ['beach'] },
+  9:  { label: '粉色项圈 + 水果拼盘 ×2', deco: ['collar'], food: [{ id: 'fruits', count: 2 }] },
+  10: { label: '小皇冠 + 新乐园「糖果王国」', deco: ['crown'], scene: ['candy'] }
+};
+
 /** 每日衰减量 */
 const DECAY_HUNGER = 20;
 const DECAY_MOOD   = 15;
@@ -55,10 +75,85 @@ function computeLevel(exp) {
     if (exp >= LEVEL_THRESHOLDS[i]) level = i + 1;
     else break;
   }
+  level = Math.min(level, MAX_LEVEL);
   const curStart = LEVEL_THRESHOLDS[level - 1] ?? 0;
   const nextStart = LEVEL_THRESHOLDS[level] ?? (curStart + 200);
   const progress = clamp((exp - curStart) / (nextStart - curStart), 0, 1);
   return { level, exp, progress, nextAt: nextStart };
+}
+
+/**
+ * 发放 fromLevel+1 ~ toLevel 的升级奖励。
+ * 已拥有的装饰/乐园折成小饼干 ×2，避免重复发放后“什么都没有”。
+ */
+function grantRewards(pet, fromLevel, toLevel) {
+  const gained = [];
+  for (let lv = fromLevel + 1; lv <= toLevel; lv += 1) {
+    const reward = LEVEL_REWARDS[lv];
+    if (!reward) continue;
+    const parts = [];
+
+    (reward.food || []).forEach(({ id, count }) => {
+      pet.inventory.food[id] = (pet.inventory.food[id] || 0) + count;
+      parts.push(`${foodOf(id)?.name || id} ×${count}`);
+    });
+
+    (reward.deco || []).forEach((id) => {
+      const deco = decoOf(id);
+      if (pet.ownedDeco.includes(id)) {
+        pet.inventory.food.cookie = (pet.inventory.food.cookie || 0) + 2;
+        parts.push('小饼干 ×2（装饰已有）');
+        return;
+      }
+      pet.ownedDeco.push(id);
+      // 该槽位还空着就自动戴上 —— 升级后马上能看到外观变化
+      if (deco && !pet.wear[deco.slot]) {
+        pet.wear[deco.slot] = id;
+        parts.push(`${deco.name}（已戴上）`);
+      } else {
+        parts.push(deco?.name || id);
+      }
+    });
+
+    (reward.scene || []).forEach((id) => {
+      if (pet.ownedScene.includes(id)) {
+        pet.inventory.food.cookie = (pet.inventory.food.cookie || 0) + 2;
+        parts.push('小饼干 ×2（乐园已有）');
+        return;
+      }
+      pet.ownedScene.push(id);
+      parts.push(`乐园「${sceneOf(id)?.name || id}」`);
+    });
+
+    gained.push({ level: lv, text: parts.join('、') });
+  }
+  pet.claimedLevel = toLevel;
+  return gained;
+}
+
+/**
+ * 同步等级并发放奖励，所有加成长值的行为都走这里。
+ * claimedLevel 用于记录已发到哪一级，防止重复领取。
+ */
+function syncLevel(pet) {
+  const before = pet.level;
+  const lv = computeLevel(pet.exp);
+  pet.level = lv.level;
+  if (lv.level <= before) {
+    if (!pet.claimedLevel) pet.claimedLevel = lv.level;
+    return { leveledUp: false, rewards: [] };
+  }
+  const from = Math.max(pet.claimedLevel || before, before);
+  const rewards = grantRewards(pet, from, lv.level);
+  return { leveledUp: true, rewards };
+}
+
+/** 兼容老存档：等级已经涨上去、但奖励从没发过时，在读档时补发一次 */
+function ensureRewards(pet) {
+  const claimed = pet.claimedLevel || 1;
+  if (pet.level > claimed) return grantRewards(pet, claimed, pet.level);
+  if (!pet.claimedLevel) pet.claimedLevel = pet.level;
+  return [];
 }
 
 /* ============================================================
@@ -72,7 +167,8 @@ function computeLevel(exp) {
 export function stateOf() {
   const data = store.load();
   if (!data.pet) return null;
-  tick(data); // 可能修改 data.pet
+  tick(data); // 可能修改 data.pet（含升级奖励）
+  if (ensureRewards(data.pet).length) store.save(data); // 老存档补发
   return buildView(data.pet);
 }
 
@@ -93,9 +189,8 @@ function tick(data) {
   pet.daily = { played: false, cleaned: false };
   pet.lastCareDate = today;
 
-  // 自动升级
-  const lv = computeLevel(pet.exp);
-  if (lv.level !== pet.level) pet.level = lv.level;
+  // 自动升级（含升级奖励发放）
+  syncLevel(pet);
 
   store.save(data);
 }
@@ -122,11 +217,15 @@ function buildView(pet) {
 
   // 成长缩放：Lv.1=85% → Lv.5=100% → Lv.10=115%，线性插值
   const growthScale = Math.round((0.85 + ((lv.level - 1) / 9) * 0.3) * 100) / 100;
+  // 等级外观档位：越高档，舞台上的光环越明显（1 素净 → 4 金色）
+  const levelTier = lv.level <= 2 ? 1 : lv.level <= 5 ? 2 : lv.level <= 8 ? 3 : 4;
   return {
     ...pet,
     level: lv.level,
     levelProgress: lv.progress,
     levelNextAt: lv.nextAt,
+    levelTier,        // 1~4，驱动宠物光环样式
+    nextReward: LEVEL_REWARDS[lv.level + 1]?.label || '',
     growthScale,      // 宠物长大的缩放倍率 0.85~1.15
     moodClass,        // pet-sad / pet-happy / pet-sleep / ''
     speciesName: species.name,
@@ -170,15 +269,16 @@ export function feed(foodId) {
   data.pet.mood   = clamp(data.pet.mood   + mood,   0, 100);
   data.pet.exp += EXP_FEED;
 
-  const lvBefore = data.pet.level;
-  const lvNow = computeLevel(data.pet.exp);
-  if (lvNow.level !== lvBefore) data.pet.level = lvNow.level;
+  const grew = syncLevel(data.pet);
 
   store.save(data);
 
   // 语音由宠物乐园页统一用童声播报（这里不再重复朗读，避免覆盖童声）
 
-  return { ok: true, fed: hunger, moodUp: mood, leveledUp: lvNow.level !== lvBefore, preference: mod.tag };
+  return {
+    ok: true, fed: hunger, moodUp: mood,
+    leveledUp: grew.leveledUp, rewards: grew.rewards, preference: mod.tag
+  };
 }
 
 /** 抚摸（免费，次数不限；心情已经满格时不再给成长值，避免一直摸一直刷分） */
@@ -192,10 +292,12 @@ export function touch() {
   const grew = data.pet.mood > moodBefore;
   if (grew) data.pet.exp += EXP_TOUCH;
 
-  const lvBefore = data.pet.level;
-  data.pet.level = computeLevel(data.pet.exp).level;
+  const lv = syncLevel(data.pet);
   store.save(data);
-  return { ok: true, expGain: grew ? EXP_TOUCH : 0, leveledUp: data.pet.level !== lvBefore };
+  return {
+    ok: true, expGain: grew ? EXP_TOUCH : 0,
+    leveledUp: lv.leveledUp, rewards: lv.rewards
+  };
 }
 
 /** 玩耍（每日 1 次，心情大 +） */
@@ -208,10 +310,9 @@ export function play() {
   data.pet.mood = clamp(data.pet.mood + 30, 0, 100);
   data.pet.exp += EXP_PLAY;
 
-  const lvBefore = data.pet.level;
-  data.pet.level = computeLevel(data.pet.exp).level;
+  const lv = syncLevel(data.pet);
   store.save(data);
-  return { ok: true, leveledUp: data.pet.level !== lvBefore };
+  return { ok: true, leveledUp: lv.leveledUp, rewards: lv.rewards };
 }
 
 /** 清洁（每日 1 次，小成长） */
@@ -224,10 +325,9 @@ export function clean() {
   data.pet.mood = clamp(data.pet.mood + 10, 0, 100);
   data.pet.exp += EXP_CLEAN;
 
-  const lvBefore = data.pet.level;
-  data.pet.level = computeLevel(data.pet.exp).level;
+  const lv = syncLevel(data.pet);
   store.save(data);
-  return { ok: true, leveledUp: data.pet.level !== lvBefore };
+  return { ok: true, leveledUp: lv.leveledUp, rewards: lv.rewards };
 }
 
 /* ============================================================
