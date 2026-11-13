@@ -43,6 +43,10 @@ const p2 = store.load().pet;
 ok(p2.ownedDeco.includes('scarf'), 'Lv.3 解锁红围巾');
 ok(p2.wear.neck === 'scarf', '红围巾自动戴上（升级后可见变化）');
 ok((p2.inventory.food.cookie || 0) >= 2, 'Lv.3 同时发小饼干');
+const v2 = pet.stateOf();
+ok(v2.speciesSvg.includes('data-deco="scarf"'), '佩戴的红围巾真的渲染进宠物 SVG');
+ok(v2.growthScale === 0.92, `Lv.3 身体缩放 0.92（实际 ${v2.growthScale}）`);
+ok(v2.levelTier === 2, 'Lv.3 徽章/光环进入第 2 档');
 
 // 4) 连续跳多级：Lv.3 → Lv.10
 store.update((d) => {
@@ -56,6 +60,11 @@ ok(p3.level === 10, '等级到 Lv.10');
 ok(p3.ownedDeco.includes('crown'), 'Lv.10 解锁小皇冠');
 ok(p3.ownedScene.includes('candy'), 'Lv.10 解锁乐园「糖果王国」');
 ok(p3.wear.head === 'red-bow', 'Lv.6 的蝴蝶结先占住头部槽位，后面的帽子/皇冠不强行替换');
+const v3 = pet.stateOf();
+ok(v3.growthScale === 1.15, `Lv.10 身体缩放 1.15（实际 ${v3.growthScale}）`);
+ok(v3.levelTier === 4, 'Lv.10 徽章/光环进入第 4 档');
+ok(v3.nextReward === '', '满级不再显示下一级奖励');
+ok(v3.speciesSvg.includes('data-deco="red-bow"'), '已戴的蝴蝶结持续渲染');
 
 // 5) 满级后不再发奖励、不再升级
 const r4 = pet.feed('cookie');
@@ -76,6 +85,20 @@ ok(p6.ownedDeco.includes('scarf'), '老存档补发拿到 Lv.3 红围巾');
 ok(p6.ownedScene.includes('home'), '老存档补发拿到 Lv.5 乐园');
 ok(view.level === 7 && view.levelTier === 3, 'Lv.7 光环档位为 3');
 ok(!!view.nextReward && view.nextReward === pet.LEVEL_REWARDS[view.level + 1]?.label, '进度条显示下一级奖励');
+
+// 7) 脏存档：exp 已到 Lv.3，但 level 还停在 Lv.1 → 读档时对齐等级并补发
+store.update((d) => {
+  d.pet.exp = 50;
+  d.pet.level = 1;
+  d.pet.claimedLevel = 1;
+  d.pet.ownedDeco = [];
+  d.pet.wear = { head: null, neck: null, face: null, back: null };
+});
+const v7 = pet.stateOf();
+const p7 = store.load().pet;
+ok(v7.level === 3 && p7.level === 3, 'level 落后于 exp 时读档对齐到 Lv.3');
+ok(p7.ownedDeco.includes('scarf') && p7.wear.neck === 'scarf', '脏存档也能补发并戴上红围巾');
+ok(p7.claimedLevel === 3, '补发后 claimedLevel 对齐');
 
 console.log(`\n== 结果：通过 ${pass} / 失败 ${fail} ==`);
 process.exit(fail ? 1 : 0);

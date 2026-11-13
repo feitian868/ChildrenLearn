@@ -148,9 +148,11 @@ function syncLevel(pet) {
   return { leveledUp: true, rewards };
 }
 
-/** 兼容老存档：等级已经涨上去、但奖励从没发过时，在读档时补发一次 */
+/** 兼容老存档：等级已经涨上去（或 exp 已越过阈值但 level 没同步）、奖励还没发过时，在读档时补发一次 */
 function ensureRewards(pet) {
   const claimed = pet.claimedLevel || 1;
+  const actual = computeLevel(pet.exp).level;
+  pet.level = Math.max(pet.level || 1, actual); // level 落后于 exp 时先对齐
   if (pet.level > claimed) return grantRewards(pet, claimed, pet.level);
   if (!pet.claimedLevel) pet.claimedLevel = pet.level;
   return [];
