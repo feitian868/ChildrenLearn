@@ -97,8 +97,8 @@ body.game-body {
   border-bottom: 4px solid var(--accent-2);
   color: var(--accent);
 }
-/* 一年级拼音标注 */
-ruby { ruby-position: over; }
+/* 一年级拼音标注 —— ruby 块间微间距，防止 rt 字母视觉粘连 */
+ruby { ruby-position: over; display: inline; margin: 0 1px; }
 /* 题干/通用 rt：base 22-38px，0.82em ≈ 18-31px，比原 0.72em 放大约 14% */
 rt {
   font-size: 0.82em;
