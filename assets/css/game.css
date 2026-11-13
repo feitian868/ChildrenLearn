@@ -97,13 +97,14 @@ body.game-body {
   border-bottom: 4px solid var(--accent-2);
   color: var(--accent);
 }
-/* 一年级拼音标注：flex column-reverse 把 rt(拼音)翻到 rb(汉字)正上方，align-items 强制居中 */
+/* 一年级拼音标注：flex column-reverse 把 rt(拼音)翻到 rb(汉字)正上方，align-items 强制居中；左右微 gap 让相邻拼音隔开 */
 ruby {
   display: inline-flex;
   flex-direction: column-reverse;
   align-items: center;
   ruby-position: over;
   vertical-align: baseline;
+  margin: 0 0.22em;
 }
 rt {
   font-size: 0.82em;
