@@ -879,6 +879,7 @@ function renderChest() {
   let btnText = '宝箱未点亮';
   let btnClass = 'btn btn-ghost btn-block';
   let btnDisabled = true;
+  let btnAction = 'open';  // 'open' | 'replay' | 'none'
 
   if (state.state === 'unlocked') {
     emoji = '🎁';
@@ -886,12 +887,23 @@ function renderChest() {
     btnText = '开启今日宝箱';
     btnClass = 'btn btn-gold btn-block';
     btnDisabled = false;
+    btnAction = 'open';
   } else if (state.state === 'opened') {
     emoji = state.reward?.emoji || '🎉';
     tip = `今天抽到了：${state.reward?.name || '惊喜奖励'}。`;
-    btnText = '已领取，明天再来';
-    btnClass = 'btn btn-ghost btn-block';
-    btnDisabled = true;
+    if (state.reward && (state.reward.type === 'minigame' || state.reward.type === 'song' || state.reward.type === 'video')) {
+      // 互动类奖励允许随时 replay
+      btnText = replayText(state.reward);
+      btnClass = 'btn btn-gold btn-block';
+      btnDisabled = false;
+      btnAction = 'replay';
+    } else {
+      // 积分类：已入账，不需要 replay
+      btnText = '已领取，明天再来';
+      btnClass = 'btn btn-ghost btn-block';
+      btnDisabled = true;
+      btnAction = 'none';
+    }
   }
 
   const card = el('div', {
@@ -909,7 +921,8 @@ function renderChest() {
   const btn = el('button', { class: btnClass, type: 'button', text: btnText, disabled: btnDisabled });
   btn.addEventListener('click', () => {
     sfxClick();
-    handleOpenChest();
+    if (btnAction === 'open') handleOpenChest();
+    else if (btnAction === 'replay' && state.reward) playReward(state.reward);
   });
   card.append(btn);
   return card;
