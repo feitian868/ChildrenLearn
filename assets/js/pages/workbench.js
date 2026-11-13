@@ -14,7 +14,7 @@ import {
   rebuildDayQuestion
 } from '../core/tasks.js';
 import { chestState, openChest } from '../core/chest.js';
-import { shopState, redeemItem } from '../core/shop.js';
+import { shopState, redeemItem, markOrderFulfilled } from '../core/shop.js';
 import {
   stateOf as petStateOf,
   addFood as petAddFood,
@@ -1133,14 +1133,24 @@ function renderShop() {
   const list = el('div', { class: 'shop-list' });
 
   state.items.forEach((item) => {
+    const blocked = item.weeklyBlocked;
+    const disabled = blocked || !item.affordable;
+    let btnText = '兑换';
+    if (blocked) btnText = '本周已兑满';
+    else if (!item.affordable) btnText = `还差 ${item.shortfall} 分`;
     const btn = el('button', {
-      class: `btn ${item.affordable ? 'btn-primary' : 'btn-ghost'}`,
+      class: `btn ${disabled ? 'btn-ghost' : 'btn-primary'}`,
       type: 'button',
-      text: item.affordable ? '兑换' : `还差 ${item.shortfall} 分`,
-      disabled: !item.affordable
+      text: btnText,
+      disabled,
+      title: blocked ? '每周只能兑现一项家长承诺，下周一起再约' : '',
     });
     btn.addEventListener('click', async () => {
       sfxClick();
+      if (blocked) {
+        toast('本周家长承诺已兑过一项啦，下周一起再约～', 'bad');
+        return;
+      }
       if (!item.affordable) {
         toast(`还差 ${item.shortfall} 积分，继续完成任务吧`, 'bad');
         return;
@@ -1156,18 +1166,27 @@ function renderShop() {
       if (!ok) return;
       const res = redeemItem(item.id);
       if (!res.ok) {
-        toast(`还差 ${res.shortfall || 0} 积分`, 'bad');
+        if (res.reason === 'weekly-cap') {
+          toast('本周家长承诺已兑过啦，下周一起再约～', 'bad');
+        } else {
+          toast(`还差 ${res.shortfall || 0} 积分`, 'bad');
+        }
         return;
       }
       refresh();
-      toast('兑换成功，记得兑换奖励哦', 'ok');
+      toast('兑换成功，记得一起兑现哦', 'ok');
     });
 
     list.append(
-      el('div', { class: `shop-item ${item.affordable ? '' : 'is-locked'}`.trim() }, [
+      el('div', { class: `shop-item ${disabled ? 'is-locked' : ''}`.trim() }, [
         el('div', { class: 'shop-icon', text: item.emoji }),
         el('div', { class: 'shop-info' }, [
           el('div', { class: 'shop-name', text: item.name }),
+          item.category === 'parent-reward'
+            ? el('div', { class: 'shop-meta', text: blocked
+                ? '（本周已兑过）'
+                : `（家长承诺类，每周限兑 ${state.weeklyParentCap} 次）` })
+            : null,
           el('div', { class: 'shop-cost', text: `${item.cost} 积分${item.desc ? ` · ${item.desc}` : ''}` })
         ]),
         btn
@@ -1184,13 +1203,29 @@ function renderShop() {
   ]);
 
   if (state.orders.length) {
-    const orders = el('div', { class: 'shop-orders' }, [el('h4', { text: '最近兑换' })]);
+    const orders = el('div', { class: 'shop-orders' }, [
+      el('h4', { text: `最近兑换（${state.orders.filter((o) => o.category === 'parent-reward' && !o.fulfilled).length} 项待兑现）` })
+    ]);
     const ul = el('ul');
-    state.orders.slice(0, 4).forEach((order) => {
-      ul.append(el('li', {}, [
-        el('span', { text: `${store.formatDateCN(order.date)} · ${order.name}` }),
-        el('span', { text: `-${order.cost}` })
-      ]));
+    state.orders.slice(0, 6).forEach((order) => {
+      const isParent = order.category === 'parent-reward';
+      const li = el('li', { class: order.fulfilled ? 'is-fulfilled' : '' }, [
+        el('span', { class: 'order-left', text: `${store.formatDateCN(order.date)} · ${order.emoji || ''} ${order.name}` }),
+        el('span', { class: 'order-right' }),
+      ]);
+      const right = li.querySelector('.order-right');
+      right.append(el('span', { text: `-${order.cost}` }));
+      if (isParent) {
+        const cb = el('input', { type: 'checkbox', checked: order.fulfilled, title: '家长兑现后勾选' });
+        cb.addEventListener('change', () => {
+          sfxClick();
+          const r = markOrderFulfilled(order.id, cb.checked);
+          if (r.ok) refresh();
+        });
+        const label = el('span', { class: 'order-cb-wrap' }, [cb, el('span', { text: order.fulfilled ? '已兑现' : '待兑现' })]);
+        right.append(label);
+      }
+      ul.append(li);
     });
     orders.append(ul);
     card.append(orders);

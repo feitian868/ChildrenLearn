@@ -93,10 +93,9 @@ function defaultData(grade = 3) {
     version: VERSION,
     grade,
     profile: {
-      points: 0,
+      points: 5, // 新用户启动金，够兑换 1 次最低档奖励（睡前故事 50 分）之前也先能买个宠物小粮包（1~3 分）
       streak: 0,
       lastFullDate: null,
-      streakBonusDays: []
     },
     pet: null, // null = 未领养；完整结构见 pet.js 的 createPet()
     days: {},
@@ -523,7 +522,7 @@ function normalize(raw) {
       }
     }
   };
-  if (!Array.isArray(data.profile.streakBonusDays)) data.profile.streakBonusDays = [];
+  // streakBonusDays 是早期遗留字段，已在 score.js 里用 streak 直接算出，不再维护
 
   // B′：masteryTrend 裁到 45 天——只裁曲线；mastery.keys / reviewQueue / quizzes 一律不裁，
   // 它们是「跨 100 天不失忆」的载体（与 mastery.js 头部的硬约束注释保持一致）
