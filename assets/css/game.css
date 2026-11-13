@@ -97,23 +97,33 @@ body.game-body {
   border-bottom: 4px solid var(--accent-2);
   color: var(--accent);
 }
-/* 一年级拼音标注 —— ruby 块间微间距，防止 rt 字母视觉粘连 */
-ruby { ruby-position: over; display: inline; margin: 0 1px; }
-/* 题干/通用 rt：base 22-38px，0.82em ≈ 18-31px，比原 0.72em 放大约 14% */
+/* 一年级拼音标注：flex column 让 rt 天然居中在 rb 正上方 */
+ruby {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  ruby-position: over;
+  vertical-align: baseline;
+}
 rt {
   font-size: 0.82em;
   font-weight: 500;
   color: var(--ink-muted, #5a6278);
   line-height: 1.2;
   letter-spacing: 0.05em;
-  padding: 0 1px;
+  padding: 0;
+  white-space: nowrap;
 }
-/* 选项 rt：base 18-24px，0.85em ≈ 15-20px，比原 0.72em 放大约 18% */
+/* 选项 rt：flex 父容器已居中，只需字号/颜色 */
 .choices rt, .match-tile rt, .order-slot rt, .tile rt {
   font-size: 0.85em;
-  letter-spacing: 0.05em;
+  font-weight: 500;
   color: var(--ink-muted, #5a6278);
   line-height: 1.15;
+  letter-spacing: 0.05em;
+  padding: 0;
+  white-space: nowrap;
 }
 /* 题干里原生写的拼音字母串（如 shù dè piān páng...）——轻微加间距避免粘连 */
 .pinyin-literal {
