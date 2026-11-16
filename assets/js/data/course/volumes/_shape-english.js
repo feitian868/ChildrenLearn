@@ -6,6 +6,14 @@
  */
 
 export const EN_FAMILY = {
+  'en-letter': {
+    label: '字母',
+    difficulty: 1,
+    specCount: 4,
+    kids: ['字母认读', '大小写与顺序', '字母在单词中'],
+    objectives: ['能认读 26 个字母的大小写', '能按字母表顺序说出前后字母', '能找到单词的开头与结尾字母'],
+    typicalErrors: ['大小写混淆', '字母顺序颠倒', '首尾字母看错']
+  },
   'en-word': {
     label: '词汇',
     difficulty: 1,

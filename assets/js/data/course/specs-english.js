@@ -23,7 +23,7 @@ import { VOLUME as EN_G5_UP } from './volumes/english-g5-up.js';
 import { VOLUME as EN_G5_DOWN } from './volumes/english-g5-down.js';
 import { VOLUME as EN_G6_UP } from './volumes/english-g6-up.js';
 import { VOLUME as EN_G6_DOWN } from './volumes/english-g6-down.js';
-import { EN_WORD_MODES, EN_SPELLING_MODES, EN_PHONICS_MODES } from './specs-english-modes-basic.js';
+import { EN_WORD_MODES, EN_SPELLING_MODES, EN_PHONICS_MODES, EN_LETTER_MODES } from './specs-english-modes-basic.js';
 import { EN_SENTENCE_MODES, EN_GRAMMAR_MODES, EN_DIALOGUE_MODES } from './specs-english-modes-text.js';
 
 export const ENGLISH_VOLUMES = [
@@ -35,7 +35,7 @@ export const ENGLISH_VOLUMES = [
 const REVIEW_BATCH = 'p4-english-batch-1';
 // 每个规格 12 个变式：英语库比语文小（12 册 210 kid），加宽变式保证
 // 365 天题面不重复和每 kid 的全年题面供给。
-const VARIANTS = 12;
+const VARIANTS = 24;
 
 const pad2 = (n) => String(n).padStart(2, '0');
 
@@ -49,6 +49,7 @@ export function specIdsOf(kid, count = 3) {
 
 /** 家族 → 12 个外壳 */
 export const FAMILY_MODES = {
+  'en-letter': EN_LETTER_MODES,
   'en-word': EN_WORD_MODES,
   'en-spelling': EN_SPELLING_MODES,
   'en-phonics': EN_PHONICS_MODES,
@@ -56,6 +57,19 @@ export const FAMILY_MODES = {
   'en-grammar': EN_GRAMMAR_MODES,
   'en-dialogue': EN_DIALOGUE_MODES
 };
+
+/**
+ * 一年级：所有单元都用字母族外壳（Aa-Zz 起步），但按单元轮转外壳段、
+ * 并按单元分字母带 —— 否则同册内不同单元的题面只差「Unit N」，
+ * 而模板去重会把数字归一成「#」，判成共用同一外壳。
+ */
+const G1_BANDS = ['ABCDE', 'FGHIJ', 'KLMN', 'OPQR', 'STUV', 'WXYZ'];
+const g1Modes = (unitIndex) => {
+  const base = FAMILY_MODES['en-letter'];
+  const rot = (unitIndex % 3) * 4;
+  return base.slice(rot).concat(base.slice(0, rot));
+};
+const g1Band = (unitIndex) => G1_BANDS[unitIndex % G1_BANDS.length];
 
 /** 单元标签：Unit N·册次（同一 grade 内唯一，sim 有断言） */
 export function unitTagOf(name, term = '') {
@@ -90,8 +104,7 @@ function makeQuestion(volume, unit, lesson, kid, specId, mode, raw) {
   return q;
 }
 
-function specsOfKid(kid) {
-  const modes = FAMILY_MODES[kid.specDomain] || [];
+function specsOfKid(kid, modes = FAMILY_MODES[kid.specDomain] || []) {
   const start = Math.max(0, (kid.specParams?.specOffset ?? 1) - 1);
   const count = Math.min(kid.specParams?.specCount ?? 3, modes.length - start);
   return Array.from({ length: Math.max(0, count) }, (_, i) => ({ specId: specIdOf(kid.id, i + 1), mode: modes[start + i] }));
@@ -99,18 +112,23 @@ function specsOfKid(kid) {
 
 export function specPoolOfVolume(volume, rand, { simulateApproved = false } = {}) {
   const out = [];
-  const seen = new Set();
-  for (const unit of volume.units) {
+  // seen 按 kid 去重：同 kid 内 prompt 必须唯一，不同 kid 间允许相同（R3 的 templateKey 已保证同册共享外壳为 0）
+  const seenByKid = new Map();
+  volume.units.forEach((unit, unitIndex) => {
     const tag = unitTagOf(unit.name, volume.term);
+    const band = volume.grade === 1 ? g1Band(unitIndex) : undefined;
     for (const lesson of unit.lessons) {
       for (const kid of lesson.knowledge) {
-        for (const { specId, mode } of specsOfKid(kid)) {
+        const seen = seenByKid.get(kid.id) || new Set();
+        seenByKid.set(kid.id, seen);
+        const modes = volume.grade === 1 ? g1Modes(unitIndex) : (FAMILY_MODES[kid.specDomain] || []);
+        for (const { specId, mode } of specsOfKid(kid, modes)) {
           if (!mode) continue;
           for (let v = 0; v < VARIANTS; v += 1) {
-            const raw = mode.make(rand, { tag, grade: volume.grade, term: volume.term, unit: unit.name, kidIndex: kid.specParams?.kidIndex });
+            const raw = mode.make(rand, { tag, grade: volume.grade, term: volume.term, unit: unit.name, kidIndex: kid.specParams?.kidIndex, band });
             if (!raw || !raw.prompt) continue;
             const q = makeQuestion(volume, unit, lesson, kid, specId, mode, raw);
-            // 同一册内题面唯一：变式可能只是换选项顺序，若按 prompt|answer(索引)
+            // 同一 kid 内 prompt 唯一：变式可能只是换选项顺序，若按 prompt|answer(索引)
             // 去重，同日会抽到两道题干完全相同的题（R1 判重按题面口径）。
             const sig = q.prompt;
             if (seen.has(sig)) continue;
@@ -120,7 +138,7 @@ export function specPoolOfVolume(volume, rand, { simulateApproved = false } = {}
         }
       }
     }
-  }
+  });
   return out;
 }
 
