@@ -6,7 +6,7 @@
  */
 
 import { pick, shuffle, randInt } from '../../core/rng.js';
-import { POEM_POOL, CLASSICAL_POOL, IDIOM_POOL, SN } from './specs-chinese-data.js';
+import { poemsForGrade, CLASSICAL_POOL, IDIOM_POOL, SN } from './specs-chinese-data.js';
 import { choiceOf } from './specs-chinese-modes-basic.js';
 
 const withTag = (tag, text) => `【${tag}】${text}`;
@@ -247,80 +247,82 @@ export const ZH_SENTENCE_MODES = [
 /* ============================================================
    zh-poem · 古诗（12 外壳）
    ============================================================ */
+const poemPoolOf = (ctx) => poemsForGrade(ctx.grade);
+
 export const ZH_POEM_MODES = [
   {
     ask: 'zh-poem-next', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `“${it.l1}”的下一句是？`), ...choiceOf(rand, it.l2, wrongsOf(POEM_POOL, 'l2', it.l2)), explain: `《${it.t}》：${it.l1}${it.l2}` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `“${it.l1}”的下一句是？`), ...choiceOf(rand, it.l2, wrongsOf(poemPoolOf(ctx), 'l2', it.l2)), explain: `《${it.t}》：${it.l1}${it.l2}` };
     }
   },
   {
     ask: 'zh-poem-author', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `《${it.t}》的作者是？`), ...choiceOf(rand, it.a, wrongsOf(POEM_POOL, 'a', it.a)), explain: `《${it.t}》的作者是${it.a}。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `《${it.t}》的作者是？`), ...choiceOf(rand, it.a, wrongsOf(poemPoolOf(ctx), 'a', it.a)), explain: `《${it.t}》的作者是${it.a}。` };
     }
   },
   {
     ask: 'zh-poem-source', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `“${it.l1}”出自哪首诗？`), ...choiceOf(rand, it.t, wrongsOf(POEM_POOL, 't', it.t)), explain: `“${it.l1}”出自《${it.t}》。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `“${it.l1}”出自哪首诗？`), ...choiceOf(rand, it.t, wrongsOf(poemPoolOf(ctx), 't', it.t)), explain: `“${it.l1}”出自《${it.t}》。` };
     }
   },
   {
     ask: 'zh-poem-meaning', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `“${it.l1}”的意思是？`), ...choiceOf(rand, it.m, wrongsOf(POEM_POOL, 'm', it.m)), explain: `“${it.l1}”的意思是：${it.m}` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `“${it.l1}”的意思是？`), ...choiceOf(rand, it.m, wrongsOf(poemPoolOf(ctx), 'm', it.m)), explain: `“${it.l1}”的意思是：${it.m}` };
     }
   },
   {
     ask: 'zh-poem-recite', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `《${it.t}》中，“${it.l1}”后面应该接哪一句？`), ...choiceOf(rand, it.l2, wrongsOf(POEM_POOL, 'l2', it.l2)), explain: `《${it.t}》第二句是“${it.l2}”。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `《${it.t}》中，“${it.l1}”后面应该接哪一句？`), ...choiceOf(rand, it.l2, wrongsOf(poemPoolOf(ctx), 'l2', it.l2)), explain: `《${it.t}》第二句是“${it.l2}”。` };
     }
   },
   {
     ask: 'zh-poem-theme', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `《${it.t}》主要写了什么？`), ...choiceOf(rand, it.th, wrongsOf(POEM_POOL, 'th', it.th)), explain: `《${it.t}》${it.th}。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `《${it.t}》主要写了什么？`), ...choiceOf(rand, it.th, wrongsOf(poemPoolOf(ctx), 'th', it.th)), explain: `《${it.t}》${it.th}。` };
     }
   },
   {
     ask: 'zh-poem-scene', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `《${it.t}》写到的景物是？`), ...choiceOf(rand, it.sc, wrongsOf(POEM_POOL, 'sc', it.sc)), explain: `《${it.t}》写到的景物有${it.sc}。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `《${it.t}》写到的景物是？`), ...choiceOf(rand, it.sc, wrongsOf(poemPoolOf(ctx), 'sc', it.sc)), explain: `《${it.t}》写到的景物有${it.sc}。` };
     }
   },
   {
     ask: 'zh-poem-season', make(rand, ctx) {
       // 题目本身不得含正确季节字（如《夏日绝句》），否则答案写进题面
-      const it = pick(rand, POEM_POOL.filter((x) => !x.t.includes(x.se)));
+      const it = pick(rand, poemPoolOf(ctx).filter((x) => !x.t.includes(x.se)));
       return { prompt: withTag(ctx.tag, `《${it.t}》写的是哪个季节？`), ...choiceOf(rand, it.se, SEASONS.filter((s) => s !== it.se)), explain: `《${it.t}》写的是${it.se}季。` };
     }
   },
   {
     ask: 'zh-poem-dynasty', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
+      const it = pick(rand, poemPoolOf(ctx));
       return { prompt: withTag(ctx.tag, `《${it.t}》的作者生活在哪个朝代？`), ...choiceOf(rand, it.d, DYNASTIES.filter((d) => d !== it.d)), explain: `${it.a}是${it.d}代诗人。` };
     }
   },
   {
     ask: 'zh-poem-pair', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      const others = POEM_POOL.filter((x) => x.t !== it.t).map((x) => `${x.l1}${x.l2}`);
+      const it = pick(rand, poemPoolOf(ctx));
+      const others = poemPoolOf(ctx).filter((x) => x.t !== it.t).map((x) => `${x.l1}${x.l2}`);
       return { prompt: withTag(ctx.tag, `下面哪两句出自《${it.t}》？`), ...choiceOf(rand, `${it.l1}${it.l2}`, others), explain: `《${it.t}》：${it.l1}${it.l2}` };
     }
   },
   {
     ask: 'zh-poem-mood', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
-      return { prompt: withTag(ctx.tag, `《${it.t}》表达了怎样的情感？`), ...choiceOf(rand, it.mo, wrongsOf(POEM_POOL, 'mo', it.mo)), explain: `《${it.t}》表达了${it.mo}之情。` };
+      const it = pick(rand, poemPoolOf(ctx));
+      return { prompt: withTag(ctx.tag, `《${it.t}》表达了怎样的情感？`), ...choiceOf(rand, it.mo, wrongsOf(poemPoolOf(ctx), 'mo', it.mo)), explain: `《${it.t}》表达了${it.mo}之情。` };
     }
   },
   {
     ask: 'zh-poem-author-judge', make(rand, ctx) {
-      const it = pick(rand, POEM_POOL);
+      const it = pick(rand, poemPoolOf(ctx));
       const truth = rand() < 0.5;
-      const claim = truth ? it.a : pick(rand, POEM_POOL.filter((x) => x.a !== it.a)).a;
+      const claim = truth ? it.a : pick(rand, poemPoolOf(ctx).filter((x) => x.a !== it.a)).a;
       return { prompt: withTag(ctx.tag, `《${it.t}》是${claim}写的。这句话对吗？`), type: 'judge', answer: truth, explain: `《${it.t}》的作者是${it.a}。` };
     }
   }
