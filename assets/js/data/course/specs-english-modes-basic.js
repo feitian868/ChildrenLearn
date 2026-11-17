@@ -655,7 +655,7 @@ export const EN_LETTER_MODES = [
     }
   },
   {
-    level: 1, ask: '大小写配对',
+    level: 2, ask: '大小写配对',
     make(rand, ctx) {
       const L = pick(rand, bandLetters(ctx));
       const correct = `${L}${L.toLowerCase()}`;
@@ -666,7 +666,7 @@ export const EN_LETTER_MODES = [
         `大写 ${L} 和它的小写合起来是哪个？`
       ])[0];
       return choiceOf(rand, correct, wrongs, {
-        prompt: p(ctx, tpl), explain: `${L} 和 ${L.toLowerCase()} 是一对大写和小写。`, level: 1
+        prompt: p(ctx, tpl), explain: `${L} 和 ${L.toLowerCase()} 是一对大写和小写。`, level: 2
       });
     }
   },
@@ -686,7 +686,7 @@ export const EN_LETTER_MODES = [
     }
   },
   {
-    level: 1, ask: '单词首字母',
+    level: 2, ask: '单词首字母',
     make(rand, ctx) {
       const pool = bandWords(ctx, (w) => w.en[0].toUpperCase());
       if (!pool.length) return null;
@@ -698,12 +698,12 @@ export const EN_LETTER_MODES = [
         `单词 ${w.en} 的首字母是？`
       ])[0];
       return choiceOf(rand, correct, otherLetters(rand, correct), {
-        prompt: p(ctx, tpl), explain: `${w.en} 的第一个字母是 ${correct}。`, level: 1
+        prompt: p(ctx, tpl), explain: `${w.en} 的第一个字母是 ${correct}。`, level: 2
       });
     }
   },
   {
-    level: 1, ask: '单词尾字母',
+    level: 2, ask: '单词尾字母',
     make(rand, ctx) {
       const pool = bandWords(ctx, (w) => w.en[w.en.length - 1].toUpperCase());
       if (!pool.length) return null;
@@ -715,12 +715,12 @@ export const EN_LETTER_MODES = [
         `单词 ${w.en} 的尾字母是？`
       ])[0];
       return choiceOf(rand, correct, otherLetters(rand, correct), {
-        prompt: p(ctx, tpl), explain: `${w.en} 的最后一个字母是 ${correct}。`, level: 1
+        prompt: p(ctx, tpl), explain: `${w.en} 的最后一个字母是 ${correct}。`, level: 2
       });
     }
   },
   {
-    level: 1, ask: '字母个数',
+    level: 2, ask: '字母个数',
     make(rand, ctx) {
       const pool = bandWords(ctx, (w) => w.en[0].toUpperCase());
       if (!pool.length) return null;
@@ -732,12 +732,12 @@ export const EN_LETTER_MODES = [
         `"${w.en}"有多少个字母？`
       ])[0];
       return numChoice(rand, n, {
-        prompt: p(ctx, tpl), explain: `${w.en} 由 ${n} 个字母组成。`, level: 1
+        prompt: p(ctx, tpl), explain: `${w.en} 由 ${n} 个字母组成。`, level: 2
       });
     }
   },
   {
-    level: 1, ask: '相同首字母',
+    level: 2, ask: '相同首字母',
     make(rand, ctx) {
       const head = pick(rand, bandLetters(ctx));
       const same = G1_LETTER_WORDS.filter((x) => x.en[0].toUpperCase() === head);
@@ -750,7 +750,7 @@ export const EN_LETTER_MODES = [
         `找一找：以 ${head} 开头的单词是哪个？`
       ])[0];
       return choiceOf(rand, correct, wrongs, {
-        prompt: p(ctx, tpl), explain: `${correct} 以 ${head} 开头。`, level: 1
+        prompt: p(ctx, tpl), explain: `${correct} 以 ${head} 开头。`, level: 2
       });
     }
   }

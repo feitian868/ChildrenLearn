@@ -213,7 +213,7 @@ function adaptTarget(data, grade = 3) {
 
 
 
-export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE) {
+export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, quota = QUESTIONS_PER_TASK, usedTemplates = new Map(), allowShort = false, review = [], weakSet = null, textbookFirst = false, passLine = PASS_LINE, maxLogic = MAX_LOGIC_PER_TASK) {
   // 同一册里不同知识点可能挂同一批参数化题面，池内先按内容签名去重，
   // 避免同一个孩子在一项任务里做到两道一模一样的题
   const poolSigs = new Set();
@@ -277,7 +277,7 @@ export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, qu
   review.forEach((q) => {
     if (picked.length >= quota || reviewCount >= MAX_REVIEW_PER_TASK) return;
     if (used.has(q.id) || picked.some((p) => p.id === q.id)) return;
-    if (q.category === 'logic' && logicCount >= MAX_LOGIC_PER_TASK) return;
+    if (q.category === 'logic' && logicCount >= maxLogic) return;
     picked.push(q);
     used.add(q.id); // 同一天多任务不能重复投放同一条复习变式
     reviewCount += 1;
@@ -292,7 +292,7 @@ export function pickQuestions(rng, pool, used, usedKeys, recent, l2t, dayKey, qu
       if (!allowSameKey && q.key && usedKeys.has(q.key)) continue;
       // 逻辑/场景题每项最多 MAX_LOGIC_PER_TASK 道；兜底阶段放行，保证能凑满。
       // 课程收敛模式（allowShort）下不放行：宁可当天题少，也不让拓展题挤掉教材题。
-      if (q.category === 'logic' && logicCount >= MAX_LOGIC_PER_TASK && (allowShort || !allowSameKey)) continue;
+      if (q.category === 'logic' && logicCount >= maxLogic && (allowShort || !allowSameKey)) continue;
       // 模板硬冷却：容量够时，当天不再出现同款问法；
       // 池子见底时（allowSameKey=true 的兜底分支）才放行，保证任务能凑满
       const tk = templateKey(q);
@@ -515,8 +515,11 @@ export function buildDay(key, grade, data) {
         ? pickStretch(rng, stretchPool, used, usedKeys, recent, key, ownSigs, usedTemplates)
         : null;
       const quota = stretchQ ? QUESTIONS_PER_TASK - 1 : QUESTIONS_PER_TASK;
-      const l2t = stretchQ ? Math.min(adapt.l2, quota) : (adapt.stretch ? QUESTIONS_PER_TASK : adapt.l2);
-      const questions = pickQuestions(rng, pool, used, usedKeys, recent, l2t, key, quota, usedTemplates, allowShort, reviewQs, weakSet, !!scopeInfo, passLine);
+      // 一年级英语以字母起步为主：每日只保留 1 道理解/对话题，其余名额给字母识记题
+      const l2Target = grade === 1 && subject === 'english' ? Math.min(adapt.l2, 1) : adapt.l2;
+      const l2t = stretchQ ? Math.min(l2Target, quota) : (adapt.stretch ? QUESTIONS_PER_TASK : l2Target);
+      const maxLogic = grade === 1 && subject === 'english' ? 1 : MAX_LOGIC_PER_TASK;
+      const questions = pickQuestions(rng, pool, used, usedKeys, recent, l2t, key, quota, usedTemplates, allowShort, reviewQs, weakSet, !!scopeInfo, passLine, maxLogic);
       if (!questions.length) break;
       if (stretchQ) questions.push(stretchQ);
       tasks.push({

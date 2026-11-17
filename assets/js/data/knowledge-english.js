@@ -468,6 +468,12 @@ export function englishPool(grade, rng = () => Math.random(), { includeSpec = fa
   if (!includeSpec) return base;
   const generated = englishGenerated(grade, rng);
   const specs = specPoolOfGrade(grade, rng, { simulateApproved });
+  // 一年级以字母起步为主：题池收敛为字母题，情景对话交给逻辑/场景池（每日可变，不重复）
+  if (grade === 1) {
+    const keep = (q) => /字母/.test(q.topic || '')
+      || /字母|大小写|读作|元音|首字母|尾字母|配对|样子|形状/.test(q.prompt || '');
+    return [...base.filter(keep), ...generated.filter(keep), ...specs];
+  }
   return [...base, ...generated, ...specs];
 }
 
